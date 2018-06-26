@@ -168,7 +168,7 @@ static void pollfd_removed_cb(int fd)
 
 int setup_pollfds(void)
 {
-	size_t numfds;
+	ssize_t numfds;
 	size_t i;
 	struct fp_pollfd *fpfds;
 	GSource *gsource;
