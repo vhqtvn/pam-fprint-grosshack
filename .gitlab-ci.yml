@@ -28,6 +28,8 @@ build_dev:
     - ninja -C _build
     - ninja -C _build install
     - cd ..
+    # So we don't get error about this libfprint file
+    - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
   script:
     - ./autogen.sh --disable-dependency-tracking
     - make
