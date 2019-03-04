@@ -60,6 +60,8 @@ AC_ARG_WITH([systemdsystemunitdir],
             [],
             [with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)])
 AS_IF([test "x$with_systemdsystemunitdir" != "xno"], [
+  # StateDirectory was introduced in systemd 235
+  PKG_CHECK_MODULES(SYSTEMD, systemd >= 235)
   AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 ])
 AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$systemdsystemunitdir"])
