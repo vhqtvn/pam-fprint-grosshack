@@ -50,3 +50,7 @@ fprintd-marshal.h: fprintd-marshal.list
 fprintd-marshal.c: fprintd-marshal.h
 	( $(GLIB_GENMARSHAL) --prefix=fprintd_marshal $(srcdir)/fprintd-marshal.list --body --header > fprintd-marshal.c )
 
+install-data-hook:
+	if test -w $(DESTDIR)$(prefix)/; then \
+		mkdir -p $(DESTDIR)$(localstatedir)/lib/fprint; \
+	fi
