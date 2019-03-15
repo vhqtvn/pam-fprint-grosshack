@@ -39,6 +39,7 @@
 
 #include "file_storage.h"
 
+#define FILE_STORAGE_PATH "/var/lib/fprint"
 #define DIR_PERMS 0700
 
 #define FP_FINGER_IS_VALID(finger) \

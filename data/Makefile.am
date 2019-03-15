@@ -15,7 +15,7 @@ if HAVE_SYSTEMD
 systemdservicedir       = $(systemdsystemunitdir)
 systemdservice_DATA     = $(systemdservice_in_files:.service.in=.service)
 $(systemdservice_DATA): $(systemdservice_in_files) Makefile
-	@sed -e "s|\@libexecdir\@|$(libexecdir)|" -e "s|\@localstatedir\@|$(localstatedir)|" $< > $@
+	@sed -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@
 endif
 
 polkitdir = $(datadir)/polkit-1/actions

@@ -13,8 +13,7 @@ AM_CFLAGS =						\
 	$(DAEMON_CFLAGS)				\
 	-DG_LOG_DOMAIN=\""fprintd"\"			\
 	-DLOCALEDIR=\""$(datadir)/locale"\"		\
-	-DPLUGINDIR=\""$(libdir)/fprintd/modules"\"	\
-	-DFILE_STORAGE_PATH=\""$(localstatedir)/lib/fprint"\"
+	-DPLUGINDIR=\""$(libdir)/fprintd/modules"\"
 
 libfprintd_la_SOURCES =				\
 	manager.c device.c			\

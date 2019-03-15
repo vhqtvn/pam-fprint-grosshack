@@ -11,7 +11,7 @@ ExecStart=@libexecdir@/fprintd
 ProtectSystem=strict
 ProtectKernelTunables=true
 ProtectControlGroups=true
-ReadWritePaths=@localstatedir@/lib/fprint
+ReadWritePaths=/var/lib/fprint
 ProtectHome=true
 PrivateTmp=true
 
