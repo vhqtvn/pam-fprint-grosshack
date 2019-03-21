@@ -110,18 +110,22 @@ int file_storage_print_data_save(struct fp_print_data *data,
 	path = __get_path_to_print(fp_print_data_get_driver_id(data), fp_print_data_get_devtype(data), finger, base_store);
 	dirpath = g_path_get_dirname(path);
 	r = g_mkdir_with_parents(dirpath, DIR_PERMS);
-	g_free(dirpath);
 	if (r < 0) {
+		g_debug("file_storage_print_data_save(): could not mkdir(\"%s\"): %s",
+			dirpath, g_strerror(r));
+		g_free(dirpath);
 		g_free(path);
 		goto out;
 	}
+	g_free(dirpath);
 
 	//fp_dbg("saving to %s", path);
 	g_file_set_contents(path, buf, len, &err);
 	g_free(path);
 	if (err) {
 		r = err->code;
-		//fp_err("save failed: %s", err->message);
+		g_debug("file_storage_print_data_save(): could not save '%s': %s",
+			path, err->message);
 		g_error_free(err);
 		/* FIXME interpret error codes */
 		goto out;
@@ -172,6 +176,8 @@ int file_storage_print_data_load(struct fp_dev *dev,
 
 	path = get_path_to_print(dev, finger, base_store);
 	r = load_from_file(path, &fdata);
+	g_debug ("file_storage_print_data_load(): loaded '%s' %s",
+		 path, g_strerror(r));
 	g_free(path);
 	g_free(base_store);
 	if (r)
@@ -190,13 +196,14 @@ int file_storage_print_data_delete(struct fp_dscv_dev *dev,
 	enum fp_finger finger, const char *username)
 {
 	int r;
-	char *base_store;
+	char *base_store, *path;
 
 	base_store = file_storage_get_basestore_for_username(username);
-
-	gchar *path = get_path_to_print_dscv(dev, finger, base_store);
+	path = get_path_to_print_dscv(dev, finger, base_store);
 
 	r = g_unlink(path);
+	g_debug("file_storage_print_data_delete(): unlink(\"%s\") %s",
+		path, g_strerror(r));
 	g_free(path);
 	g_free(base_store);
 
@@ -212,7 +219,7 @@ static GSList *scan_dev_storedir(char *devpath, uint16_t driver_id,
 
 	GDir *dir = g_dir_open(devpath, 0, &err);
 	if (!dir) {
-		//fp_err("opendir %s failed: %s", devpath, err->message);
+		g_debug("scan_dev_storedir(): opendir(\"%s\") failed: %s", devpath, err->message);
 		g_error_free(err);
 		return list;
 	}
@@ -227,7 +234,7 @@ static GSList *scan_dev_storedir(char *devpath, uint16_t driver_id,
 
 		val = g_ascii_strtoull(ent, &endptr, 16);
 		if (endptr == ent || !FP_FINGER_IS_VALID(val)) {
-			//fp_dbg("skipping print file %s", ent);
+			g_debug("scan_dev_storedir(): skipping print file '%s'", ent);
 			continue;
 		}
 
@@ -249,6 +256,9 @@ GSList *file_storage_discover_prints(struct fp_dscv_dev *dev, const char *userna
 
 	storedir = get_path_to_storedir(fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
 		fp_dscv_dev_get_devtype(dev), base_store);
+
+	g_debug ("file_storage_discover_prints() for user '%s' in '%s'",
+		 username, storedir);
 
 	list = scan_dev_storedir(storedir, fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
 		fp_dscv_dev_get_devtype(dev), list);
