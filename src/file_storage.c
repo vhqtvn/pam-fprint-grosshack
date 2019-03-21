@@ -250,7 +250,6 @@ GSList *file_storage_discover_prints(struct fp_dscv_dev *dev, const char *userna
 	GSList *list = NULL;
 	char *base_store = NULL;
 	char *storedir = NULL;
-	int r;
 
 	base_store = file_storage_get_basestore_for_username(username);
 
