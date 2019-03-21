@@ -87,6 +87,7 @@ load_conf (void)
 
 	filename = g_build_filename (SYSCONFDIR, "fprintd.conf", NULL);
 	file = g_key_file_new ();
+	g_debug("About to load configuration file '%s'", filename);
 	if (!g_key_file_load_from_file (file, filename, G_KEY_FILE_NONE, &error)) {
 		g_print ("Could not open fprintd.conf: %s\n", error->message);
 		goto bail;
