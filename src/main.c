@@ -89,7 +89,7 @@ load_conf (void)
 	file = g_key_file_new ();
 	g_debug("About to load configuration file '%s'", filename);
 	if (!g_key_file_load_from_file (file, filename, G_KEY_FILE_NONE, &error)) {
-		g_print ("Could not open fprintd.conf: %s\n", error->message);
+		g_warning ("Could not open fprintd.conf: %s\n", error->message);
 		goto bail;
 	}
 
@@ -149,7 +149,7 @@ int main(int argc, char **argv)
 #endif
 
 	if (g_option_context_parse (context, &argc, &argv, &error) == FALSE) {
-		g_print ("couldn't parse command-line options: %s\n", error->message);
+		g_warning ("couldn't parse command-line options: %s\n", error->message);
 		g_error_free (error);
 		return 1;
 	}
@@ -200,7 +200,7 @@ int main(int argc, char **argv)
 
 	r = setup_pollfds();
 	if (r < 0) {
-		g_print("pollfd setup failed\n");
+		g_warning("pollfd setup failed\n");
 		goto err;
 	}
 
