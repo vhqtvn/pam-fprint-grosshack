@@ -35,7 +35,7 @@
 #include <glib.h>
 #include <glib/gstdio.h>
 
-#include <libfprint/fprint.h>
+#include <fprint.h>
 
 #include "file_storage.h"
 
@@ -43,21 +43,15 @@
 #define DIR_PERMS 0700
 
 #define FP_FINGER_IS_VALID(finger) \
-	((finger) >= LEFT_THUMB && (finger) <= RIGHT_LITTLE)
+	((finger) >= FP_FINGER_LEFT_THUMB && (finger) <= FP_FINGER_RIGHT_LITTLE)
 
-static char *get_path_to_storedir(uint16_t driver_id, uint32_t devtype, char *base_store)
+static char *get_path_to_storedir(const char *driver, const char * device_id, char *base_store)
 {
-	char idstr[5];
-	char devtypestr[9];
-
-	g_snprintf(idstr, sizeof(idstr), "%04x", driver_id);
-	g_snprintf(devtypestr, sizeof(devtypestr), "%08x", devtype);
-
-	return g_build_filename(base_store, idstr, devtypestr, NULL);
+	return g_build_filename(base_store, driver, device_id, NULL);
 }
 
-static char *__get_path_to_print(uint16_t driver_id, uint32_t devtype,
-	enum fp_finger finger, char *base_store)
+static char *__get_path_to_print(const char *driver, const char * device_id,
+	FpFinger finger, char *base_store)
 {
 	char *dirpath;
 	char *path;
@@ -65,22 +59,26 @@ static char *__get_path_to_print(uint16_t driver_id, uint32_t devtype,
 
 	g_snprintf(fingername, 2, "%x", finger);
 
-	dirpath = get_path_to_storedir(driver_id, devtype, base_store);
+	dirpath = get_path_to_storedir(driver, device_id, base_store);
 	path = g_build_filename(dirpath, fingername, NULL);
 	g_free(dirpath);
 	return path;
 }
 
-static char *get_path_to_print(struct fp_dev *dev, enum fp_finger finger, char *base_store)
+static char *get_path_to_print(FpDevice *dev, FpFinger finger, char *base_store)
 {
-	return __get_path_to_print(fp_driver_get_driver_id(fp_dev_get_driver(dev)), 
-		fp_dev_get_devtype(dev), finger, base_store);
+	return __get_path_to_print(fp_device_get_driver (dev),
+				   fp_device_get_device_id(dev),
+				   finger,
+				   base_store);
 }
 
-static char *get_path_to_print_dscv(struct fp_dscv_dev *dev, enum fp_finger finger, char *base_store)
+static char *get_path_to_print_dscv(FpDevice *dev, FpFinger finger, char *base_store)
 {
-	return __get_path_to_print(fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
-		fp_dscv_dev_get_devtype(dev), finger, base_store);
+	return __get_path_to_print(fp_device_get_driver (dev),
+				   fp_device_get_device_id(dev),
+				   finger,
+				   base_store);
 }
 
 static char *file_storage_get_basestore_for_username(const char *username)
@@ -88,67 +86,58 @@ static char *file_storage_get_basestore_for_username(const char *username)
 	return g_build_filename(FILE_STORAGE_PATH, username, NULL);
 }
 
-/* if username == NULL function will use current username */
-int file_storage_print_data_save(struct fp_print_data *data,
-	enum fp_finger finger, const char *username)
+int file_storage_print_data_save(FpPrint *print)
 {
-	GError *err = NULL;
-	char *path, *dirpath;
-	size_t len;
+	g_autoptr(GError) err = NULL;
+	g_autofree char *path = NULL;
+	g_autofree char *dirpath = NULL;
+	g_autofree char *base_store = NULL;
+	g_autofree char *buf = NULL;
+	gsize len;
 	int r;
-	char *base_store = NULL;
-	char *buf = NULL;
 
-	base_store = file_storage_get_basestore_for_username(username);
+	base_store = file_storage_get_basestore_for_username(fp_print_get_username (print));
 
-	len = fp_print_data_get_data(data, (guchar **) &buf);
-	if (!len) {
-		g_free(base_store);
+	if (!fp_print_serialize (print, (guchar **) &buf, &len, &err)) {
+		g_warning ("Error serializing data: %s", err->message);
 		return -ENOMEM;
 	}
 
-	path = __get_path_to_print(fp_print_data_get_driver_id(data), fp_print_data_get_devtype(data), finger, base_store);
+	path = __get_path_to_print(fp_print_get_driver (print),
+	                           fp_print_get_device_id (print),
+	                           fp_print_get_finger (print),
+	                           base_store);
 	dirpath = g_path_get_dirname(path);
 	r = g_mkdir_with_parents(dirpath, DIR_PERMS);
 	if (r < 0) {
 		g_debug("file_storage_print_data_save(): could not mkdir(\"%s\"): %s",
 			dirpath, g_strerror(r));
-		g_free(dirpath);
-		g_free(path);
-		goto out;
+		return r;
 	}
-	g_free(dirpath);
 
 	//fp_dbg("saving to %s", path);
 	g_file_set_contents(path, buf, len, &err);
-	g_free(path);
 	if (err) {
-		r = err->code;
 		g_debug("file_storage_print_data_save(): could not save '%s': %s",
 			path, err->message);
-		g_error_free(err);
 		/* FIXME interpret error codes */
-		goto out;
+		return err->code;
 	}
 
-out:
-	g_clear_pointer(&buf, free);
-	g_clear_pointer(&base_store, g_free);
-	return r;
+	return 0;
 }
 
-static int load_from_file(char *path, struct fp_print_data **data)
+static int load_from_file(char *path, FpPrint **print)
 {
+	g_autoptr(GError) err = NULL;
 	gsize length;
-	char *contents;
-	GError *err = NULL;
-	struct fp_print_data *fdata;
+	g_autofree char *contents = NULL;
+	FpPrint *new;
 
 	//fp_dbg("from %s", path);
 	g_file_get_contents(path, &contents, &length, &err);
 	if (err) {
 		int r = err->code;
-		g_error_free(err);
 		/* FIXME interpret more error codes */
 		if (r == G_FILE_ERROR_NOENT)
 			return -ENOENT;
@@ -156,71 +145,71 @@ static int load_from_file(char *path, struct fp_print_data **data)
 			return r;
 	}
 
-	fdata = fp_print_data_from_data((guchar *) contents, length);
-	g_free(contents);
-	if (!fdata)
+	new = fp_print_deserialize ((guchar *) contents, length, &err);
+	if (!new) {
+		g_print ("Error deserializing data: %s", err->message);
 		return -EIO;
-	*data = fdata;
+	}
+
+	*print = new;
 	return 0;
 }
 
-int file_storage_print_data_load(struct fp_dev *dev,
-	enum fp_finger finger, struct fp_print_data **data, const char *username)
+int file_storage_print_data_load(FpDevice *dev,
+				 FpFinger  finger,
+				 const char *username,
+				 FpPrint **print)
 {
-	gchar *path;
-	struct fp_print_data *fdata = NULL;
+	g_autofree gchar *path = NULL;
+	g_autofree gchar *base_store = NULL;
+	FpPrint *new = NULL;
 	int r;
-	char *base_store = NULL;
 
 	base_store = file_storage_get_basestore_for_username(username);
 
 	path = get_path_to_print(dev, finger, base_store);
-	r = load_from_file(path, &fdata);
+	r = load_from_file(path, &new);
 	g_debug ("file_storage_print_data_load(): loaded '%s' %s",
 		 path, g_strerror(r));
-	g_free(path);
-	g_free(base_store);
 	if (r)
 		return r;
 
-	if (!fp_dev_supports_print_data(dev, fdata)) {
-		fp_print_data_free(fdata);
+	if (!fp_print_compatible (new, dev)) {
+		g_object_unref (new);
 		return -EINVAL;
 	}
 
-	*data = fdata;
+	*print = new;
 	return 0;
 }
 
-int file_storage_print_data_delete(struct fp_dscv_dev *dev,
-	enum fp_finger finger, const char *username)
+int file_storage_print_data_delete(FpDevice *dev, FpFinger finger, const char *username)
 {
+	g_autofree gchar *base_store = NULL;
+	g_autofree gchar *path = NULL;
 	int r;
-	char *base_store, *path;
 
 	base_store = file_storage_get_basestore_for_username(username);
+
 	path = get_path_to_print_dscv(dev, finger, base_store);
 
 	r = g_unlink(path);
 	g_debug("file_storage_print_data_delete(): unlink(\"%s\") %s",
 		path, g_strerror(r));
-	g_free(path);
-	g_free(base_store);
 
 	/* FIXME: cleanup empty directory */
-	return r;
+	return g_unlink(path);
 }
 
-static GSList *scan_dev_storedir(char *devpath, uint16_t driver_id,
-	uint32_t devtype, GSList *list)
+static GSList *scan_dev_storedir(char *devpath,
+                                 GSList *list)
 {
-	GError *err = NULL;
+	g_autoptr(GError) err = NULL;
 	const gchar *ent;
 
 	GDir *dir = g_dir_open(devpath, 0, &err);
 	if (!dir) {
 		g_debug("scan_dev_storedir(): opendir(\"%s\") failed: %s", devpath, err->message);
-		g_error_free(err);
 		return list;
 	}
 
@@ -245,25 +234,22 @@ static GSList *scan_dev_storedir(char *devpath, uint16_t driver_id,
 	return list;
 }
 
-GSList *file_storage_discover_prints(struct fp_dscv_dev *dev, const char *username)
+GSList *file_storage_discover_prints(FpDevice *dev, const char *username)
 {
 	GSList *list = NULL;
-	char *base_store = NULL;
-	char *storedir = NULL;
+	g_autofree gchar *base_store = NULL;
+	g_autofree gchar *storedir = NULL;
 
 	base_store = file_storage_get_basestore_for_username(username);
 
-	storedir = get_path_to_storedir(fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
-		fp_dscv_dev_get_devtype(dev), base_store);
+	storedir = get_path_to_storedir(fp_device_get_driver (dev),
+					fp_device_get_device_id (dev),
+					base_store);
 
 	g_debug ("file_storage_discover_prints() for user '%s' in '%s'",
 		 username, storedir);
 
-	list = scan_dev_storedir(storedir, fp_driver_get_driver_id(fp_dscv_dev_get_driver(dev)), 
-		fp_dscv_dev_get_devtype(dev), list);
-
-	g_free(base_store);
-	g_free(storedir);
+	list = scan_dev_storedir(storedir, list);
 
 	return list;
 }

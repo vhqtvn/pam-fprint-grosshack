@@ -1,4 +1,4 @@
-AC_INIT([fprintd], [0.9.0])
+AC_INIT([fprintd], [1.90.0])
 AM_INIT_AUTOMAKE([1.11 dist-xz no-dist-gzip check-news])
 AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_HEADERS([config.h])
@@ -17,7 +17,7 @@ AC_SUBST(GETTEXT_PACKAGE)
 AM_GLIB_GNU_GETTEXT
 IT_PROG_INTLTOOL([0.35.0])
 
-PKG_CHECK_MODULES(FPRINT, [libfprint > 0.1.0])
+PKG_CHECK_MODULES(FPRINT, [libfprint2 >= 1.90.0])
 AC_SUBST(FPRINT_LIBS)
 AC_SUBST(FPRINT_CFLAGS)
 

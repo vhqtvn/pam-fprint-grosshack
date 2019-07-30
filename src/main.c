@@ -25,12 +25,11 @@
 #include <dbus/dbus-glib-bindings.h>
 #include <glib.h>
 #include <glib/gi18n.h>
-#include <libfprint/fprint.h>
+#include <fprint.h>
 #include <glib-object.h>
 #include <gmodule.h>
 
 #include "fprintd.h"
-#include "loop.h"
 #include "storage.h"
 #include "file_storage.h"
 
@@ -135,7 +134,6 @@ int main(int argc, char **argv)
 	FprintManager *manager;
 	DBusGProxy *driver_proxy;
 	guint32 request_name_ret;
-	int r = 0;
 
 	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
@@ -190,19 +188,7 @@ int main(int argc, char **argv)
 		set_storage_file ();
 	store.init ();
 
-	r = fp_init();
-	if (r < 0) {
-		g_warning("fprint init failed with error %d\n", r);
-		return r;
-	}
-
 	loop = g_main_loop_new(NULL, FALSE);
-
-	r = setup_pollfds();
-	if (r < 0) {
-		g_warning("pollfd setup failed\n");
-		goto err;
-	}
 
 	g_debug("Launching FprintObject");
 
@@ -218,8 +204,6 @@ int main(int argc, char **argv)
 
 	g_object_unref (manager);
 
-err:
-	fp_exit();
 	return 0;
 }
 

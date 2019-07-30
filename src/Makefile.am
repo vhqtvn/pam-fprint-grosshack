@@ -24,7 +24,6 @@ libfprintd_la_LDFLAGS = -no-undefined
 
 fprintd_SOURCES =				\
 	main.c					\
-	loop.c loop.h				\
 	file_storage.c file_storage.h storage.h
 fprintd_LDADD = libfprintd.la
 

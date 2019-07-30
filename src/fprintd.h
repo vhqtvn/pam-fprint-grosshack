@@ -22,6 +22,7 @@
 
 #include <glib.h>
 #include <dbus/dbus-glib.h>
+#include <fprint.h>
 
 /* General */
 #define TIMEOUT 30
@@ -87,7 +88,7 @@ struct FprintDeviceClass {
 typedef struct FprintDevice FprintDevice;
 typedef struct FprintDeviceClass FprintDeviceClass;
 
-FprintDevice *fprint_device_new(struct fp_dscv_dev *ddev);
+FprintDevice *fprint_device_new(FpDevice *dev);
 GType fprint_device_get_type(void);
 guint32 _fprint_device_get_id(FprintDevice *rdev);
 /* Print */

@@ -22,7 +22,7 @@
 #include <dbus/dbus-glib-bindings.h>
 #include <glib.h>
 #include <glib/gi18n.h>
-#include <libfprint/fprint.h>
+#include <fprint.h>
 #include <glib-object.h>
 
 #include "fprintd.h"
@@ -41,6 +41,7 @@ G_DEFINE_TYPE(FprintManager, fprint_manager, G_TYPE_OBJECT);
 
 typedef struct
 {
+	FpContext *context;
 	GSList *dev_registry;
 	gboolean no_timeout;
 	guint timeout_id;
@@ -53,6 +54,7 @@ static void fprint_manager_finalize(GObject *object)
 {
 	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (object);
 
+	g_clear_object (&priv->context);
 	g_slist_free(priv->dev_registry);
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
@@ -112,32 +114,79 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
 }
 
 static void
+device_added_cb (FprintManager *manager, FpDevice *device, FpContext *context)
+{
+	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
+	FprintDevice *rdev = fprint_device_new(device);
+	g_autofree gchar *path = NULL;
+
+	g_signal_connect (G_OBJECT(rdev), "notify::in-use",
+			  G_CALLBACK (fprint_manager_in_use_notified), manager);
+
+	priv->dev_registry = g_slist_prepend (priv->dev_registry, rdev);
+	path = get_device_path (rdev);
+	dbus_g_connection_register_g_object(fprintd_dbus_conn, path,
+		G_OBJECT(rdev));
+}
+
+static void
+device_removed_cb (FprintManager *manager, FpDevice *device, FpContext *context)
+{
+	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
+	GSList *item;
+	g_autofree gchar *path = NULL;
+
+	for (item = priv->dev_registry; item; item = item->next) {
+		FprintDevice *rdev;
+		g_autoptr(FpDevice) dev = NULL;
+
+		rdev = item->data;
+
+		g_object_get (rdev, "dev", &dev, NULL);
+		if (dev != device)
+			continue;
+
+		priv->dev_registry = g_slist_delete_link (priv->dev_registry, item);
+
+		dbus_g_connection_unregister_g_object(fprintd_dbus_conn, G_OBJECT(rdev));
+
+		g_signal_handlers_disconnect_by_data (rdev, manager);
+		g_object_unref (rdev);
+
+		/* We cannot continue to iterate at this point, but we don't need to either */
+		break;
+	}
+
+	/* The device that disappeared might have been in-use.
+	 * Do we need to do anything else in this case to clean up more gracefully? */
+	fprint_manager_in_use_notified (NULL, NULL, manager);
+}
+
+static void
 fprint_manager_init (FprintManager *manager)
 {
 	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
-	struct fp_dscv_dev **discovered_devs = fp_discover_devs();
-	struct fp_dscv_dev *ddev;
-	int i = 0;
+
+	priv->context = fp_context_new ();
+
+	/* And register the signals for initial enumeration and hotplug. */
+	g_signal_connect_object (priv->context,
+				 "device-added",
+				 (GCallback) device_added_cb,
+				 manager,
+				 G_CONNECT_SWAPPED);
+
+	g_signal_connect_object (priv->context,
+				 "device-removed",
+				 (GCallback) device_removed_cb,
+				 manager,
+				 G_CONNECT_SWAPPED);
+
+	/* Prepare everthing by enumerating all devices. */
+	fp_context_enumerate (priv->context);
 
 	dbus_g_connection_register_g_object(fprintd_dbus_conn,
 		"/net/reactivated/Fprint/Manager", G_OBJECT(manager));
-
-	if (discovered_devs == NULL)
-		return;
-
-	while ((ddev = discovered_devs[i++]) != NULL) {
-		FprintDevice *rdev = fprint_device_new(ddev);
-		gchar *path;
-
-		g_signal_connect (G_OBJECT(rdev), "notify::in-use",
-				  G_CALLBACK (fprint_manager_in_use_notified), manager);
-
-		priv->dev_registry = g_slist_prepend(priv->dev_registry, rdev);
-		path = get_device_path(rdev);
-		dbus_g_connection_register_g_object(fprintd_dbus_conn, path,
-			G_OBJECT(rdev));
-		g_free(path);
-	}
 }
 
 FprintManager *fprint_manager_new(gboolean no_timeout)
@@ -159,10 +208,14 @@ static gboolean fprint_manager_get_devices(FprintManager *manager,
 	GPtrArray **devices, GError **error)
 {
 	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
-	GSList *elem = g_slist_reverse(g_slist_copy(priv->dev_registry));
+	GSList *elem;
 	GSList *l;
-	int num_open = g_slist_length(elem);
-	GPtrArray *devs = g_ptr_array_sized_new(num_open);
+	int num_open;
+	GPtrArray *devs;
+
+	elem = g_slist_reverse(g_slist_copy(priv->dev_registry));
+	num_open = g_slist_length(elem);
+	devs = g_ptr_array_sized_new(num_open);
 
 	if (num_open > 0) {
 		for (l = elem; l != NULL; l = l->next) {
@@ -181,8 +234,11 @@ static gboolean fprint_manager_get_default_device(FprintManager *manager,
 	const char **device, GError **error)
 {
 	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
-	GSList *elem = priv->dev_registry;
-	int num_open = g_slist_length(elem);
+	GSList *elem;;
+	int num_open;
+
+	elem = priv->dev_registry;
+	num_open = g_slist_length(elem);
 
 	if (num_open > 0) {
 		*device = get_device_path (g_slist_last (elem)->data);
