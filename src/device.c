@@ -110,6 +110,7 @@ struct FprintDevicePrivate {
 	/* Required to restart the operation on a retry failure. */
 	FpPrint   *verify_data;
 	GPtrArray *identify_data;
+	int enroll_data;
 
 	/* whether we're running an identify, or a verify */
 	FprintDeviceAction current_action;
@@ -375,6 +376,8 @@ enroll_result_to_name (gboolean completed, gboolean enrolled, GError *error)
 		 */
 		if (g_error_matches (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_PROTO))
 			return "enroll-disconnected";
+		else if (g_error_matches (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_DATA_FULL))
+			return "enroll-data-full";
 
 		return "enroll-unknown-error";
 	}
@@ -956,6 +959,75 @@ static void enroll_progress_cb(FpDevice *dev,
 		g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, name, FALSE);
 }
 
+static gboolean try_delete_print(FprintDevice *rdev)
+{
+	g_autoptr(GError) error = NULL;
+	g_autoptr(GPtrArray) device_prints = NULL;
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	GSList *users, *user;
+
+	device_prints = fp_device_list_prints_sync (priv->dev, NULL, &error);
+	if (!device_prints) {
+		g_warning ("Failed to query prints: %s", error->message);
+		return FALSE;
+	}
+
+	g_debug ("Device has %d prints stored", device_prints->len);
+
+	users = store.discover_users();
+
+	for (user = users; user; user = user->next) {
+		const gchar *username = user->data;
+		GSList *fingers, *finger;
+
+		fingers = store.discover_prints (priv->dev, username);
+
+		for (finger = fingers; finger; finger = finger->next) {
+			g_autoptr(FpPrint) print = NULL;
+			guint index;
+
+			store.print_data_load (priv->dev,
+			                       GPOINTER_TO_INT (fingers->data),
+			                       username,
+			                       &print);
+
+			if (!print)
+				continue;
+
+			if (!g_ptr_array_find_with_equal_func (device_prints,
+			                                       print,
+			                                       (GEqualFunc) fp_print_equal,
+			                                       &index))
+				continue;
+
+			/* Found an equal print, remove it */
+			g_ptr_array_remove_index (device_prints, index);
+		}
+
+		g_slist_free (fingers);
+	}
+
+	g_slist_free_full (users, g_free);
+
+	g_debug ("Device has %d prints stored that we do not need", device_prints->len);
+	if (device_prints->len == 0)
+		return FALSE;
+
+	/* Just delete the first print in the list at this point.
+	 * We could be smarter and fetch some more metadata. */
+	fp_device_delete_print_sync (priv->dev,
+				     g_ptr_array_index (device_prints, 0),
+				     NULL,
+				     &error);
+
+	if (error) {
+		g_warning ("Failed to garbage collect a print: %s", error->message);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static FpPrint*
 fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
 {
@@ -987,6 +1059,29 @@ static void enroll_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	const char *name;
 
 	print = fp_device_enroll_finish (dev, res, &error);
+
+	/* We need to special case the issue where the on device storage
+	 * is completely full. In that case, we check whether we can delete
+	 * a print that is not coming from us; assuming it is from an old
+	 * installation.
+	 * We do this synchronously, which is not great but should be good
+	 * enough. */
+	if (g_error_matches (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_DATA_FULL)) {
+		g_debug ("Device storage is full, trying to garbage collect old prints");
+		if (try_delete_print (rdev)) {
+			/* Success? Then restart the operation */
+			fp_device_enroll (priv->dev,
+			                  fprint_device_create_enroll_template (rdev, priv->enroll_data),
+			                  priv->current_cancellable,
+			                  enroll_progress_cb,
+			                  rdev,
+			                  NULL,
+			                  (GAsyncReadyCallback) enroll_cb,
+			                  rdev);
+			return;
+		}
+	}
+
 	name = enroll_result_to_name (TRUE, print != NULL, error);
 
 	g_debug ("enroll_cb: result %s", name);
@@ -1053,6 +1148,7 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 	g_debug("start enrollment device %d finger %d", priv->id, finger_num);
 
 	priv->current_cancellable = g_cancellable_new ();
+	priv->enroll_data = finger_num;
 	fp_device_enroll (priv->dev,
 	                  fprint_device_create_enroll_template (rdev, priv->enroll_data),
 	                  priv->current_cancellable,
