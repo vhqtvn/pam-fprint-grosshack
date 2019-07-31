@@ -38,5 +38,6 @@ int file_storage_init(void);
 int file_storage_deinit(void);
 
 GSList *file_storage_discover_prints(FpDevice *dev, const char *username);
+GSList *file_storage_discover_users(void);
 
 #endif

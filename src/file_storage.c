@@ -254,6 +254,29 @@ GSList *file_storage_discover_prints(FpDevice *dev, const char *username)
 	return list;
 }
 
+GSList *file_storage_discover_users()
+{
+	g_autoptr(GError) err = NULL;
+	GSList *list = NULL;
+	const gchar *ent;
+	GDir *dir = g_dir_open(FILE_STORAGE_PATH, 0, &err);
+
+	if (!dir) {
+		return list;
+	}
+
+	while ((ent = g_dir_read_name(dir))) {
+		/* ent is a username */
+		if (*ent == 0)
+			continue;
+
+		list = g_slist_prepend(list, g_strdup (ent));
+	}
+
+	g_dir_close(dir);
+	return list;
+}
+
 int file_storage_init(void)
 {
 	/* Nothing to do */

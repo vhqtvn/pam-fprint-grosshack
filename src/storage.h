@@ -31,6 +31,7 @@ typedef int (*storage_print_data_delete)(FpDevice   *dev,
                                          FpFinger    finger,
                                          const char *username);
 typedef GSList *(*storage_discover_prints)(FpDevice *dev, const char *username);
+typedef GSList *(*storage_discover_users)();
 typedef int (*storage_init)(void);
 typedef int (*storage_deinit)(void);
 
@@ -41,6 +42,7 @@ struct storage {
 	storage_print_data_load print_data_load;
 	storage_print_data_delete print_data_delete;
 	storage_discover_prints discover_prints;
+	storage_discover_users discover_users;
 };
 
 typedef struct storage fp_storage;
