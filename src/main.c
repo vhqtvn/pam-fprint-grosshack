@@ -171,18 +171,6 @@ int main(int argc, char **argv)
 	driver_proxy = dbus_g_proxy_new_for_name(fprintd_dbus_conn,
 		DBUS_SERVICE_DBUS, DBUS_PATH_DBUS, DBUS_INTERFACE_DBUS);
 
-
-	if (!org_freedesktop_DBus_request_name(driver_proxy, FPRINT_SERVICE_NAME,
-			0, &request_name_ret, &error)) {
-		g_warning("Failed to get name: %s", error->message);
-		return 1;
-	}
-
-	if (request_name_ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
-		g_warning ("Got result code %u from requesting name", request_name_ret);
-		return 1;
-	}
-
 	/* Load the configuration file,
 	 * and the default storage plugin */
 	if (!load_conf())
@@ -196,6 +184,22 @@ int main(int argc, char **argv)
 	/* create the one instance of the Manager object to be shared between
 	 * all fprintd users */
 	manager = fprint_manager_new(no_timeout);
+
+	/* Obtain the well-known name after the manager has been initialized.
+	 * Otherwise a client immediately enumerating the devices will not see
+	 * any. */
+	if (!org_freedesktop_DBus_request_name(driver_proxy, FPRINT_SERVICE_NAME,
+			0, &request_name_ret, &error)) {
+		g_warning("Failed to get name: %s", error->message);
+		g_object_unref (manager);
+		return 1;
+	}
+
+	if (request_name_ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
+		g_warning ("Got result code %u from requesting name", request_name_ret);
+		g_object_unref (manager);
+		return 1;
+	}
 
 	g_debug("D-Bus service launched with name: %s", FPRINT_SERVICE_NAME);
 
