@@ -476,7 +476,13 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 					   G_TYPE_NONE, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INVALID);
 
 	pam_get_item(pamh, PAM_RHOST, (const void **)(const void*) &rhost);
-	if (rhost != NULL && strlen(rhost) > 0) {
+
+	if (rhost == NULL || *rhost == '\0') {
+		/* unavailable host information */
+		return PAM_AUTHINFO_UNAVAIL;
+	}
+
+	if (strcmp (rhost, "localhost") != 0) {
 		/* remote login (e.g. over SSH) */
 		return PAM_AUTHINFO_UNAVAIL;
 	}
