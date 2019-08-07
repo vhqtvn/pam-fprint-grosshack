@@ -749,8 +749,30 @@ static void fprint_device_release(FprintDevice *rdev,
 	}
 }
 
-static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
-		      void *user_data)
+static void verify_cb(struct fp_dev *dev,
+		      int            r,
+		      struct fp_img *img,
+		      void          *user_data);
+
+static void
+verify_restart_cb(struct fp_dev *dev,
+		  void          *user_data)
+{
+	struct FprintDevice *rdev = user_data;
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+
+	if (priv->current_action != ACTION_VERIFY)
+		return;
+
+	g_debug("verify_restart_cb: restarting verification");
+	fp_async_verify_start(priv->dev, priv->verify_data, verify_cb, rdev);
+}
+
+static void
+verify_cb(struct fp_dev *dev,
+	  int            r,
+	  struct fp_img *img,
+	  void          *user_data)
 {
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -761,8 +783,20 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 
 	g_debug("verify_cb: result %s (%d)", name, r);
 
-	if (r == FP_VERIFY_NO_MATCH || r == FP_VERIFY_MATCH || r < 0)
-		priv->action_done = TRUE;
+	if (r == FP_VERIFY_RETRY ||
+	    r == FP_VERIFY_RETRY_TOO_SHORT ||
+	    r == FP_VERIFY_RETRY_CENTER_FINGER ||
+	    r == FP_VERIFY_RETRY_REMOVE_FINGER) {
+		g_debug ("verify_cb: stopping current verification to retry");
+		fp_img_free(img);
+		if (fp_async_verify_stop(priv->dev, verify_restart_cb, user_data) == 0) {
+			g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, priv->action_done);
+			return;
+		}
+		/* fallthrough to error out if restarting failed */
+	}
+
+	priv->action_done = TRUE;
 	set_disconnected (priv, name);
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, priv->action_done);
 	fp_img_free(img);
@@ -773,8 +807,32 @@ static void verify_cb(struct fp_dev *dev, int r, struct fp_img *img,
 	}
 }
 
-static void identify_cb(struct fp_dev *dev, int r,
-			 size_t match_offset, struct fp_img *img, void *user_data)
+static void identify_cb(struct fp_dev *dev,
+			int            r,
+			size_t         match_offset,
+			struct fp_img *img,
+			void          *user_data);
+
+static void
+identify_restart_cb(struct fp_dev *dev,
+		    void          *user_data)
+{
+	struct FprintDevice *rdev = user_data;
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+
+	if (priv->current_action != ACTION_IDENTIFY)
+		return;
+
+	g_debug("identify_restart_cb: restarting identification");
+	fp_async_identify_start (priv->dev, priv->identify_data, identify_cb, rdev);
+}
+
+static void
+identify_cb(struct fp_dev *dev,
+	    int            r,
+	    size_t         match_offset,
+	    struct fp_img *img,
+	    void          *user_data)
 {
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
@@ -785,8 +843,20 @@ static void identify_cb(struct fp_dev *dev, int r,
 
 	g_debug("identify_cb: result %s (%d)", name, r);
 
-	if (r == FP_VERIFY_NO_MATCH || r == FP_VERIFY_MATCH || r < 0)
-		priv->action_done = TRUE;
+	if (r == FP_VERIFY_RETRY ||
+	    r == FP_VERIFY_RETRY_TOO_SHORT ||
+	    r == FP_VERIFY_RETRY_CENTER_FINGER ||
+	    r == FP_VERIFY_RETRY_REMOVE_FINGER) {
+		g_debug ("identify_cb: stopping current identification to retry");
+		fp_img_free(img);
+		if (fp_async_identify_stop(priv->dev, identify_restart_cb, user_data) == 0) {
+			g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, priv->action_done);
+			return;
+		}
+		/* fallthrough to error out if restarting failed */
+	}
+
+	priv->action_done = TRUE;
 	set_disconnected (priv, name);
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, priv->action_done);
 	fp_img_free(img);
@@ -988,6 +1058,13 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 		dbus_g_method_return_error(context, error);
 		g_error_free (error);
 		return;
+	}
+
+	if (r == -EINPROGRESS) {
+		g_debug ("%s stop already in progress",
+			 priv->current_action == ACTION_VERIFY ? "verification" : "identification");
+		dbus_g_method_return(context);
+		r = 0;
 	}
 
 	if (r < 0) {
