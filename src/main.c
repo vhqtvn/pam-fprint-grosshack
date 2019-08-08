@@ -89,7 +89,7 @@ load_conf (void)
 	file = g_key_file_new ();
 	g_debug("About to load configuration file '%s'", filename);
 	if (!g_key_file_load_from_file (file, filename, G_KEY_FILE_NONE, &error)) {
-		g_warning ("Could not open fprintd.conf: %s\n", error->message);
+		g_warning ("Could not open \"%s\": %s\n", filename, error->message);
 		goto bail;
 	}
 
