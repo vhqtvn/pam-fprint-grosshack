@@ -477,13 +477,12 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 
 	pam_get_item(pamh, PAM_RHOST, (const void **)(const void*) &rhost);
 
-	if (rhost == NULL || *rhost == '\0') {
-		/* unavailable host information */
-		return PAM_AUTHINFO_UNAVAIL;
-	}
-
-	if (strcmp (rhost, "localhost") != 0) {
-		/* remote login (e.g. over SSH) */
+	/* NULL or empty rhost if the host information is not available or set.
+	 * "localhost" if the host is local.
+	 * We want to not run for known remote hosts */
+	if (rhost != NULL &&
+	    rhost != '\0' &&
+	    strcmp (rhost, "localhost") != 0) {
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 
