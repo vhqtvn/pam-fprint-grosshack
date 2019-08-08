@@ -1,4 +1,4 @@
-AC_INIT([fprintd], [0.8.1])
+AC_INIT([fprintd], [0.9.0])
 AM_INIT_AUTOMAKE([1.11 dist-xz no-dist-gzip check-news])
 AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_HEADERS([config.h])
