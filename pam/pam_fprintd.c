@@ -481,7 +481,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 	 * "localhost" if the host is local.
 	 * We want to not run for known remote hosts */
 	if (rhost != NULL &&
-	    rhost != '\0' &&
+	    *rhost != '\0' &&
 	    strcmp (rhost, "localhost") != 0) {
 		return PAM_AUTHINFO_UNAVAIL;
 	}
