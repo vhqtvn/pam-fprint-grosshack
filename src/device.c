@@ -69,6 +69,8 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 						  const char *username,
 						  DBusGMethodInvocation *context);
+static void fprint_device_delete_enrolled_fingers2(FprintDevice *rdev,
+						    DBusGMethodInvocation *context);
 
 #include "device-dbus-glue.h"
 
@@ -730,10 +732,12 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	gboolean success;
 	const char *name;
 	gboolean match;
 
-	fp_device_verify_finish (dev, res, &match, NULL, &error);
+	success = fp_device_verify_finish (dev, res, &match, NULL, &error);
+	g_assert (!!success == !error);
 	name = verify_result_to_name (match, error);
 
 	g_debug("verify_cb: result %s", name);
@@ -772,9 +776,11 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	struct FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	const char *name;
+	gboolean success;
 	FpPrint *match;
 
-	fp_device_identify_finish (dev, res, &match, NULL, &error);
+	success = fp_device_identify_finish (dev, res, &match, NULL, &error);
+	g_assert (!!success == !error);
 	name = verify_result_to_name (match != NULL, error);
 
 	g_debug("verify_cb: result %s", name);
@@ -977,7 +983,7 @@ static gboolean try_delete_print(FprintDevice *rdev)
 	users = store.discover_users();
 
 	for (user = users; user; user = user->next) {
-		const gchar *username = user->data;
+		const char *username = user->data;
 		GSList *fingers, *finger;
 
 		fingers = store.discover_prints (priv->dev, username);
@@ -1254,14 +1260,53 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 	dbus_g_method_return(context, g_ptr_array_free (ret, FALSE));
 }
 
+static void delete_enrolled_fingers(FprintDevice *rdev, const char *user)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	guint i;
+
+	/* First try deleting the print from the device, we don't consider it
+	 * fatal if this does not work. */
+	if (fp_device_has_storage (priv->dev)) {
+		g_autoptr(GSList) prints = NULL;
+		GSList *l;
+
+		prints = store.discover_prints(priv->dev, user);
+
+		for (l = prints; l != NULL; l = l->next) {
+			g_autoptr(FpPrint) print = NULL;
+
+			store.print_data_load(priv->dev,
+			                      GPOINTER_TO_INT (l->data),
+			                      user,
+			                      &print);
+
+			if (print) {
+				g_autoptr(GError) error = NULL;
+
+				if (!fp_device_delete_print_sync (priv->dev, print, NULL, &error)) {
+					g_warning ("Error deleting print from device: %s", error->message);
+					g_warning ("This might indicate an issue in the libfprint driver or in the fingerprint device.");
+				}
+			}
+		}
+	}
+
+	for (i = FP_FINGER_LEFT_THUMB; i <= FP_FINGER_RIGHT_LITTLE; i++) {
+		store.print_data_delete(priv->dev, i, user);
+	}
+}
+
 static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 						  const char *username,
 						  DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
 	GError *error = NULL;
-	guint i;
 	char *user, *sender;
+	gboolean opened;
+
+	g_warning ("The API user should be updated to use DeleteEnrolledFingers2 method!");
 
 	user = _fprint_device_check_for_username (rdev,
 						  context,
@@ -1281,14 +1326,54 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 		return;
 	}
 
+	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+		/* Return error for anything but FPRINT_ERROR_CLAIM_DEVICE */
+		if (!g_error_matches (error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE)) {
+			dbus_g_method_return_error (context, error);
+			return;
+		}
+
+		g_clear_error (&error);
+		opened = FALSE;
+	} else {
+		opened = TRUE;
+	}
+
 	sender = dbus_g_method_get_sender (context);
 	_fprint_device_add_client (rdev, sender);
 	g_free (sender);
 
-	for (i = FP_FINGER_LEFT_THUMB; i <= FP_FINGER_RIGHT_LITTLE; i++) {
-		store.print_data_delete(priv->dev, i, user);
-	}
+	if (!opened && fp_device_has_storage (priv->dev))
+		fp_device_open_sync (priv->dev, NULL, NULL);
+
+	delete_enrolled_fingers (rdev, user);
+
+	if (!opened && fp_device_has_storage (priv->dev))
+		fp_device_close_sync (priv->dev, NULL, NULL);
+
 	g_free (user);
+
+	dbus_g_method_return(context);
+}
+
+static void fprint_device_delete_enrolled_fingers2(FprintDevice *rdev,
+						    DBusGMethodInvocation *context)
+{
+	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	GError *error = NULL;
+
+	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		return;
+	}
+
+	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
+		dbus_g_method_return_error (context, error);
+		g_error_free (error);
+		return;
+	}
+
+	delete_enrolled_fingers (rdev, priv->username);
 
 	dbus_g_method_return(context);
 }

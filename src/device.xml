@@ -250,7 +250,7 @@
 						<doc:definition>
 							No further prints can be enrolled on this device, <doc:ref type="method" to="Device.EnrollStop">Device.EnrollStop</doc:ref> should now be called.
 
-							<doc:ref type="method" to="DeleteEnrolledFingers">Delete other prints</doc:ref> from the device first to continue
+							<doc:ref type="method" to="DeleteEnrolledFingers2">Delete other prints</doc:ref> from the device first to continue
 							(e.g. from other users). Note that old prints or prints from other operating systems may be deleted automatically
 							to resolve this error without any notification.
 						</doc:definition>
@@ -310,6 +310,29 @@
 				<doc:description>
 					<doc:para>
 						Delete all the enrolled fingerprints for the chosen user.
+					</doc:para>
+					<doc:para>
+						This call only exists for compatibility reasons, you should instead claim the device using
+						<doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref> and then call
+						<doc:ref type="method" to="DeleteEnrolledFingers2">DeleteEnrolledFingers2</doc:ref>.
+					</doc:para>
+				</doc:description>
+
+				<doc:errors>
+					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
+				</doc:errors>
+			</doc:doc>
+		</method>
+
+		<!-- ************************************************************ -->
+
+		<method name="DeleteEnrolledFingers2">
+			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
+
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Delete all the enrolled fingerprints for the user currently claiming the device with <doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref>.
 					</doc:para>
 				</doc:description>
 
