@@ -6,7 +6,7 @@ dbus_services_DATA = $(dbus_services_in_files:.service.in=.service)
 $(dbus_services_DATA): $(dbus_services_in_files)
 	sed -e "s|\@LIBEXECDIR\@|$(libexecdir)|" $< > $@
 
-dbus_confdir = $(sysconfdir)/dbus-1/system.d
+dbus_confdir = $(datadir)/dbus-1/system.d
 dbus_conf_DATA = net.reactivated.Fprint.conf
 
 systemdservice_in_files = fprintd.service.in
