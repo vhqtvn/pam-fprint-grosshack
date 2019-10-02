@@ -45,6 +45,20 @@
 #define FP_FINGER_IS_VALID(finger) \
 	((finger) >= FP_FINGER_LEFT_THUMB && (finger) <= FP_FINGER_RIGHT_LITTLE)
 
+static const char *get_storage_path()
+{
+	const char *path;
+
+	/* set by systemd >= 240 to an absolute path
+	 * taking into account the StateDirectory
+	 * unit file setting */
+	path = g_getenv ("STATE_DIRECTORY");
+	if (path != NULL)
+		return path;
+
+	return FILE_STORAGE_PATH;
+}
+
 static char *get_path_to_storedir(const char *driver, const char * device_id, char *base_store)
 {
 	return g_build_filename(base_store, driver, device_id, NULL);
@@ -83,7 +97,7 @@ static char *get_path_to_print_dscv(FpDevice *dev, FpFinger finger, char *base_s
 
 static char *file_storage_get_basestore_for_username(const char *username)
 {
-	return g_build_filename(FILE_STORAGE_PATH, username, NULL);
+	return g_build_filename(get_storage_path(), username, NULL);
 }
 
 int file_storage_print_data_save(FpPrint *print)
@@ -259,7 +273,7 @@ GSList *file_storage_discover_users()
 	g_autoptr(GError) err = NULL;
 	GSList *list = NULL;
 	const gchar *ent;
-	GDir *dir = g_dir_open(FILE_STORAGE_PATH, 0, &err);
+	GDir *dir = g_dir_open(get_storage_path(), 0, &err);
 
 	if (!dir) {
 		return list;
