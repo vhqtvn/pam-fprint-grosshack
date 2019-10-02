@@ -81,7 +81,7 @@ AC_OUTPUT([
 Makefile
 src/Makefile
 data/Makefile
-tests/Makefile
+utils/Makefile
 pam/Makefile
 doc/Makefile
 doc/version.xml
