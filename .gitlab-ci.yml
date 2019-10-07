@@ -7,11 +7,13 @@ variables:
   DEPENDENCIES_STABLE: $DEPENDENCIES libfprint-devel
   DEPENDENCIES_DEV: $DEPENDENCIES git
   # Sync'ed up with https://gitlab.freedesktop.org/libfprint/libfprint/blob/master/.gitlab-ci.yml
-  DEPENDENCIES_LIBFPRINT: libusb1-devel glib2-devel nss-devel pixman-devel systemd
-                          meson gtk-doc gcc gcc-c++ glibc-devel libX11-devel
-                          libXv-devel
+  DEPENDENCIES_LIBFPRINT: libgusb-devel glib2-devel nss-devel pixman-devel systemd meson gtk-doc
+                          gcc gcc-c++ glibc-devel libX11-devel libXv-devel gtk3-devel flatpak-builder
+                          gobject-introspection-devel python3-cairo python3-gobject umockdev
 
 build_stable:
+  # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
+  allow_failure: true
   before_script:
     - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_STABLE
   script:
@@ -22,7 +24,7 @@ build_stable:
 build_dev:
   before_script:
     - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_LIBFPRINT $DEPENDENCIES_DEV
-    - git clone -b libfprint-1-0 https://gitlab.freedesktop.org/libfprint/libfprint.git
+    - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
     - cd libfprint
     - meson . _build --prefix=/usr
     - ninja -C _build
