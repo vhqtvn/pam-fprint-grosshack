@@ -3,7 +3,7 @@ image: fedora:rawhide
 variables:
   DEPENDENCIES: dbus-glib-devel pam-devel polkit-devel
                 gtk-doc meson intltool autoconf automake libtool
-                gcc gcc-c++ glibc-devel make
+                gcc gcc-c++ glibc-devel make python3-dbusmock
   DEPENDENCIES_STABLE: $DEPENDENCIES libfprint-devel
   DEPENDENCIES_DEV: $DEPENDENCIES git
   # Sync'ed up with https://gitlab.freedesktop.org/libfprint/libfprint/blob/master/.gitlab-ci.yml
@@ -36,3 +36,25 @@ build_dev:
     - ./autogen.sh --disable-dependency-tracking
     - make
     - make install
+
+test_dev:
+  stage: test
+  before_script:
+    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_LIBFPRINT $DEPENDENCIES_DEV
+    - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
+    - cd libfprint
+    - meson . _build --prefix=/usr -Ddrivers=virtual_image
+    - ninja -C _build
+    - ninja -C _build install
+    - cd ..
+    # So we don't get error about this libfprint file
+    - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
+  script:
+    - ./autogen.sh --disable-dependency-tracking
+    - make
+    - make check
+  artifacts:
+    name: log
+    when: always
+    paths:
+      - tests/*.log
