@@ -86,5 +86,6 @@ pam/Makefile
 doc/Makefile
 doc/version.xml
 doc/dbus/Makefile
+tests/Makefile
 po/Makefile.in
 ])
