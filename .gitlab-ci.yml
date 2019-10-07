@@ -22,7 +22,7 @@ build_stable:
 build_dev:
   before_script:
     - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_LIBFPRINT $DEPENDENCIES_DEV
-    - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
+    - git clone -b libfprint-1-0 https://gitlab.freedesktop.org/libfprint/libfprint.git
     - cd libfprint
     - meson . _build --prefix=/usr
     - ninja -C _build
