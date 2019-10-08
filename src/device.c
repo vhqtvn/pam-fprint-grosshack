@@ -683,10 +683,8 @@ static void fprint_device_claim(FprintDevice *rdev,
 		g_slice_free(struct session_data, priv->session);
 		priv->session = NULL;
 
-		g_free (priv->username);
-		priv->username = NULL;
-		g_free (priv->sender);
-		priv->sender = NULL;
+		g_clear_pointer (&priv->username, g_free);
+		g_clear_pointer (&priv->sender, g_free);
 
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
 			"Could not attempt device open, error %d", r);
@@ -706,11 +704,8 @@ static void dev_close_cb(struct fp_dev *dev, void *user_data)
 	g_slice_free(struct session_data, session);
 	priv->session = NULL;
 
-	g_free (priv->sender);
-	priv->sender = NULL;
-
-	g_free (priv->username);
-	priv->username = NULL;
+	g_clear_pointer (&priv->sender, g_free);
+	g_clear_pointer (&priv->username, g_free);
 
 	g_debug("released device %d", priv->id);
 	dbus_g_method_return(context);
@@ -1045,8 +1040,7 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 			guint i;
 			for (i = 0; priv->identify_data[i] != NULL; i++)
 				fp_print_data_free(priv->identify_data[i]);
-			g_free (priv->identify_data);
-			priv->identify_data = NULL;
+			g_clear_pointer (&priv->identify_data, g_free);
 		}
 		if (!priv->disconnected)
 			r = fp_async_identify_stop(priv->dev, identify_stop_cb, context);
