@@ -1297,6 +1297,44 @@ static void delete_enrolled_fingers(FprintDevice *rdev, const char *user)
 	}
 }
 
+#ifdef __linux__
+static void log_offending_client(DBusGMethodInvocation *context)
+{
+	g_autofree char *sender = NULL;
+	g_autofree char *path = NULL;
+	g_autofree char *content = NULL;
+	DBusGProxy *proxy = NULL;
+	guint pid = 0;
+
+	sender = dbus_g_method_get_sender(context);
+	proxy = dbus_g_proxy_new_for_name (fprintd_dbus_conn,
+					    "org.freedesktop.DBus",
+					    "/org/freedesktop/DBus",
+					    "org.freedesktop.DBus");
+
+	if (!dbus_g_proxy_call(proxy,
+			       "GetConnectionUnixProcessID",
+			       NULL,
+			       G_TYPE_STRING,
+			       sender,
+			       G_TYPE_INVALID,
+			       G_TYPE_UINT,
+			       &pid,
+			       G_TYPE_INVALID)) {
+		goto out;
+	}
+
+	path = g_strdup_printf ("/proc/%u/comm", pid);
+	if (g_file_get_contents (path, &content, NULL, NULL)) {
+		g_strchomp (content);
+		g_warning ("Offending API user is %s", content);
+	}
+
+out:
+	g_clear_object (&proxy);
+}
+#endif
+
 static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 						  const char *username,
 						  DBusGMethodInvocation *context)
@@ -1307,6 +1345,9 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 	gboolean opened;
 
 	g_warning ("The API user should be updated to use DeleteEnrolledFingers2 method!");
+#ifdef __linux__
+	log_offending_client(context);
+#endif
 
 	user = _fprint_device_check_for_username (rdev,
 						  context,
