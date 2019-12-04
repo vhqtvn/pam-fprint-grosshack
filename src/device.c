@@ -757,6 +757,9 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		g_clear_object (&priv->verify_data);
 		g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, TRUE);
 
+		if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+			g_warning ("Device reported an error during verify: %s", error->message);
+
 		/* Return the cancellation or reset action right away if vanished. */
 		if (priv->current_cancel_context) {
 			dbus_g_method_return(priv->current_cancel_context);
@@ -799,6 +802,9 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	} else {
 		g_clear_pointer (&priv->identify_data, g_ptr_array_unref);
 		g_signal_emit (rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, TRUE);
+
+		if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+			g_warning ("Device reported an error during identify: %s", error->message);
 
 		/* Return the cancellation or reset action right away if vanished. */
 		if (priv->current_cancel_context) {
@@ -1102,6 +1108,9 @@ static void enroll_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	set_disconnected (priv, name);
 
 	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, name, TRUE);
+
+	if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+		g_warning ("Device reported an error during enroll: %s", error->message);
 
 	/* Return the cancellation or reset action right away if vanished. */
 	if (priv->current_cancel_context) {
