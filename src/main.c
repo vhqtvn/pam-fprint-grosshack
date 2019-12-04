@@ -136,6 +136,8 @@ int main(int argc, char **argv)
 	DBusGProxy *driver_proxy;
 	guint32 request_name_ret;
 
+	setlocale (LC_ALL, "");
+
 	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 	textdomain (GETTEXT_PACKAGE);

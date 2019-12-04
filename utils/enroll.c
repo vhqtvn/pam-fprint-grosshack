@@ -19,6 +19,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <locale.h>
 #include <dbus/dbus-glib-bindings.h>
 #include "manager-dbus-glue.h"
 #include "device-dbus-glue.h"
@@ -158,6 +159,8 @@ int main(int argc, char **argv)
 	GOptionContext *context;
 	GError *err = NULL;
 	DBusGProxy *dev;
+
+	setlocale (LC_ALL, "");
 
 	dbus_g_object_register_marshaller (fprintd_marshal_VOID__STRING_BOOLEAN,
 					   G_TYPE_NONE, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INVALID);

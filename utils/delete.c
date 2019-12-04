@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <locale.h>
 #include <dbus/dbus-glib-bindings.h>
 #include "manager-dbus-glue.h"
 #include "device-dbus-glue.h"
@@ -125,6 +126,8 @@ static void process_devices(char **argv)
 
 int main(int argc, char **argv)
 {
+	setlocale (LC_ALL, "");
+
 	create_manager();
 
 	if (argc < 2) {
