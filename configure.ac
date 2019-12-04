@@ -21,11 +21,11 @@ PKG_CHECK_MODULES(FPRINT, [libfprint2 >= 1.90.0])
 AC_SUBST(FPRINT_LIBS)
 AC_SUBST(FPRINT_CFLAGS)
 
-PKG_CHECK_MODULES(GLIB, glib-2.0 dbus-glib-1)
+PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.56 dbus-glib-1)
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
 
-PKG_CHECK_MODULES(DAEMON, glib-2.0 dbus-glib-1 gmodule-2.0 polkit-gobject-1 >= 0.91 gio-2.0 >= 2.26)
+PKG_CHECK_MODULES(DAEMON, glib-2.0 dbus-glib-1 gmodule-2.0 polkit-gobject-1 >= 0.91 gio-2.0)
 AC_SUBST(DAEMON_LIBS)
 AC_SUBST(DAEMON_CFLAGS)
 

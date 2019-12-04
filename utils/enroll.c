@@ -159,10 +159,6 @@ int main(int argc, char **argv)
 	GError *err = NULL;
 	DBusGProxy *dev;
 
-#if !GLIB_CHECK_VERSION (2, 36, 0)
-	g_type_init();
-#endif
-
 	dbus_g_object_register_marshaller (fprintd_marshal_VOID__STRING_BOOLEAN,
 					   G_TYPE_NONE, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INVALID);
 

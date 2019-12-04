@@ -125,10 +125,6 @@ static void process_devices(char **argv)
 
 int main(int argc, char **argv)
 {
-#if !GLIB_CHECK_VERSION (2, 36, 0)
-	g_type_init();
-#endif
-
 	create_manager();
 
 	if (argc < 2) {

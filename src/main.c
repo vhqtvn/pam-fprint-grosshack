@@ -143,10 +143,6 @@ int main(int argc, char **argv)
 	context = g_option_context_new ("Fingerprint handler daemon");
 	g_option_context_add_main_entries (context, entries, GETTEXT_PACKAGE);
 
-#if !GLIB_CHECK_VERSION (2, 36, 0)
-	g_type_init();
-#endif
-
 	if (g_option_context_parse (context, &argc, &argv, &error) == FALSE) {
 		g_warning ("couldn't parse command-line options: %s\n", error->message);
 		g_error_free (error);
