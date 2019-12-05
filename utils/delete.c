@@ -54,7 +54,12 @@ static void delete_fingerprints(DBusGProxy *dev, const char *username)
 		exit (1);
 	}
 
-	if (!net_reactivated_Fprint_Device_delete_enrolled_fingers(dev, username, &error)) {
+	if (!net_reactivated_Fprint_Device_claim(dev, username, &error)) {
+		g_print("failed to claim device: %s\n", error->message);
+		exit (1);
+	}
+
+	if (!net_reactivated_Fprint_Device_delete_enrolled_fingers2(dev, &error)) {
 		if (dbus_g_error_has_name (error, "net.reactivated.Fprint.Error.NoEnrolledPrints") == FALSE) {
 			g_print("ListEnrolledFingers failed: %s\n", error->message);
 			exit (1);
@@ -64,6 +69,12 @@ static void delete_fingerprints(DBusGProxy *dev, const char *username)
 	} else {
 			g_print ("Fingerprints deleted on %s\n", g_value_get_string (g_hash_table_lookup (props, "name")));
 	}
+
+	if (!net_reactivated_Fprint_Device_release(dev, &error)) {
+		g_print("ReleaseDevice failed: %s\n", error->message);
+		exit (1);
+	}
+
 	g_hash_table_destroy (props);
 	g_object_unref (p);
 }
