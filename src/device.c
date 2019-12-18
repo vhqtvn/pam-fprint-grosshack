@@ -295,7 +295,7 @@ finger_num_to_name (int finger_num)
 {
 	if (finger_num == -1)
 		return "any";
-	if (finger_num < FP_FINGER_LEFT_THUMB || finger_num > FP_FINGER_RIGHT_LITTLE)
+	if (finger_num < FP_FINGER_FIRST || finger_num > FP_FINGER_LAST)
 		return NULL;
 	return fingers[finger_num];
 }
@@ -308,7 +308,7 @@ finger_name_to_num (const char *finger_name)
 	if (finger_name == NULL || *finger_name == '\0' || g_str_equal (finger_name, "any"))
 		return -1;
 
-	for (i = FP_FINGER_LEFT_THUMB; i < G_N_ELEMENTS (fingers); i++) {
+	for (i = FP_FINGER_FIRST; i <= FP_FINGER_LAST; i++) {
 		if (g_str_equal (finger_name, fingers[i]))
 			return i;
 	}
@@ -1301,7 +1301,7 @@ static void delete_enrolled_fingers(FprintDevice *rdev, const char *user)
 		}
 	}
 
-	for (i = FP_FINGER_LEFT_THUMB; i <= FP_FINGER_RIGHT_LITTLE; i++) {
+	for (i = FP_FINGER_FIRST; i <= FP_FINGER_LAST; i++) {
 		store.print_data_delete(priv->dev, i, user);
 	}
 }
