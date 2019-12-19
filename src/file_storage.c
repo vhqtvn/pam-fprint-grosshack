@@ -42,9 +42,6 @@
 #define FILE_STORAGE_PATH "/var/lib/fprint"
 #define DIR_PERMS 0700
 
-#define FP_FINGER_IS_VALID(finger) \
-	((finger) >= FP_FINGER_FIRST && (finger) <= FP_FINGER_LAST)
-
 static const char *get_storage_path()
 {
 	const char *path;
