@@ -295,7 +295,7 @@ finger_num_to_name (int finger_num)
 {
 	if (finger_num == -1)
 		return "any";
-	if (finger_num < FP_FINGER_FIRST || finger_num > FP_FINGER_LAST)
+	if (!FP_FINGER_IS_VALID (finger_num))
 		return NULL;
 	return fingers[finger_num];
 }
