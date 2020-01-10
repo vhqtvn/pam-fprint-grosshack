@@ -1,6 +1,21 @@
 This file lists notable changes in each release. For the full history of all
 changes, see ChangeLog.
 
+version 1.90.1:
+- Add support for prints saved on the fingerprint device itself
+- Add integration tests using the virtual image driver, and further
+  tests for the utilities
+- Port build system to meson
+- Loads of build warnings and memory leak fixes
+
+- PAM module:
+  - Port PAM module to sd-bus from dbus-glib
+  - Use systemd to not ask for a fingerprint scan on remote logins
+  - Add man page for PAM module
+  - Add tests
+
+This version requires libfprint 1.90.1, a 2.0 pre-release.
+
 version 0.9.0:
 - Fix hangs when there the verification error was "retry"
 - Update for fp_get_pollfds() changes
