@@ -89,7 +89,7 @@ struct session_data {
 	DBusGMethodInvocation *context_release_device;
 };
 
-struct FprintDevicePrivate {
+typedef struct {
 	guint32 id;
 	FpDevice *dev;
 	struct session_data *session;
@@ -120,9 +120,7 @@ struct FprintDevicePrivate {
 	DBusGMethodInvocation *current_cancel_context;
 	/* Whether the device was disconnected */
 	gboolean disconnected;
-};
-
-typedef struct FprintDevicePrivate FprintDevicePrivate;
+} FprintDevicePrivate;
 
 #define DEVICE_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE((o), FPRINT_TYPE_DEVICE, FprintDevicePrivate))
 
