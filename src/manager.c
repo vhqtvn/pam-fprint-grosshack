@@ -178,7 +178,7 @@ fprint_manager_init (FprintManager *manager)
 				 manager,
 				 G_CONNECT_SWAPPED);
 
-	/* Prepare everthing by enumerating all devices. */
+	/* Prepare everything by enumerating all devices. */
 	fp_context_enumerate (priv->context);
 
 	dbus_g_connection_register_g_object(fprintd_dbus_conn,
