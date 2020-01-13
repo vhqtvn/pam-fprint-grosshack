@@ -1,7 +1,7 @@
 /*
  * pam_fprint: PAM module for fingerprint authentication through fprintd
  * Copyright (C) 2007 Daniel Drake <dsd@gentoo.org>
- * Copyright (C) 2008 Bastien Nocera <hadess@hadess.net>
+ * Copyright (C) 2008-2014, 2017-2020 Bastien Nocera <hadess@hadess.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
