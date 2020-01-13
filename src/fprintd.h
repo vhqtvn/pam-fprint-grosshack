@@ -39,7 +39,7 @@ GType fprint_error_get_type(void);
 typedef enum {
 	FPRINT_ERROR_CLAIM_DEVICE, /* developer didn't claim the device */
 	FPRINT_ERROR_ALREADY_IN_USE, /* device is already claimed by somebody else */
-	FPRINT_ERROR_INTERNAL, /* internal error occured */
+	FPRINT_ERROR_INTERNAL, /* internal error occurred */
 	FPRINT_ERROR_PERMISSION_DENIED, /* PolicyKit refused the action */
 	FPRINT_ERROR_NO_ENROLLED_PRINTS, /* No prints are enrolled */
 	FPRINT_ERROR_NO_ACTION_IN_PROGRESS, /* No actions currently in progress */
@@ -94,7 +94,7 @@ guint32 _fprint_device_get_id(FprintDevice *rdev);
 /* Print */
 /* TODO */
 
-/* Binding data included in main.c thorugh server-bindings.h which individual
+/* Binding data included in main.c through server-bindings.h which individual
  * class implementations need to access.
  */
 extern const DBusGObjectInfo dbus_glib_fprint_manager_object_info;
