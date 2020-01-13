@@ -122,7 +122,7 @@ typedef struct {
 	gboolean disconnected;
 } FprintDevicePrivate;
 
-#define DEVICE_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE((o), FPRINT_TYPE_DEVICE, FprintDevicePrivate))
+G_DEFINE_TYPE_WITH_CODE(FprintDevice, fprint_device, G_TYPE_OBJECT, G_ADD_PRIVATE (FprintDevice));
 
 enum fprint_device_properties {
 	FPRINT_DEVICE_CONSTRUCT_DEV = 1,
@@ -146,7 +146,7 @@ static guint signals[NUM_SIGNALS] = { 0, };
 static void fprint_device_finalize(GObject *object)
 {
 	FprintDevice *self = (FprintDevice *) object;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(self);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(self);
 
 	g_hash_table_destroy (priv->clients);
 	/* FIXME close and stuff */
@@ -156,7 +156,7 @@ static void fprint_device_set_property(GObject *object, guint property_id,
 	const GValue *value, GParamSpec *pspec)
 {
 	FprintDevice *self = (FprintDevice *) object;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(self);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(self);
 
 	switch (property_id) {
 	case FPRINT_DEVICE_CONSTRUCT_DEV:
@@ -172,7 +172,7 @@ static void fprint_device_get_property(GObject *object, guint property_id,
 				       GValue *value, GParamSpec *pspec)
 {
 	FprintDevice *self = (FprintDevice *) object;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(self);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(self);
 
 	switch (property_id) {
 	case FPRINT_DEVICE_CONSTRUCT_DEV:
@@ -219,7 +219,6 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 	gobject_class->finalize = fprint_device_finalize;
 	gobject_class->set_property = fprint_device_set_property;
 	gobject_class->get_property = fprint_device_get_property;
-	g_type_class_add_private(klass, sizeof(FprintDevicePrivate));
 
 	pspec = g_param_spec_object("dev", "Device",
 				     "Set device construction property",
@@ -265,7 +264,7 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 
 static void fprint_device_init(FprintDevice *device)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(device);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(device);
 	priv->id = ++last_id;
 
 	/* Setup PolicyKit */
@@ -276,8 +275,6 @@ static void fprint_device_init(FprintDevice *device)
 					       NULL);
 }
 
-G_DEFINE_TYPE(FprintDevice, fprint_device, G_TYPE_OBJECT);
-
 FprintDevice *fprint_device_new(FpDevice *dev)
 {
 	return g_object_new(FPRINT_TYPE_DEVICE, "dev", dev, NULL);
@@ -285,7 +282,9 @@ FprintDevice *fprint_device_new(FpDevice *dev)
 
 guint32 _fprint_device_get_id(FprintDevice *rdev)
 {
-	return DEVICE_GET_PRIVATE(rdev)->id;
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+
+	return priv->id;
 }
 
 static const char *
@@ -396,7 +395,7 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 			      DBusGMethodInvocation *context,
 			      GError **error)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	char *sender;
 	gboolean retval;
 
@@ -422,7 +421,7 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 static gboolean
 _fprint_device_check_polkit_for_action (FprintDevice *rdev, DBusGMethodInvocation *context, const char *action, GError **error)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	char *sender;
 	PolkitSubject *subject;
 	PolkitAuthorizationResult *result;
@@ -543,7 +542,7 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 				FprintDevice *rdev)
 {
 	g_autoptr(GError) error = NULL;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 
 	/* Was that the client that claimed the device? */
 	if (g_strcmp0 (priv->sender, name) == 0) {
@@ -571,7 +570,7 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 static void
 _fprint_device_add_client (FprintDevice *rdev, const char *sender)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	guint id;
 
 	id = GPOINTER_TO_UINT (g_hash_table_lookup (priv->clients, sender));
@@ -592,7 +591,7 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	struct session_data *session = priv->session;
 
 	if (!fp_device_open_finish (dev, res, &error)) {
@@ -616,7 +615,7 @@ static void fprint_device_claim(FprintDevice *rdev,
 				const char *username,
 				DBusGMethodInvocation *context)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 	char *sender, *user;
 
@@ -673,7 +672,7 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	struct session_data *session = priv->session;
 
 	if (!fp_device_close_finish (dev, res, &error)) {
@@ -701,7 +700,7 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	struct session_data *session = priv->session;
 	GError *error = NULL;
 
@@ -729,7 +728,7 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
 	struct FprintDevice *rdev = user_data;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	gboolean success;
 	const char *name;
 	gboolean match;
@@ -777,7 +776,7 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
 	struct FprintDevice *rdev = user_data;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	const char *name;
 	gboolean success;
 	FpPrint *match;
@@ -824,7 +823,7 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 static void fprint_device_verify_start(FprintDevice *rdev,
 	const char *finger_name, DBusGMethodInvocation *context)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GPtrArray) gallery = NULL;
 	g_autoptr(FpPrint) print = NULL;
 	g_autoptr(GError) error = NULL;
@@ -931,7 +930,7 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 static void fprint_device_verify_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
@@ -983,7 +982,7 @@ static gboolean try_delete_print(FprintDevice *rdev)
 {
 	g_autoptr(GError) error = NULL;
 	g_autoptr(GPtrArray) device_prints = NULL;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GSList *users, *user;
 
 	device_prints = fp_device_list_prints_sync (priv->dev, NULL, &error);
@@ -1051,7 +1050,7 @@ static gboolean try_delete_print(FprintDevice *rdev)
 static FpPrint*
 fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	FpPrint *template = NULL;
 	GDateTime *datetime = NULL;
 	GDate *date = NULL;
@@ -1074,7 +1073,7 @@ static void enroll_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
 	struct FprintDevice *rdev = user_data;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(FpPrint) print = NULL;
 	const char *name;
 
@@ -1136,7 +1135,7 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 	const char *finger_name, DBusGMethodInvocation *context)
 {
 	g_autoptr(GError) error = NULL;
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	int finger_num = finger_name_to_num (finger_name);
 
 	if (finger_num == -1) {
@@ -1189,7 +1188,7 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 static void fprint_device_enroll_stop(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
@@ -1226,7 +1225,7 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 						const char *username,
 						DBusGMethodInvocation *context)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 	GSList *prints;
 	GSList *item;
@@ -1279,7 +1278,7 @@ static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
 
 static void delete_enrolled_fingers(FprintDevice *rdev, const char *user)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	guint i;
 
 	/* First try deleting the print from the device, we don't consider it
@@ -1356,7 +1355,7 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 						  const char *username,
 						  DBusGMethodInvocation *context)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 	char *user, *sender;
 	gboolean opened;
@@ -1417,7 +1416,7 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 static void fprint_device_delete_enrolled_fingers2(FprintDevice *rdev,
 						    DBusGMethodInvocation *context)
 {
-	FprintDevicePrivate *priv = DEVICE_GET_PRIVATE(rdev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
