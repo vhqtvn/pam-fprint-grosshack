@@ -2,7 +2,7 @@
 
 fprintd - Fingerprint management daemon, and test applications
 
-=head1 SYNOPSYS
+=head1 SYNOPSIS
 
 B<fprintd-enroll> [-f finger] [usename]
 
