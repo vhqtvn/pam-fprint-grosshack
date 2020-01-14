@@ -28,6 +28,15 @@
 
 #define GNUC_UNUSED __attribute__((__unused__))
 
+static bool str_equal (const char *a, const char *b)
+{
+	if (a == NULL && b == NULL)
+		return true;
+	if (a == NULL || b == NULL)
+		return false;
+	return (strcmp (a, b) == 0);
+}
+
 struct {
 	const char *dbus_name;
 	const char *place_str_generic;
