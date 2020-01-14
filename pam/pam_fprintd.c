@@ -23,6 +23,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <string.h>
@@ -60,6 +61,17 @@
 static gboolean debug = FALSE;
 static guint max_tries = DEFAULT_MAX_TRIES;
 static guint timeout = DEFAULT_TIMEOUT;
+
+#define USEC_PER_SEC ((uint64_t) 1000000ULL)
+#define NSEC_PER_USEC ((uint64_t) 1000ULL)
+
+static uint64_t
+now (void)
+{
+	struct timespec ts;
+	clock_gettime (CLOCK_MONOTONIC, &ts);
+	return (uint64_t) ts.tv_sec * USEC_PER_SEC + (uint64_t) ts.tv_nsec / NSEC_PER_USEC;
+}
 
 static gboolean send_info_msg(pam_handle_t *pamh, const char *msg)
 {
