@@ -105,7 +105,7 @@ struct {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
-G_GNUC_UNUSED static char *finger_str_to_msg(const char *finger_name, const char *driver_name, gboolean is_swipe)
+GNUC_UNUSED static char *finger_str_to_msg(const char *finger_name, const char *driver_name, bool is_swipe)
 {
 	int i;
 
@@ -113,17 +113,25 @@ G_GNUC_UNUSED static char *finger_str_to_msg(const char *finger_name, const char
 		return NULL;
 
 	for (i = 0; fingers[i].dbus_name != NULL; i++) {
-		if (g_str_equal (fingers[i].dbus_name, finger_name)) {
-			if (is_swipe == FALSE) {
-				if (driver_name)
-					return g_strdup_printf (TR (fingers[i].place_str_specific), driver_name);
-				else
-					return g_strdup (TR (fingers[i].place_str_generic));
+		if (str_equal (fingers[i].dbus_name, finger_name)) {
+			if (is_swipe == false) {
+				if (driver_name) {
+					char *s;
+					int ret;
+					ret = asprintf (&s, TR (fingers[i].place_str_specific), driver_name);
+					return ret >= 0 ? s : NULL;
+				} else {
+					return strdup (TR (fingers[i].place_str_generic));
+				}
 			} else {
-				if (driver_name)
-					return g_strdup_printf (TR (fingers[i].swipe_str_specific), driver_name);
-				else
-					return g_strdup (TR (fingers[i].swipe_str_generic));
+				if (driver_name) {
+					char *s;
+					int ret;
+					ret = asprintf (&s, TR (fingers[i].swipe_str_specific), driver_name);
+					return ret >= 0 ? s : NULL;
+				} else {
+					return strdup (TR (fingers[i].swipe_str_generic));
+				}
 			}
 		}
 	}
@@ -138,13 +146,13 @@ G_GNUC_UNUSED static char *finger_str_to_msg(const char *finger_name, const char
  * verify-match
  * verify-unknown-error
  */
-G_GNUC_UNUSED static const char *verify_result_str_to_msg(const char *result, gboolean is_swipe)
+GNUC_UNUSED static const char *verify_result_str_to_msg(const char *result, bool is_swipe)
 {
 	if (result == NULL)
 		return NULL;
 
 	if (strcmp (result, "verify-retry-scan") == 0) {
-		if (is_swipe == FALSE)
+		if (is_swipe == false)
 			return N_("Place your finger on the reader again");
 		else
 			return N_("Swipe your finger again");
@@ -164,13 +172,13 @@ G_GNUC_UNUSED static const char *verify_result_str_to_msg(const char *result, gb
  * enroll-failed
  * enroll-unknown-error
  */
-G_GNUC_UNUSED static const char *enroll_result_str_to_msg(const char *result, gboolean is_swipe)
+GNUC_UNUSED static const char *enroll_result_str_to_msg(const char *result, bool is_swipe)
 {
 	if (result == NULL)
 		return NULL;
 
 	if (strcmp (result, "enroll-retry-scan") == 0 || strcmp (result, "enroll-stage-passed") == 0) {
-		if (is_swipe == FALSE)
+		if (is_swipe == false)
 			return N_("Place your finger on the reader again");
 		else
 			return N_("Swipe your finger again");
