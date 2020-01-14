@@ -73,6 +73,13 @@ now (void)
 	return (uint64_t) ts.tv_sec * USEC_PER_SEC + (uint64_t) ts.tv_nsec / NSEC_PER_USEC;
 }
 
+static bool str_has_prefix (const char *s, const char *prefix)
+{
+	if (s == NULL || prefix == NULL)
+		return false;
+	return (strncmp (s, prefix, strlen (prefix)) == 0);
+}
+
 static gboolean send_info_msg(pam_handle_t *pamh, const char *msg)
 {
 	const struct pam_message mymsg = {
