@@ -3,3 +3,4 @@ src/main.c
 src/manager.c
 src/device.c
 pam/fingerprint-strings.h
+pam/pam_fprintd.c

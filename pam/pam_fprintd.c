@@ -28,17 +28,18 @@
 #include <sys/types.h>
 #include <string.h>
 #include <syslog.h>
+#include <errno.h>
 
-#include <glib/gi18n-lib.h>
-#include <dbus/dbus-glib-bindings.h>
-#include <dbus/dbus-glib-lowlevel.h>
+#include <libintl.h>
+#include <systemd/sd-bus.h>
 
 #define PAM_SM_AUTH
 #include <security/pam_modules.h>
+#include <security/pam_ext.h>
 
-#include "marshal.h"
-
+#define _(s) ((char *) dgettext (GETTEXT_PACKAGE, s))
 #define TR(s) dgettext(GETTEXT_PACKAGE, s)
+#define N_(s) (s)
 
 #include "fingerprint-strings.h"
 
@@ -48,19 +49,9 @@
 #define MAX_TRIES_MATCH "max-tries="
 #define TIMEOUT_MATCH "timeout="
 
-#define D(pamh, ...) {					\
-	if (debug) {					\
-		char *s;				\
-		s = g_strdup_printf (__VA_ARGS__);	\
-		send_debug_msg (pamh, s);		\
-		g_free (s);				\
-	}						\
-}
-
-
-static gboolean debug = FALSE;
-static guint max_tries = DEFAULT_MAX_TRIES;
-static guint timeout = DEFAULT_TIMEOUT;
+static bool debug = false;
+static unsigned max_tries = DEFAULT_MAX_TRIES;
+static unsigned timeout = DEFAULT_TIMEOUT;
 
 #define USEC_PER_SEC ((uint64_t) 1000000ULL)
 #define NSEC_PER_USEC ((uint64_t) 1000ULL)
@@ -80,10 +71,10 @@ static bool str_has_prefix (const char *s, const char *prefix)
 	return (strncmp (s, prefix, strlen (prefix)) == 0);
 }
 
-static gboolean send_info_msg(pam_handle_t *pamh, const char *msg)
+static bool send_msg(pam_handle_t *pamh, const char *msg, int style)
 {
 	const struct pam_message mymsg = {
-		.msg_style = PAM_TEXT_INFO,
+		.msg_style = style,
 		.msg = msg,
 	};
 	const struct pam_message *msgp = &mymsg;
@@ -93,386 +84,507 @@ static gboolean send_info_msg(pam_handle_t *pamh, const char *msg)
 
 	r = pam_get_item(pamh, PAM_CONV, (const void **) &pc);
 	if (r != PAM_SUCCESS)
-		return FALSE;
+		return false;
 
 	if (!pc || !pc->conv)
-		return FALSE;
+		return false;
 
 	return (pc->conv(1, &msgp, &resp, pc->appdata_ptr) == PAM_SUCCESS);
 }
 
-static gboolean send_err_msg(pam_handle_t *pamh, const char *msg)
+static bool send_info_msg(pam_handle_t *pamh, const char *msg)
 {
-	const struct pam_message mymsg = {
-		.msg_style = PAM_ERROR_MSG,
-		.msg = msg,
-	};
-	const struct pam_message *msgp = &mymsg;
-	const struct pam_conv *pc;
-	struct pam_response *resp;
+	return send_msg(pamh, msg, PAM_TEXT_INFO);
+}
+
+static bool send_err_msg(pam_handle_t *pamh, const char *msg)
+{
+	return send_msg(pamh, msg, PAM_ERROR_MSG);
+}
+
+static char *
+open_device (pam_handle_t    *pamh,
+	     sd_bus          *bus,
+	     bool            *has_multiple_devices)
+{
+	sd_bus_error error = SD_BUS_ERROR_NULL;
+	sd_bus_message *m = NULL;
+	size_t num_devices;
+	const char *path = NULL;
+	char *ret;
+	const char *s;
 	int r;
 
-	r = pam_get_item(pamh, PAM_CONV, (const void **) &pc);
-	if (r != PAM_SUCCESS)
-		return FALSE;
+	*has_multiple_devices = false;
 
-	if (!pc || !pc->conv)
-		return FALSE;
-
-	return (pc->conv(1, &msgp, &resp, pc->appdata_ptr) == PAM_SUCCESS);
-}
-
-static void send_debug_msg(pam_handle_t *pamh, const char *msg)
-{
-	gconstpointer item;
-	const char *service;
-
-	if (pam_get_item(pamh, PAM_SERVICE, &item) != PAM_SUCCESS || !item)
-		service = "<unknown>";
-	else
-		service = item;
-
-	openlog (service, LOG_CONS | LOG_PID, LOG_AUTHPRIV);
-
-	syslog (LOG_AUTHPRIV|LOG_WARNING, "%s(%s): %s", "pam_fprintd", service, msg);
-
-	closelog ();
-
-}
-
-static DBusGProxy *create_manager (pam_handle_t *pamh, DBusGConnection **ret_conn, GMainLoop **ret_loop)
-{
-	DBusGConnection *connection;
-	DBusConnection *conn;
-	DBusGProxy *manager;
-	DBusError error;
-	GMainLoop *loop;
-	GMainContext *ctx;
-
-	/* Otherwise dbus-glib doesn't setup it value types */
-	connection = dbus_g_bus_get (DBUS_BUS_SYSTEM, NULL);
-
-	if (connection != NULL)
-		dbus_g_connection_unref (connection);
-
-	/* And set us up a private D-Bus connection */
-	dbus_error_init (&error);
-	conn = dbus_bus_get_private (DBUS_BUS_SYSTEM, &error);
-	if (conn == NULL) {
-		D(pamh, "Error with getting the bus: %s", error.message);
-		dbus_error_free (&error);
+	r = sd_bus_call_method (bus,
+				"net.reactivated.Fprint",
+				"/net/reactivated/Fprint/Manager",
+				"net.reactivated.Fprint.Manager",
+				"GetDevices",
+				&error,
+				&m,
+				NULL);
+	if (r < 0) {
+		pam_syslog (pamh, LOG_ERR, "GetDevices failed: %s", error.message);
+		sd_bus_error_free (&error);
 		return NULL;
 	}
 
-	/* Set up our own main loop context */
-	ctx = g_main_context_new ();
-	loop = g_main_loop_new (ctx, FALSE);
-	dbus_connection_setup_with_g_main (conn, ctx);
-
-	connection = dbus_connection_get_g_connection (conn);
-
-	manager = dbus_g_proxy_new_for_name(connection,
-					    "net.reactivated.Fprint",
-					    "/net/reactivated/Fprint/Manager",
-					    "net.reactivated.Fprint.Manager");
-	*ret_conn = connection;
-	*ret_loop = loop;
-
-	return manager;
-}
-
-static void close_and_unref (DBusGConnection *connection)
-{
-	DBusConnection *conn;
-
-	conn = dbus_g_connection_get_connection (connection);
-	dbus_connection_close (conn);
-	dbus_g_connection_unref (connection);
-}
-
-static void unref_loop (GMainLoop *loop)
-{
-	GMainContext *ctx;
-
-	/* The main context was created separately, so
-	 * we'll need to unref it ourselves */
-	ctx = g_main_loop_get_context (loop);
-	g_main_loop_unref (loop);
-	g_main_context_unref (ctx);
-}
-
-#define DBUS_TYPE_G_OBJECT_PATH_ARRAY (dbus_g_type_get_collection ("GPtrArray", DBUS_TYPE_G_OBJECT_PATH))
-
-static DBusGProxy *open_device(pam_handle_t *pamh, DBusGConnection *connection, DBusGProxy *manager, gboolean *has_multiple_devices)
-{
-	GError *error = NULL;
-	const char *path;
-	DBusGProxy *dev;
-	GPtrArray *paths_array;
-	const char **paths;
-
-	if (!dbus_g_proxy_call (manager, "GetDevices", &error,
-				G_TYPE_INVALID, DBUS_TYPE_G_OBJECT_PATH_ARRAY,
-				&paths_array, G_TYPE_INVALID)) {
-		D(pamh, "get_devices failed: %s", error->message);
-		g_error_free (error);
-		return NULL;
+	r = sd_bus_message_enter_container (m, 'a', "o");
+	if (r < 0) {
+		pam_syslog (pamh, LOG_ERR, "Failed to parse answer from GetDevices(): %d", r);
+		goto out;
 	}
 
-	if (paths_array == NULL || paths_array->len == 0) {
-		if (paths_array != NULL)
-			g_ptr_array_free (paths_array, TRUE);
-		D(pamh, "No devices found\n");
-		return NULL;
-	}
+	r = sd_bus_message_read_basic (m, 'o', &path);
+	if (r < 0)
+		goto out;
 
-	*has_multiple_devices = (paths_array->len > 1);
-	paths = (const char **)paths_array->pdata;
-	path = paths[0];
+	num_devices = 1;
+	while ((r = sd_bus_message_read_basic(m, 'o', &s)) > 0)
+		num_devices++;
+	*has_multiple_devices = (num_devices > 1);
+	if (debug)
+		pam_syslog(pamh, LOG_DEBUG, "Using device %s (out of %ld devices)", path, num_devices);
 
-	D(pamh, "Using device %s\n", path);
+	sd_bus_message_exit_container (m);
 
-	dev = dbus_g_proxy_new_for_name(connection,
-					"net.reactivated.Fprint",
-					path,
-					"net.reactivated.Fprint.Device");
-
-	g_ptr_array_free (paths_array, TRUE);
-
-	return dev;
+out:
+	ret = path ? strdup (path) : NULL;
+	sd_bus_message_unref (m);
+	return ret;
 }
 
 typedef struct {
-	guint max_tries;
+	unsigned max_tries;
 	char *result;
-	gboolean timed_out;
-	gboolean is_swipe;
+	bool timed_out;
+	bool is_swipe;
 	pam_handle_t *pamh;
-	GMainLoop *loop;
 
 	char *driver;
 } verify_data;
 
-static void verify_result(GObject *object, const char *result, gboolean done, gpointer user_data)
+static int
+verify_result (sd_bus_message *m,
+	       void           *userdata,
+	       sd_bus_error   *ret_error)
 {
-	verify_data *data = user_data;
+	verify_data *data = userdata;
 	const char *msg;
+	const char *result = NULL;
+	/* see https://github.com/systemd/systemd/issues/14643 */
+	uint64_t done = false;
+	int r;
 
-	D(data->pamh, "Verify result: %s\n", result);
-	if (done != FALSE) {
-		data->result = g_strdup (result);
-		g_main_loop_quit (data->loop);
-		return;
+	if (!sd_bus_message_is_signal(m, "net.reactivated.Fprint.Device", "VerifyStatus")) {
+		pam_syslog (data->pamh, LOG_ERR, "Not the signal we expected (iface: %s, member: %s)",
+			    sd_bus_message_get_interface (m),
+			    sd_bus_message_get_member (m));
+		return 0;
 	}
 
-	msg = TR(verify_result_str_to_msg (result, data->is_swipe));
+	if ((r = sd_bus_message_read (m, "sb", &result, &done)) < 0) {
+		pam_syslog (data->pamh, LOG_ERR, "Failed to parse VerifyResult signal: %d", r);
+		return 0;
+	}
+
+	if (debug)
+		pam_syslog (data->pamh, LOG_DEBUG, "Verify result: %s (done: %d)", result, done ? 1 : 0);
+
+	if (done) {
+		data->result = strdup (result);
+		return 0;
+	}
+
+	msg = _(verify_result_str_to_msg (result, data->is_swipe));
 	send_err_msg (data->pamh, msg);
+
+	return 0;
 }
 
-static void verify_finger_selected(GObject *object, const char *finger_name, gpointer user_data)
+static int
+verify_finger_selected (sd_bus_message *m,
+			void           *userdata,
+			sd_bus_error   *ret_error)
 {
-	verify_data *data = user_data;
+	verify_data *data = userdata;
+	const char *finger_name = NULL;
 	char *msg;
 
-	msg = finger_str_to_msg(finger_name, data->driver, data->is_swipe);
-
-	D(data->pamh, "verify_finger_selected %s", msg);
-	send_info_msg (data->pamh, msg);
-	g_free (msg);
-}
-
-static gboolean verify_timeout_cb (gpointer user_data)
-{
-	verify_data *data = user_data;
-
-	data->timed_out = TRUE;
-	send_info_msg (data->pamh, "Verification timed out");
-	g_main_loop_quit (data->loop);
-
-	return FALSE;
-}
-
-static int do_verify(GMainLoop *loop, pam_handle_t *pamh, DBusGProxy *dev, gboolean has_multiple_devices)
-{
-	GError *error = NULL;
-	GHashTable *props;
-	DBusGProxy *p;
-	verify_data *data;
-	int ret;
-
-	data = g_new0 (verify_data, 1);
-	data->max_tries = max_tries;
-	data->pamh = pamh;
-	data->loop = loop;
-
-	/* Get some properties for the device */
-	p = dbus_g_proxy_new_from_proxy (dev, "org.freedesktop.DBus.Properties", NULL);
-
-	if (dbus_g_proxy_call (p, "GetAll", NULL, G_TYPE_STRING, "net.reactivated.Fprint.Device", G_TYPE_INVALID,
-			       dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), &props, G_TYPE_INVALID)) {
-		const char *scan_type;
-		if (has_multiple_devices)
-			data->driver = g_value_dup_string (g_hash_table_lookup (props, "name"));
-		scan_type = g_value_dup_string (g_hash_table_lookup (props, "scan-type"));
-		if (g_str_equal (scan_type, "swipe"))
-			data->is_swipe = TRUE;
-		g_hash_table_destroy (props);
+	if (sd_bus_message_read_basic (m, 's', &finger_name) < 0) {
+		pam_syslog (data->pamh, LOG_ERR, "Failed to parse VerifyFingerSelected signal: %m");
+		return 0;
 	}
 
-	g_object_unref (p);
+	msg = finger_str_to_msg(finger_name, data->driver, data->is_swipe);
+	if (debug)
+		pam_syslog (data->pamh, LOG_DEBUG, "verify_finger_selected %s", msg);
+	send_info_msg (data->pamh, msg);
+	free (msg);
 
-	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_STRING, G_TYPE_BOOLEAN, NULL);
-	dbus_g_proxy_add_signal(dev, "VerifyFingerSelected", G_TYPE_STRING, NULL);
-	dbus_g_proxy_connect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result),
-				    data, NULL);
-	dbus_g_proxy_connect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected),
-				    data, NULL);
+	return 0;
+}
+
+/* See https://github.com/systemd/systemd/issues/14636 */
+static int
+get_property_string (sd_bus *bus,
+		     const char *destination,
+		     const char *path,
+		     const char *interface,
+		     const char *member,
+		     sd_bus_error *error,
+		     char **ret) {
+
+	sd_bus_message *reply = NULL;
+	const char *s;
+	char *n;
+	int r;
+
+	r = sd_bus_call_method(bus, destination, path, "org.freedesktop.DBus.Properties", "Get", error, &reply, "ss", interface, member);
+	if (r < 0)
+		return r;
+
+	r = sd_bus_message_enter_container(reply, 'v', "s");
+	if (r < 0)
+		goto fail;
+
+	r = sd_bus_message_read_basic(reply, 's', &s);
+	if (r < 0)
+		goto fail;
+
+	n = strdup(s);
+	if (!n) {
+		r = -ENOMEM;
+		goto fail;
+	}
+
+	sd_bus_message_unref (reply);
+
+	*ret = n;
+	return 0;
+
+fail:
+	if (reply != NULL)
+		sd_bus_message_unref (reply);
+	return sd_bus_error_set_errno(error, r);
+}
+
+static int
+do_verify (pam_handle_t *pamh,
+	   sd_bus       *bus,
+	   const char   *dev,
+	   bool          has_multiple_devices)
+{
+	verify_data *data;
+	sd_bus_slot *verify_status_slot, *verify_finger_selected_slot;
+	char *scan_type = NULL;
+	int ret;
+	int r;
+
+	data = calloc (1, sizeof(verify_data));
+	data->max_tries = max_tries;
+	data->pamh = pamh;
+
+	/* Get some properties for the device */
+	r = get_property_string (bus,
+				 "net.reactivated.Fprint",
+				 dev,
+				 "net.reactivated.Fprint.Device",
+				 "scan-type",
+				 NULL,
+				 &scan_type);
+	if (r < 0)
+		pam_syslog (data->pamh, LOG_ERR, "Failed to get scan-type for %s: %d", dev, r);
+	if (debug)
+		pam_syslog (data->pamh, LOG_DEBUG, "scan-type for %s: %s", dev, scan_type);
+	if (str_equal (scan_type, "swipe"))
+		data->is_swipe = true;
+	free (scan_type);
+
+	if (has_multiple_devices) {
+		get_property_string (bus,
+				     "net.reactivated.Fprint",
+				     dev,
+				     "net.reactivated.Fprint.Device",
+				     "name",
+				     NULL,
+				     &data->driver);
+		if (r < 0)
+			pam_syslog (data->pamh, LOG_ERR, "Failed to get driver name for %s: %d", dev, r);
+		if (debug && r == 0)
+			pam_syslog (data->pamh, LOG_DEBUG, "driver name for %s: %s", dev, data->driver);
+	}
+
+	verify_status_slot = NULL;
+	sd_bus_match_signal (bus,
+			     &verify_status_slot,
+			     "net.reactivated.Fprint",
+			     dev,
+			     "net.reactivated.Fprint.Device",
+			     "VerifyStatus",
+			     verify_result,
+			     data);
+
+	verify_finger_selected_slot = NULL;
+	sd_bus_match_signal (bus,
+			     &verify_finger_selected_slot,
+			     "net.reactivated.Fprint",
+			     dev,
+			     "net.reactivated.Fprint.Device",
+			     "VerifyFingerSelected",
+			     verify_finger_selected,
+			     data);
 
 	ret = PAM_AUTH_ERR;
 
 	while (ret == PAM_AUTH_ERR && data->max_tries > 0) {
-		GSource *source;
+		uint64_t verification_end = now () + (timeout * USEC_PER_SEC);
+		sd_bus_message *m = NULL;
+		sd_bus_error error = SD_BUS_ERROR_NULL;
 
-		/* Set up the timeout on our non-default context */
-		source = g_timeout_source_new_seconds (timeout);
-		g_source_attach (source, g_main_loop_get_context (loop));
-		g_source_set_callback (source, verify_timeout_cb, data, NULL);
+		data->timed_out = false;
 
-		data->timed_out = FALSE;
+		r = sd_bus_call_method (bus,
+					"net.reactivated.Fprint",
+					dev,
+					"net.reactivated.Fprint.Device",
+					"VerifyStart",
+					&error,
+					&m,
+					"s",
+					"any");
 
-		if (!dbus_g_proxy_call (dev, "VerifyStart", &error, G_TYPE_STRING, "any", G_TYPE_INVALID, G_TYPE_INVALID)) {
-			if (dbus_g_error_has_name(error, "net.reactivated.Fprint.Error.NoEnrolledPrints"))
+		if (r < 0) {
+			if (sd_bus_error_has_name (&error, "net.reactivated.Fprint.Error.NoEnrolledPrints"))
 				ret = PAM_USER_UNKNOWN;
 
-			D(pamh, "VerifyStart failed: %s", error->message);
-			g_error_free (error);
-
-			g_source_destroy (source);
-			g_source_unref (source);
+			if (debug)
+				pam_syslog (pamh, LOG_DEBUG, "VerifyStart failed: %s", error.message);
+			sd_bus_error_free (&error);
 			break;
 		}
 
-		g_main_loop_run (loop);
+		for (;;) {
+			int64_t wait_time;
 
-		g_source_destroy (source);
-		g_source_unref (source);
+			wait_time = verification_end - now();
+			if (wait_time <= 0)
+				break;
+
+			r = sd_bus_process (bus, NULL);
+			if (r < 0)
+				break;
+			if (data->result != NULL)
+				break;
+			if (r == 0) {
+				if (debug) {
+					pam_syslog(pamh, LOG_DEBUG, "Waiting for %"PRId64" seconds (%"PRId64" usecs)",
+						   wait_time / USEC_PER_SEC,
+						   wait_time);
+				}
+				r = sd_bus_wait (bus, wait_time);
+				if (r < 0)
+					break;
+			}
+		}
+
+		if (now () >= verification_end) {
+			data->timed_out = true;
+			send_info_msg (data->pamh, _("Verification timed out"));
+		}
 
 		/* Ignore errors from VerifyStop */
-		dbus_g_proxy_call (dev, "VerifyStop", NULL, G_TYPE_INVALID, G_TYPE_INVALID);
+		sd_bus_call_method (bus,
+				    "net.reactivated.Fprint",
+				    dev,
+				    "net.reactivated.Fprint.Device",
+				    "VerifyStop",
+				    NULL,
+				    NULL,
+				    NULL,
+				    NULL);
 
 		if (data->timed_out) {
 			ret = PAM_AUTHINFO_UNAVAIL;
 			break;
 		} else {
-			if (g_str_equal (data->result, "verify-no-match")) {
+			if (str_equal (data->result, "verify-no-match")) {
 				send_err_msg (data->pamh, "Failed to match fingerprint");
 				ret = PAM_AUTH_ERR;
-			} else if (g_str_equal (data->result, "verify-match"))
+			} else if (str_equal (data->result, "verify-match")) {
 				ret = PAM_SUCCESS;
-			else if (g_str_equal (data->result, "verify-unknown-error"))
+			} else if (str_equal (data->result, "verify-unknown-error")) {
 				ret = PAM_AUTHINFO_UNAVAIL;
-			else if (g_str_equal (data->result, "verify-disconnected")) {
+			} else if (str_equal (data->result, "verify-disconnected")) {
 				ret = PAM_AUTHINFO_UNAVAIL;
-				g_free (data->result);
+				free (data->result);
 				break;
 			} else {
-				send_info_msg (data->pamh, "An unknown error occurred");
+				send_info_msg (data->pamh, _("An unknown error occurred"));
 				ret = PAM_AUTH_ERR;
-				g_free (data->result);
+				free (data->result);
 				break;
 			}
-			g_free (data->result);
+			free (data->result);
 			data->result = NULL;
 		}
 		data->max_tries--;
 	}
 
-	dbus_g_proxy_disconnect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result), data);
-	dbus_g_proxy_disconnect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected), data);
+	sd_bus_slot_unref (verify_status_slot);
+	sd_bus_slot_unref (verify_finger_selected_slot);
 
-	g_free (data->driver);
-	g_free (data);
+	free (data->driver);
+	free (data);
 
 	return ret;
 }
 
-static gboolean user_has_prints(DBusGProxy *dev, const char *username)
+static bool
+user_has_prints (pam_handle_t *pamh,
+		 sd_bus       *bus,
+		 const char   *dev,
+		 const char   *username)
 {
-	char **fingers;
-	gboolean have_prints;
+	sd_bus_error error = SD_BUS_ERROR_NULL;
+	sd_bus_message *m = NULL;
+	size_t num_fingers = 0;
+	const char *s;
+	int r;
 
-	if (!dbus_g_proxy_call (dev, "ListEnrolledFingers", NULL,
-				G_TYPE_STRING, username, G_TYPE_INVALID,
-				G_TYPE_STRV, &fingers, G_TYPE_INVALID)) {
+	r = sd_bus_call_method (bus,
+				"net.reactivated.Fprint",
+				dev,
+				"net.reactivated.Fprint.Device",
+				"ListEnrolledFingers",
+				&error,
+				&m,
+				"s",
+				username);
+	if (r < 0) {
 		/* If ListEnrolledFingers fails then verification should
 		 * also fail (both use the same underlying call), so we
-		 * report FALSE here and bail out early.  */
-		return FALSE;
+		 * report false here and bail out early.  */
+		if (debug) {
+			pam_syslog (pamh, LOG_DEBUG, "ListEnrolledFingers failed for %s: %s",
+				    username, error.message);
+		}
+		sd_bus_error_free (&error);
+		return false;
 	}
 
-	have_prints = fingers != NULL && g_strv_length (fingers) > 0;
-	g_strfreev (fingers);
+	r = sd_bus_message_enter_container (m, 'a', "s");
+	if (r < 0) {
+		pam_syslog (pamh, LOG_ERR, "Failed to parse answer from ListEnrolledFingers(): %d", r);
+		goto out;
+	}
 
-	return have_prints;
+	num_fingers = 0;
+	while ((r = sd_bus_message_read_basic(m, 's', &s)) > 0)
+		num_fingers++;
+	sd_bus_message_exit_container (m);
+
+out:
+	sd_bus_message_unref (m);
+	return (num_fingers > 0);
 }
 
-static void release_device(pam_handle_t *pamh, DBusGProxy *dev)
+static void
+release_device (pam_handle_t *pamh,
+		 sd_bus       *bus,
+		 const char   *dev)
 {
-	GError *error = NULL;
-	if (!dbus_g_proxy_call (dev, "Release", &error, G_TYPE_INVALID, G_TYPE_INVALID)) {
-		D(pamh, "ReleaseDevice failed: %s\n", error->message);
-		g_error_free (error);
+	sd_bus_error error = SD_BUS_ERROR_NULL;
+	sd_bus_message *m = NULL;
+	int r;
+
+	r = sd_bus_call_method (bus,
+				"net.reactivated.Fprint",
+				dev,
+				"net.reactivated.Fprint.Device",
+				"Release",
+				&error,
+				&m,
+				NULL,
+				NULL);
+	if (r < 0) {
+		pam_syslog (pamh, LOG_ERR, "ReleaseDevice failed: %s", error.message);
+		sd_bus_error_free (&error);
+		return;
 	}
+
+	//FIXME needed?
+	sd_bus_message_unref (m);
 }
 
-static gboolean claim_device(pam_handle_t *pamh, DBusGProxy *dev, const char *username)
+static bool
+claim_device (pam_handle_t *pamh,
+	      sd_bus       *bus,
+	      const char   *dev,
+	      const char   *username)
 {
-	GError *error = NULL;
+	sd_bus_error error = SD_BUS_ERROR_NULL;
+	sd_bus_message *m = NULL;
+	int r;
 
-	if (!dbus_g_proxy_call (dev, "Claim", &error, G_TYPE_STRING, username, G_TYPE_INVALID, G_TYPE_INVALID)) {
-		D(pamh, "failed to claim device %s\n", error->message);
-		g_error_free (error);
-		return FALSE;
+	r = sd_bus_call_method (bus,
+				"net.reactivated.Fprint",
+				dev,
+				"net.reactivated.Fprint.Device",
+				"Claim",
+				&error,
+				&m,
+				"s",
+				username);
+	if (r < 0) {
+		if (debug)
+			pam_syslog (pamh, LOG_DEBUG, "failed to claim device %s", error.message);
+		sd_bus_error_free (&error);
+		return false;
 	}
 
-	return TRUE;
+	//FIXME needed?
+	sd_bus_message_unref (m);
+
+	return true;
 }
 
 static int do_auth(pam_handle_t *pamh, const char *username)
 {
-	DBusGProxy *manager;
-	DBusGConnection *connection;
-	DBusGProxy *dev;
-	GMainLoop *loop;
-	gboolean have_prints;
-	gboolean has_multiple_devices;
+	char *dev;
+	bool have_prints;
+	bool has_multiple_devices;
 	int ret = PAM_AUTHINFO_UNAVAIL;
+	sd_bus *bus = NULL;
 
-	manager = create_manager (pamh, &connection, &loop);
-	if (manager == NULL)
-		return PAM_AUTHINFO_UNAVAIL;
-
-	dev = open_device(pamh, connection, manager, &has_multiple_devices);
-	g_object_unref (manager);
-	if (!dev) {
-		unref_loop (loop);
-		close_and_unref (connection);
+	if (sd_bus_open_system (&bus) < 0) {
+		pam_syslog (pamh, LOG_ERR, "Error with getting the bus: %m");
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 
-	have_prints = user_has_prints(dev, username);
-	D(pamh, "prints registered: %s\n", have_prints ? "yes" : "no");
-
-	if (have_prints) {
-		if (claim_device (pamh, dev, username)) {
-			ret = do_verify (loop, pamh, dev, has_multiple_devices);
-			release_device (pamh, dev);
-		}
+	dev = open_device (pamh, bus, &has_multiple_devices);
+	if (dev == NULL) {
+		sd_bus_unref (bus);
+		return PAM_AUTHINFO_UNAVAIL;
 	}
 
-	unref_loop (loop);
-	g_object_unref (dev);
-	close_and_unref (connection);
+	have_prints = user_has_prints (pamh, bus, dev, username);
+	if (debug)
+		pam_syslog (pamh, LOG_DEBUG, "prints registered: %s\n", have_prints ? "yes" : "no");
+
+	if (!have_prints)
+		goto out;
+
+	if (claim_device (pamh, bus, dev, username)) {
+		ret = do_verify (pamh, bus, dev, has_multiple_devices);
+		release_device (pamh, bus, dev);
+	}
+
+out:
+	free (dev);
+	sd_bus_unref (bus);
 
 	return ret;
 }
@@ -482,14 +594,11 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 {
 	const char *rhost = NULL;
 	const char *username;
-	guint i;
+	unsigned i;
 	int r;
 
 	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
-
-	dbus_g_object_register_marshaller (fprintd_marshal_VOID__STRING_BOOLEAN,
-					   G_TYPE_NONE, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INVALID);
 
 	pam_get_item(pamh, PAM_RHOST, (const void **)(const void*) &rhost);
 
@@ -508,21 +617,21 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 
 	for (i = 0; i < argc; i++) {
 		if (argv[i] != NULL) {
-			if(g_str_equal (argv[i], "debug")) {
-				g_message ("debug on");
-				debug = TRUE;
-			}
-			else if (strncmp(argv[i], MAX_TRIES_MATCH, strlen (MAX_TRIES_MATCH)) == 0 && strlen(argv[i]) == strlen (MAX_TRIES_MATCH) + 1) {
+			if (str_equal (argv[i], "debug")) {
+				pam_syslog (pamh, LOG_DEBUG, "debug on");
+				debug = true;
+			} else if (str_has_prefix (argv[i], MAX_TRIES_MATCH) && strlen(argv[i]) == strlen (MAX_TRIES_MATCH) + 1) {
 				max_tries = atoi (argv[i] + strlen (MAX_TRIES_MATCH));
 				if (max_tries < 1)
 					max_tries = DEFAULT_MAX_TRIES;
-				D(pamh, "max_tries specified as: %d", max_tries);
-			}
-			else if (strncmp(argv[i], TIMEOUT_MATCH, strlen (TIMEOUT_MATCH)) == 0 && strlen(argv[i]) <= strlen (TIMEOUT_MATCH) + 2) {
+				if (debug)
+					pam_syslog (pamh, LOG_DEBUG, "max_tries specified as: %d", max_tries);
+			} else if (str_has_prefix (argv[i], TIMEOUT_MATCH) && strlen(argv[i]) <= strlen (TIMEOUT_MATCH) + 2) {
 				timeout = atoi (argv[i] + strlen (TIMEOUT_MATCH));
 				if (timeout < 10)
 					timeout = DEFAULT_TIMEOUT;
-				D(pamh, "timeout specified as: %d", timeout);
+				if (debug)
+					pam_syslog (pamh, LOG_DEBUG, "timeout specified as: %d", timeout);
 			}
 		}
 	}
