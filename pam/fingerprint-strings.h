@@ -24,6 +24,7 @@
 #error _GNU_SOURCE must be defined
 #endif
 #include <stdio.h>
+#include <stdbool.h>
 
 struct {
 	const char *dbus_name;
