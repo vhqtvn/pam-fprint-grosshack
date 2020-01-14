@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#define GNUC_UNUSED __attribute__((__unused__))
+
 struct {
 	const char *dbus_name;
 	const char *place_str_generic;
