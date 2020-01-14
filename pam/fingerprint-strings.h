@@ -20,6 +20,11 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#ifndef _GNU_SOURCE
+#error _GNU_SOURCE must be defined
+#endif
+#include <stdio.h>
+
 struct {
 	const char *dbus_name;
 	const char *place_str_generic;
