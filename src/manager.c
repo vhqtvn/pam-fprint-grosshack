@@ -35,9 +35,6 @@ static gboolean fprint_manager_get_default_device(FprintManager *manager,
 	const char **device, GError **error);
 #include "manager-dbus-glue.h"
 
-static GObjectClass *parent_class = NULL;
-
-G_DEFINE_TYPE(FprintManager, fprint_manager, G_TYPE_OBJECT);
 
 typedef struct
 {
@@ -47,12 +44,13 @@ typedef struct
 	guint timeout_id;
 } FprintManagerPrivate;
 
-#define FPRINT_MANAGER_GET_PRIVATE(o)  \
-	(G_TYPE_INSTANCE_GET_PRIVATE ((o), FPRINT_TYPE_MANAGER, FprintManagerPrivate))
+static GObjectClass *parent_class = NULL;
+
+G_DEFINE_TYPE_WITH_CODE(FprintManager, fprint_manager, G_TYPE_OBJECT, G_ADD_PRIVATE (FprintManager))
 
 static void fprint_manager_finalize(GObject *object)
 {
-	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (object);
+	FprintManagerPrivate *priv = fprint_manager_get_instance_private (FPRINT_MANAGER (object));
 
 	g_clear_object (&priv->context);
 	g_slist_free(priv->dev_registry);
@@ -65,8 +63,6 @@ static void fprint_manager_class_init(FprintManagerClass *klass)
 	dbus_g_object_type_install_info(FPRINT_TYPE_MANAGER,
 					&dbus_glib_fprint_manager_object_info);
 	dbus_g_error_domain_register (FPRINT_ERROR, FPRINT_ERROR_DBUS_INTERFACE, FPRINT_TYPE_ERROR);
-
-	g_type_class_add_private ((GObjectClass *) klass, sizeof (FprintManagerPrivate));
 
 	G_OBJECT_CLASS(klass)->finalize = fprint_manager_finalize;
 	parent_class = g_type_class_peek_parent(klass);
@@ -89,7 +85,7 @@ fprint_manager_timeout_cb (FprintManager *manager)
 static void
 fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintManager *manager)
 {
-	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
+	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
 	guint num_devices_used = 0;
 	GSList *l;
 	gboolean in_use;
@@ -116,7 +112,7 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
 static void
 device_added_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 {
-	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
+	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
 	FprintDevice *rdev = fprint_device_new(device);
 	g_autofree gchar *path = NULL;
 
@@ -132,7 +128,7 @@ device_added_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 static void
 device_removed_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 {
-	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
+	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
 	GSList *item;
 	g_autofree gchar *path = NULL;
 
@@ -165,7 +161,7 @@ device_removed_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 static void
 fprint_manager_init (FprintManager *manager)
 {
-	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
+	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
 
 	priv->context = fp_context_new ();
 
@@ -195,7 +191,7 @@ FprintManager *fprint_manager_new(gboolean no_timeout)
 	GObject *object;
 
 	object = g_object_new(FPRINT_TYPE_MANAGER, NULL);
-	priv = FPRINT_MANAGER_GET_PRIVATE (object);
+	priv = fprint_manager_get_instance_private (FPRINT_MANAGER (object));
 	priv->no_timeout = no_timeout;
 
 	if (!priv->no_timeout)
@@ -207,7 +203,7 @@ FprintManager *fprint_manager_new(gboolean no_timeout)
 static gboolean fprint_manager_get_devices(FprintManager *manager,
 	GPtrArray **devices, GError **error)
 {
-	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
+	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
 	GSList *elem;
 	GSList *l;
 	int num_open;
@@ -233,7 +229,7 @@ static gboolean fprint_manager_get_devices(FprintManager *manager,
 static gboolean fprint_manager_get_default_device(FprintManager *manager,
 	const char **device, GError **error)
 {
-	FprintManagerPrivate *priv = FPRINT_MANAGER_GET_PRIVATE (manager);
+	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
 	GSList *elem;;
 	int num_open;
 
