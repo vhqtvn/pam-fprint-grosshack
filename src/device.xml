@@ -491,7 +491,7 @@
 			<doc:doc>
 				<doc:description>
 					<doc:para>
-						Start enrollemnt for the selected finger. You need to have claimed the device using
+						Start enrollment for the selected finger. You need to have claimed the device using
 						<doc:ref type="method" to="Device.Claim">Device.Claim</doc:ref> before calling
 						this method. Enrollment status is sent through <doc:ref type="signal" to="Device::EnrollStatus">Device::EnrollStatus</doc:ref>.
 					</doc:para>
