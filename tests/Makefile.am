@@ -3,6 +3,7 @@ TESTS = fprintd.py
 
 EXTRA_DIST = \
 	$(TESTS) \
+	dbusmock/fprintd.py \
 	prints/README \
 	prints/*.png \
 	prints/*.jpg
