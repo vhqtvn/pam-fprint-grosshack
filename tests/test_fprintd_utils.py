@@ -98,6 +98,7 @@ class TestFprintd(dbusmock.DBusTestCase):
         with open(mock_log.name) as f:
             out = f.read()
             self.assertRegex(out, r'left-little-finger')
+            self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
 
         self.device_mock.EmitVerifyStatus('verify-match', True)
         time.sleep(0.5)
