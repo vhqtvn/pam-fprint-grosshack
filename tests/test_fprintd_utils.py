@@ -107,6 +107,32 @@ class TestFprintd(dbusmock.DBusTestCase):
             out = f.read()
             self.assertRegex(out, 'Verify result: verify-match \(done\)')
 
+    def test_fprintd_verify_script(self):
+        self.setup_device()
+        script = [
+            ( 'verify-match', True, 2 )
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        mock_log = tempfile.NamedTemporaryFile()
+        process = subprocess.Popen([self.tools_prefix + 'fprintd-verify', 'toto'],
+                                   stdout=mock_log,
+                                   stderr=subprocess.STDOUT,
+                                   universal_newlines=True)
+
+        time.sleep(0.5)
+
+        with open(mock_log.name) as f:
+            out = f.read()
+            self.assertRegex(out, r'left-little-finger')
+            self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
+
+        time.sleep(2)
+
+        with open(mock_log.name) as f:
+            out = f.read()
+            self.assertRegex(out, 'Verify result: verify-match \(done\)')
+
     def test_fprintd_list(self):
         self.setup_device()
 
