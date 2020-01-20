@@ -3,7 +3,7 @@ image: fedora:rawhide
 variables:
   DEPENDENCIES: dbus-glib-devel pam-devel polkit-devel
                 gtk-doc meson intltool autoconf automake libtool
-                gcc gcc-c++ glibc-devel make python3-dbusmock
+                gcc gcc-c++ glibc-devel make python3-dbusmock python3-libpamtest
   DEPENDENCIES_STABLE: $DEPENDENCIES libfprint-devel
   DEPENDENCIES_DEV: $DEPENDENCIES git
   # Sync'ed up with https://gitlab.freedesktop.org/libfprint/libfprint/blob/master/.gitlab-ci.yml

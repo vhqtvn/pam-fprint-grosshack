@@ -91,5 +91,7 @@ doc/Makefile
 doc/version.xml
 doc/dbus/Makefile
 tests/Makefile
+tests/pam/Makefile
+tests/pam/services/Makefile
 po/Makefile.in
 ])
