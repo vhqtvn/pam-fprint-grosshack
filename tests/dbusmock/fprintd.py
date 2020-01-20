@@ -19,6 +19,7 @@ __copyright__ = '(c) 2020 Red Hat Inc.'
 __license__ = 'LGPL 3+'
 
 import dbus
+import asyncio
 
 from dbusmock import MOCK_IFACE, mockobject
 
@@ -77,6 +78,7 @@ def load(mock, parameters):
     fprintd = mockobject.objects[MAIN_OBJ]
     mock.last_device_id = 0
     fprintd.fingers = {}
+    mock.loop = asyncio.new_event_loop()
 
 @dbus.service.method(MAIN_IFACE,
                      in_signature='', out_signature='ao')
@@ -142,6 +144,7 @@ def AddDevice(self, device_name, num_enroll_stages, scan_type):
     device.fingers = {}
     device.claimed_user = None
     device.action = None
+    device.verify_script = []
 
     return path
 
@@ -195,6 +198,14 @@ def can_verify_finger(device, finger_name):
         return True
     return False
 
+async def send_verify_script(device, script):
+    for [result, done, timeout] in device.verify_script:
+        await asyncio.sleep(timeout)
+        device.EmitSignal(DEVICE_IFACE, 'VerifyStatus', 'sb', [
+                            result,
+                            done
+                          ])
+
 @dbus.service.method(DEVICE_IFACE,
                      in_signature='s', out_signature='')
 def VerifyStart(device, finger_name):
@@ -225,6 +236,10 @@ def VerifyStart(device, finger_name):
     device.EmitSignal(DEVICE_IFACE, 'VerifyFingerSelected', 's', [
                           finger_name
                       ])
+
+    if device.verify_script is not None and len(device.verify_script) > 0:
+        asyncio.run(send_verify_script(device, device.verify_script))
+
 
 @dbus.service.method(DEVICE_MOCK_IFACE,
                      in_signature='sb', out_signature='')
@@ -318,3 +333,17 @@ def SetEnrolledFingers(device, user, fingers):
 
     device.fingers[user] = fingers
 
+@dbus.service.method(DEVICE_MOCK_IFACE,
+                     in_signature='a(sbi)', out_signature='')
+def SetVerifyScript(device, script):
+    '''Convenience method to set the verification script.
+
+    After VerifyStart is called, signal results will be sent in order after
+    a certain timeout declared in seconds. The array contains each
+    'result' followed by the 'done' argument for VerifyStatus, and the
+    amount of time to wait before each signal is sent.
+
+    Returns nothing.
+    '''
+
+    device.verify_script = script
