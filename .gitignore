@@ -18,6 +18,7 @@
 /Makefile
 /Makefile.in
 /TAGS
+/_build
 /_libs
 /autom4te.cache
 /config.cache

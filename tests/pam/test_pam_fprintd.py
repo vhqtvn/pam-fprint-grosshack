@@ -163,7 +163,7 @@ class TestPamFprintd(dbusmock.DBusTestCase):
 
 if __name__ == '__main__':
     if 'PAM_WRAPPER_SERVICE_DIR' not in os.environ:
-        print('Cannot run test without environment set correctly, run "make check" instead')
+        print('Cannot run test without environment set correctly, run "meson test" instead')
         sys.exit(1)
     # set stream to sys.stderr to get debug output
     unittest.main(testRunner=unittest.TextTestRunner(stream=sys.stdout, verbosity=2))
