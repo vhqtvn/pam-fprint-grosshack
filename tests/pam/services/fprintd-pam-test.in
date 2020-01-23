@@ -1,1 +1,1 @@
-auth   required     @TOPBUILDDIR@/pam/.libs/pam_fprintd.so debug
+auth   required     @TOPBUILDDIR@/pam/.libs/pam_fprintd.so debug timeout=10
