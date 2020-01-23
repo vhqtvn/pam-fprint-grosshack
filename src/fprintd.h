@@ -17,8 +17,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __FPRINTD_H__
-#define __FPRINTD_H__
+#pragma once
 
 #include <glib.h>
 #include <dbus/dbus-glib.h>
@@ -99,6 +98,3 @@ guint32 _fprint_device_get_id(FprintDevice *rdev);
  */
 extern const DBusGObjectInfo dbus_glib_fprint_manager_object_info;
 extern const DBusGObjectInfo dbus_glib_fprint_device_object_info;
-
-#endif
-

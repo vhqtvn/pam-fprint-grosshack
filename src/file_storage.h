@@ -18,9 +18,7 @@
  *
  */
 
-#ifndef FILE_STORAGE_H
-
-#define FILE_STORAGE_H
+#pragma once
 
 int file_storage_print_data_save(FpPrint *print);
 
@@ -39,5 +37,3 @@ int file_storage_deinit(void);
 
 GSList *file_storage_discover_prints(FpDevice *dev, const char *username);
 GSList *file_storage_discover_users(void);
-
-#endif

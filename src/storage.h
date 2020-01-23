@@ -18,9 +18,7 @@
  *
  */
 
-#ifndef STORAGE_H
-
-#define STORAGE_H
+#pragma once
 
 typedef int (*storage_print_data_save)(FpPrint *print);
 typedef int (*storage_print_data_load)(FpDevice   *dev,
@@ -49,6 +47,3 @@ typedef struct storage fp_storage;
 
 /* The currently setup store */
 fp_storage store;
-
-#endif
-
