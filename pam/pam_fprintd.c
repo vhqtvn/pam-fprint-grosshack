@@ -433,6 +433,9 @@ do_verify (pam_handle_t *pamh,
 		data->max_tries--;
 	}
 
+	if (data->max_tries == 0)
+		ret = PAM_MAXTRIES;
+
 	sd_bus_slot_unref (verify_status_slot);
 	sd_bus_slot_unref (verify_finger_selected_slot);
 

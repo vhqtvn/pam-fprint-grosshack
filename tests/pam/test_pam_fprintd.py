@@ -29,6 +29,7 @@ PAM_SUCCESS = 0
 PAM_AUTH_ERR = 7
 PAM_AUTHINFO_UNAVAIL = 9
 PAM_USER_UNKNOWN = 10
+PAM_MAXTRIES = 11
 
 class TestPamFprintd(dbusmock.DBusTestCase):
     '''Test pam_fprintd'''
@@ -127,7 +128,7 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         ]
         self.device_mock.SetVerifyScript(script)
 
-        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTH_ERR)
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_MAXTRIES)
         res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
 
         self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
