@@ -643,8 +643,13 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 				}
 			} else if (str_has_prefix (argv[i], MAX_TRIES_MATCH) && strlen(argv[i]) == strlen (MAX_TRIES_MATCH) + 1) {
 				max_tries = atoi (argv[i] + strlen (MAX_TRIES_MATCH));
-				if (max_tries < 1)
+				if (max_tries < 1) {
+					if (debug) {
+						pam_syslog (pamh, LOG_DEBUG, "invalid max tries '%s', using %d",
+							    argv[i] + strlen (MAX_TRIES_MATCH), DEFAULT_MAX_TRIES);
+					}
 					max_tries = DEFAULT_MAX_TRIES;
+				}
 				if (debug)
 					pam_syslog (pamh, LOG_DEBUG, "max_tries specified as: %d", max_tries);
 			} else if (str_has_prefix (argv[i], TIMEOUT_MATCH) && strlen(argv[i]) <= strlen (TIMEOUT_MATCH) + 2) {
