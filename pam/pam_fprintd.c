@@ -46,6 +46,7 @@
 #define DEFAULT_MAX_TRIES 3
 #define DEFAULT_TIMEOUT 30
 
+#define DEBUG_MATCH "debug="
 #define MAX_TRIES_MATCH "max-tries="
 #define TIMEOUT_MATCH "timeout="
 
@@ -623,6 +624,23 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 			if (str_equal (argv[i], "debug")) {
 				pam_syslog (pamh, LOG_DEBUG, "debug on");
 				debug = true;
+			} else if (str_has_prefix (argv[i], DEBUG_MATCH)) {
+				pam_syslog (pamh, LOG_DEBUG, "debug on");
+				const char *value;
+
+				value = argv[i] + strlen (DEBUG_MATCH);
+				if (str_equal (value, "on") ||
+				    str_equal (value, "true") ||
+				    str_equal (value, "1")) {
+					pam_syslog (pamh, LOG_DEBUG, "debug on");
+					debug = true;
+				} else if (str_equal (value, "off") ||
+					   str_equal (value, "false") ||
+					   str_equal (value, "0")) {
+					debug = false;
+				} else {
+					pam_syslog (pamh, LOG_DEBUG, "invalid debug value '%s', disabling", value);
+				}
 			} else if (str_has_prefix (argv[i], MAX_TRIES_MATCH) && strlen(argv[i]) == strlen (MAX_TRIES_MATCH) + 1) {
 				max_tries = atoi (argv[i] + strlen (MAX_TRIES_MATCH));
 				if (max_tries < 1)
