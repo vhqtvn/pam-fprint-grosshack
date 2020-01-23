@@ -34,8 +34,30 @@ class TestPamFprintd(dbusmock.DBusTestCase):
     '''Test pam_fprintd'''
 
     @classmethod
+    def start_monitor(klass):
+        '''Start dbus-monitor'''
+
+        workdir = os.environ['TOPBUILDDIR'] + '/tests/pam/'
+        klass.monitor_log = open(os.path.join(workdir, 'dbus-monitor.log'), 'wb', buffering=0)
+        klass.monitor = subprocess.Popen(['dbus-monitor', '--monitor', '--system'],
+                                         stdout=klass.monitor_log,
+                                         stderr=subprocess.STDOUT)
+
+    @classmethod
+    def stop_monitor(klass):
+        '''Stop dbus-monitor'''
+
+        assert klass.monitor
+        klass.monitor.terminate()
+        klass.monitor.wait()
+
+        klass.monitor_log.flush()
+        klass.monitor_log.close()
+
+    @classmethod
     def setUpClass(klass):
         klass.start_system_bus()
+        klass.start_monitor()
         klass.dbus_con = klass.get_dbus(True)
 
         template_path = './'
@@ -43,6 +65,10 @@ class TestPamFprintd(dbusmock.DBusTestCase):
             template_path = os.environ['TOPSRCDIR'] + '/tests/'
         klass.template_name = template_path + 'dbusmock/fprintd.py'
         print ('Using template from %s' % klass.template_name)
+
+    @classmethod
+    def tearDownClass(klass):
+        klass.stop_monitor()
 
     def setUp(self):
         (self.p_mock, self.obj_fprintd_manager) = self.spawn_server_template(
