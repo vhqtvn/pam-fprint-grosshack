@@ -45,6 +45,7 @@
 
 #define DEFAULT_MAX_TRIES 3
 #define DEFAULT_TIMEOUT 30
+#define MIN_TIMEOUT 10
 
 #define DEBUG_MATCH "debug="
 #define MAX_TRIES_MATCH "max-tries="
@@ -654,10 +655,15 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 					pam_syslog (pamh, LOG_DEBUG, "max_tries specified as: %d", max_tries);
 			} else if (str_has_prefix (argv[i], TIMEOUT_MATCH) && strlen(argv[i]) <= strlen (TIMEOUT_MATCH) + 2) {
 				timeout = atoi (argv[i] + strlen (TIMEOUT_MATCH));
-				if (timeout < 10)
-					timeout = DEFAULT_TIMEOUT;
-				if (debug)
-					pam_syslog (pamh, LOG_DEBUG, "timeout specified as: %d", timeout);
+				if (timeout < MIN_TIMEOUT) {
+					if (debug) {
+						pam_syslog (pamh, LOG_DEBUG, "timeout %d secs too low, using %d",
+							    timeout, MIN_TIMEOUT);
+					}
+					timeout = MIN_TIMEOUT;
+				} else if (debug) {
+					pam_syslog (pamh, LOG_DEBUG, "timeout specified as: %d secs", timeout);
+				}
 			}
 		}
 	}
