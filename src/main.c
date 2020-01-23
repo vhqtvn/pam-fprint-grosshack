@@ -33,6 +33,8 @@
 #include "storage.h"
 #include "file_storage.h"
 
+fp_storage store;
+
 extern DBusGConnection *fprintd_dbus_conn;
 static gboolean no_timeout = FALSE;
 static gboolean g_fatal_warnings = FALSE;

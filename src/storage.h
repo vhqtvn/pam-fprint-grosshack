@@ -46,4 +46,4 @@ struct storage {
 typedef struct storage fp_storage;
 
 /* The currently setup store */
-fp_storage store;
+extern fp_storage store;
