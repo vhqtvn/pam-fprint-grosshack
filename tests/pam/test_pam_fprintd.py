@@ -136,6 +136,13 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.assertRegex(res.errors[1], r'Failed to match fingerprint')
         self.assertRegex(res.errors[2], r'Failed to match fingerprint')
 
+    def test_pam_timeout(self):
+        self.setup_device()
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTHINFO_UNAVAIL)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+        self.assertRegex(res.info[1], r'Verification timed out')
+
 if __name__ == '__main__':
     if 'PAM_WRAPPER_SERVICE_DIR' not in os.environ:
         print('Cannot run test without environment set correctly, run "make check" instead')
