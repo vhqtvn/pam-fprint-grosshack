@@ -17,7 +17,6 @@ build_stable:
   allow_failure: true
   before_script:
     - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_STABLE
-    - sudo rpm -Uvh https://kojipkgs.fedoraproject.org//packages/pam_wrapper/1.0.7/5.fc32/x86_64/libpamtest-1.0.7-5.fc32.x86_64.rpm https://kojipkgs.fedoraproject.org//packages/pam_wrapper/1.0.7/5.fc32/x86_64/pam_wrapper-1.0.7-5.fc32.x86_64.rpm https://kojipkgs.fedoraproject.org//packages/pam_wrapper/1.0.7/5.fc32/x86_64/python3-libpamtest-1.0.7-5.fc32.x86_64.rpm
   script:
     - ./autogen.sh --disable-dependency-tracking
     - make
@@ -26,7 +25,6 @@ build_stable:
 build_dev:
   before_script:
     - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_LIBFPRINT $DEPENDENCIES_DEV
-    - sudo rpm -Uvh https://kojipkgs.fedoraproject.org//packages/pam_wrapper/1.0.7/5.fc32/x86_64/libpamtest-1.0.7-5.fc32.x86_64.rpm https://kojipkgs.fedoraproject.org//packages/pam_wrapper/1.0.7/5.fc32/x86_64/pam_wrapper-1.0.7-5.fc32.x86_64.rpm https://kojipkgs.fedoraproject.org//packages/pam_wrapper/1.0.7/5.fc32/x86_64/python3-libpamtest-1.0.7-5.fc32.x86_64.rpm
     - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
     - cd libfprint
     - meson . _build --prefix=/usr -Ddrivers=virtual_image -Ddoc=false
@@ -44,7 +42,6 @@ test_dev:
   stage: test
   before_script:
     - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_LIBFPRINT $DEPENDENCIES_DEV
-    - sudo rpm -Uvh https://kojipkgs.fedoraproject.org//packages/pam_wrapper/1.0.7/5.fc32/x86_64/libpamtest-1.0.7-5.fc32.x86_64.rpm https://kojipkgs.fedoraproject.org//packages/pam_wrapper/1.0.7/5.fc32/x86_64/pam_wrapper-1.0.7-5.fc32.x86_64.rpm https://kojipkgs.fedoraproject.org//packages/pam_wrapper/1.0.7/5.fc32/x86_64/python3-libpamtest-1.0.7-5.fc32.x86_64.rpm
     - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
     - cd libfprint
     - meson . _build --prefix=/usr -Ddrivers=virtual_image -Ddoc=false
