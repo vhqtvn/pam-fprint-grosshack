@@ -71,9 +71,6 @@ VALID_ENROLL_STATUS = [
     'enroll-unknown-error'
 ]
 
-# Ever incrementing device ID
-last_id = 0
-
 def load(mock, parameters):
     fprintd = mockobject.objects[MAIN_OBJ]
     mock.last_device_id = 0
@@ -116,7 +113,7 @@ def AddDevice(self, device_name, num_enroll_stages, scan_type):
             name='org.freedesktop.DBus.Error.InvalidArgs')
 
     self.last_device_id += 1
-    path = '/net/reactivated/Fprint/Device/%d' % last_id
+    path = '/net/reactivated/Fprint/Device/%d' % self.last_device_id
     device_properties = {
         'name': dbus.String(device_name, variant_level=1),
         'num-enroll-stages': dbus.UInt32(num_enroll_stages, variant_level=1),
