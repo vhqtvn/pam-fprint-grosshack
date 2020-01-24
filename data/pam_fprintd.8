@@ -132,82 +132,53 @@
 .rm #[ #] #H #V #F C
 .\" ========================================================================
 .\"
-.IX Title "fprintd 1"
-.TH fprintd 1 "2020-01-24" "freedesktop" ""
+.IX Title "pam_fprintd 8"
+.TH pam_fprintd 8 "2020-01-24" "freedesktop" ""
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
 .nh
 .SH "NAME"
-fprintd \- Fingerprint management daemon, and test applications
+pam_fprintd \- PAM module to authenticate against fprintd, the fingerprint daemon
 .SH "SYNOPSIS"
 .IX Header "SYNOPSIS"
-\&\fBfprintd-enroll\fR [\-f finger] [usename]
-.PP
-\&\fBfprintd-list\fR username [usernames...]
-.PP
-\&\fBfprintd-verify\fR [\-f finger] [usename]
-.PP
-\&\fBfprintd-delete\fR username [usernames...]
+\&\fBpam_fprintd.so\fR [debug|debug=[\fIon\fR|\fIoff\fR|\fItrue\fR|\fIfalse\fR|\fI1\fR|\fI0\fR]] [max\-tries=\fI\s-1MAX_TRIES\s0\fR] [timeout=\fI\s-1TIMEOUT\s0\fR]
 .SH "DESCRIPTION"
 .IX Header "DESCRIPTION"
-This manual page documents briefly the \fBfprintd\fR command-line utilities.
+The pam_fprintd module is used to verify a user's fingerprints against fingerprints
+enrolled using fprintd, the fingerprint management daemon.
+.SH "OPTIONS"
+.IX Header "OPTIONS"
+.IP "\fBdebug\fR" 8
+.IX Item "debug"
+.PD 0
+.IP "\fBdebug=[\f(BIon\fB|\f(BIoff\fB|\f(BItrue\fB|\f(BIfalse\fB|\f(BI1\fB|\f(BI0\fB]\fR" 8
+.IX Item "debug=[on|off|true|false|1|0]"
+.PD
+Whether debug should be turned on or off. Debug messages will be generated using
+pam_syslog which means that they will be saved in the systemd journal by default.
+.IP "\fBmax\-tries=\f(BI\s-1MAX_TRIES\s0\fB\fR" 8
+.IX Item "max-tries=MAX_TRIES"
+The number of attempts at fingerprint authentication to try before returning an
+authentication failure. The minimum, and default, number of tries is 3.
+.IP "\fBtimeout=\f(BI\s-1TIMEOUT\s0\fB\fR" 8
+.IX Item "timeout=TIMEOUT"
+The amount of time before returning an authentication failure. The default timeout
+is 30 seconds, with 10 seconds being the minimum.
+.SH "LIMITATIONS"
+.IX Header "LIMITATIONS"
+The \s-1PAM\s0 stack is by design a serialised authentication, so it is not
+possible for pam_fprintd to allow authentication through passwords and
+fingerprints at the same time.
 .PP
-The \fBfprintd\fR daemon is accessed through \fBD\-Bus\fR by those command-line utilities.
-.SH "ARGUMENTS"
-.IX Header "ARGUMENTS"
-.IP "\fBusername\fR" 8
-.IX Item "username"
-The username for the user for which you want to query or modify the fingerprint database.
-.Sp
-Not that \fBfprintd-list\fR and \fBfprintd-delete\fR require at least one username to be passed, and support multiple usernames.
-.Sp
-\&\fBfprintd-enroll\fR and \fBfprintd-verify\fR will use the current username if none are passed on the command-line.
-.IP "\fB\-f finger\fR" 8
-.IX Item "-f finger"
-For \fBfprintd-enroll\fR, the finger to enroll. Possible values are:
-.Sp
-left-thumb,
-left-index-finger,
-left-middle-finger,
-left-ring-finger,
-left-little-finger,
-right-thumb,
-right-index-finger,
-right-middle-finger,
-right-ring-finger,
-right-little-finger.
-.Sp
-The default is automatic, selecting the first available finger for swipe devices, or all the enrolled fingers, for press devices.
-.SH "TEST APPLICATIONS"
-.IX Header "TEST APPLICATIONS"
-.SS "fprintd-enroll"
-.IX Subsection "fprintd-enroll"
-.RS 8
-Will enroll the user's right index finger into the database.
-.RE
-.SS "fprintd-list"
-.IX Subsection "fprintd-list"
-.RS 8
-Will list the user's enrolled fingerprints.
-.RE
-.SS "fprintd-verify"
-.IX Subsection "fprintd-verify"
-.RS 8
-Will verify the user's fingerprints against the database.
-.RE
-.SS "fprintd-enroll"
-.IX Subsection "fprintd-enroll"
-.RS 8
-Will enroll the user's right index finger into the database.
-.RE
+It is up to the application using the \s-1PAM\s0 services to implement separate
+\&\s-1PAM\s0 processes and run separate authentication stacks separately. This
+is the way multiple authentication methods are made available to users
+of gdm for example.
 .SH "AUTHOR"
 .IX Header "AUTHOR"
-\&\fBfprintd\fR was written by Bastien Nocera and Daniel Drake.
-.SH "DIRECTORIES"
-.IX Header "DIRECTORIES"
-By default, fprintd stores the fingerprints in \fB/var/lib/fprint/\fR
+\&\fBfprintd\fR was written by Bastien Nocera.
 .SH "SEE ALSO"
 .IX Header "SEE ALSO"
-.IP "\fBgnome-control-center\fR" 8
-.IX Item "gnome-control-center"
+.IP "\fBfprintd\fR, \fB\s-1PAM\s0\fR" 8
+.IX Item "fprintd, PAM"
