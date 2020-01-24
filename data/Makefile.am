@@ -30,13 +30,16 @@ conf_DATA = fprintd.conf
 man_MANS =
 
 if BUILD_MAN
-man_MANS += fprintd.1
+man_MANS += fprintd.1 pam_fprintd.8
 fprintd.1: fprintd.pod
 	$(AM_V_GEN) pod2man -c "" -s 1 -q none -n fprintd -r freedesktop $< > $@
+
+pam_fprintd.8: pam_fprintd.pod
+	$(AM_V_GEN) pod2man -c "" -s 8 -q none -n pam_fprintd -r freedesktop $< > $@
 endif
 
-EXTRA_DIST = $(dbus_services_in_files) $(dbus_conf_DATA) $(polkit_in_files) $(conf_DATA) $(systemdservice_in_files) fprintd.pod
-CLEANFILES = $(polkit_DATA) $(dbus_services_DATA) $(systemdservice_DATA) fprintd.1
+EXTRA_DIST = $(dbus_services_in_files) $(dbus_conf_DATA) $(polkit_in_files) $(conf_DATA) $(systemdservice_in_files) fprintd.pod pam_fprintd.pod
+CLEANFILES = $(polkit_DATA) $(dbus_services_DATA) $(systemdservice_DATA) fprintd.1 pam_fprintd.8
 
 check:
 	@$(XMLLINT) --noout $(polkit_DATA)
