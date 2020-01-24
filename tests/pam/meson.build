@@ -18,6 +18,7 @@ foreach t: tests
             'TOPSRCDIR=' + meson.source_root(),
             'LD_PRELOAD=libpam_wrapper.so',
             'PAM_WRAPPER=1',
+            'PAM_WRAPPER_DEBUGLEVEL=2',
             'PAM_WRAPPER_SERVICE_DIR=' + meson.current_build_dir() / 'services',
             'G_DEBUG=fatal-warnings',
         ],
