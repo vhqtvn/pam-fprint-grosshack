@@ -75,7 +75,7 @@ Will list the user's enrolled fingerprints.
 
 =over 8
 
-Will enroll the user's right index finger into the database.
+Will verify the user's fingerprints against the database.
 
 =back
 
