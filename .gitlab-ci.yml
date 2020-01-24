@@ -12,6 +12,18 @@ variables:
                           gcc gcc-c++ glibc-devel
                           gobject-introspection-devel python3-cairo python3-gobject
 
+.install_libfprint_dev: &install_libfprint_dev
+  before_script:
+    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_LIBFPRINT $DEPENDENCIES_DEV
+    - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
+    - cd libfprint
+    - meson . _build --prefix=/usr -Ddrivers=virtual_image -Ddoc=false
+    - ninja -C _build
+    - ninja -C _build install
+    - cd ..
+    # So we don't get error about this libfprint file
+    - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
+
 build_stable:
   # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
   allow_failure: true
@@ -23,16 +35,7 @@ build_stable:
     - make install
 
 build_dev:
-  before_script:
-    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_LIBFPRINT $DEPENDENCIES_DEV
-    - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
-    - cd libfprint
-    - meson . _build --prefix=/usr -Ddrivers=virtual_image -Ddoc=false
-    - ninja -C _build
-    - ninja -C _build install
-    - cd ..
-    # So we don't get error about this libfprint file
-    - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
+  <<: *install_libfprint_dev
   script:
     - ./autogen.sh --disable-dependency-tracking
     - make
@@ -40,16 +43,7 @@ build_dev:
 
 test_dev:
   stage: test
-  before_script:
-    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_LIBFPRINT $DEPENDENCIES_DEV
-    - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
-    - cd libfprint
-    - meson . _build --prefix=/usr -Ddrivers=virtual_image -Ddoc=false
-    - ninja -C _build
-    - ninja -C _build install
-    - cd ..
-    # So we don't get error about this libfprint file
-    - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
+  <<: *install_libfprint_dev
   script:
     - ./autogen.sh --disable-dependency-tracking
     - make
