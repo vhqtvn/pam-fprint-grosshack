@@ -157,3 +157,25 @@ if get_option('gtk_doc')
 endif
 subdir('tests')
 subdir('po')
+
+output = []
+output += 'System paths:'
+output += '  prefix: ' + get_option('prefix')
+output += '  fprintd daemon directory: ' + fprintd_installdir
+output += '  fprintd modules directory: ' + fprintd_plugindir
+output += '  fprintd prints storage directory: ' + storage_path
+output += '  DBus configuration directory: ' + dbus_conf_dir
+output += '  DBus service directory: ' + dbus_service_dir
+output += '  DBus interfaces directory: ' + dbus_interfaces_dir
+output += '  Polkit policy directory: ' + polkit_policy_directory
+output += '  Systemd service directory: ' + systemd_unit_dir
+if get_option('pam')
+    output += '  PAM module directory: ' + pam_modules_dir
+endif
+output += '\nOptional features:\n'
+output += '  PAM module: ' + pam_dep.found().to_string()
+output += '  Manuals: ' + get_option('man').to_string()
+output += '  GTK Doc: ' + get_option('gtk_doc').to_string()
+output += '  XML Linter ' + xmllint.found().to_string()
+
+message('\n'+'\n'.join(output)+'\n')
