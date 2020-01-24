@@ -24,7 +24,7 @@ variables:
     # So we don't get error about this libfprint file
     - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
 
-build_stable:
+build_stable_autotools:
   # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
   allow_failure: true
   before_script:
@@ -34,14 +34,14 @@ build_stable:
     - make
     - make install
 
-build_dev:
+build_dev_autotools:
   <<: *install_libfprint_dev
   script:
     - ./autogen.sh --disable-dependency-tracking
     - make
     - make install
 
-test_dev:
+test_dev_autotools:
   stage: test
   <<: *install_libfprint_dev
   script:
@@ -53,3 +53,37 @@ test_dev:
     when: always
     paths:
       - tests/*.log
+
+build_stable_meson:
+  # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
+  allow_failure: true
+  before_script:
+    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_STABLE
+  script:
+    - meson _build
+    - ninja -C _build -v
+    - ninja -C _build -v install
+
+build_dev_meson:
+  <<: *install_libfprint_dev
+  script:
+    - meson _build
+    - ninja -C _build -v
+    - ninja -C _build -v install
+  artifacts:
+    name: log
+    when: on_failure
+    paths:
+      - _build/meson-logs/*.txt
+
+test_dev_meson:
+  stage: test
+  <<: *install_libfprint_dev
+  script:
+    - meson _build
+    - meson test -C _build --verbose --no-stdsplit --timeout-multiplier 3
+  artifacts:
+    name: log
+    when: always
+    paths:
+      - _build/meson-logs/*.txt
