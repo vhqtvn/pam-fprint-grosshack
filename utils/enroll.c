@@ -32,7 +32,7 @@
 
 static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;
-static char *finger_name = "right-index-finger";
+static char *finger_name = NULL;
 static char **usernames = NULL;
 
 static void create_manager(void)
@@ -175,11 +175,15 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	if (finger_name == NULL)
+		finger_name = g_strdup("right-index-finger");
+
 	create_manager();
 
 	dev = open_device(usernames ? usernames[0] : NULL);
 	do_enroll(dev);
 	release_device(dev);
+	g_free(finger_name);
 	return 0;
 }
 
