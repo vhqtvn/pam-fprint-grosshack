@@ -34,7 +34,7 @@
 #include "fprintd.h"
 #include "storage.h"
 
-static char *fingers[] = {
+static const char *FINGERS_NAMES[] = {
 	[FP_FINGER_UNKNOWN] = "unknown",
 	"left-thumb",
 	"left-index-finger",
@@ -298,7 +298,7 @@ finger_num_to_name (int finger_num)
 		return "any";
 	if (!FP_FINGER_IS_VALID (finger_num))
 		return NULL;
-	return fingers[finger_num];
+	return FINGERS_NAMES[finger_num];
 }
 
 static int
@@ -310,7 +310,7 @@ finger_name_to_num (const char *finger_name)
 		return -1;
 
 	for (i = FP_FINGER_FIRST; i <= FP_FINGER_LAST; i++) {
-		if (g_str_equal (finger_name, fingers[i]))
+		if (g_str_equal (finger_name, FINGERS_NAMES[i]))
 			return i;
 	}
 
