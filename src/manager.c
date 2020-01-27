@@ -27,7 +27,7 @@
 
 #include "fprintd.h"
 
-DBusGConnection *fprintd_dbus_conn;
+extern DBusGConnection *fprintd_dbus_conn;
 
 static gboolean fprint_manager_get_devices(FprintManager *manager,
 	GPtrArray **devices, GError **error);

@@ -35,7 +35,7 @@
 
 fp_storage store;
 
-extern DBusGConnection *fprintd_dbus_conn;
+DBusGConnection *fprintd_dbus_conn = NULL;
 static gboolean no_timeout = FALSE;
 static gboolean g_fatal_warnings = FALSE;
 

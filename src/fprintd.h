@@ -26,7 +26,6 @@
 /* General */
 #define TIMEOUT 30
 #define FPRINT_SERVICE_NAME "net.reactivated.Fprint"
-extern DBusGConnection *fprintd_dbus_conn;
 
 /* Errors */
 GQuark fprint_error_quark(void);
