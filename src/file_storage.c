@@ -42,7 +42,7 @@
 #define FILE_STORAGE_PATH "/var/lib/fprint"
 #define DIR_PERMS 0700
 
-static const char *get_storage_path()
+static const char *get_storage_path(void)
 {
 	const char *path;
 
@@ -265,7 +265,7 @@ GSList *file_storage_discover_prints(FpDevice *dev, const char *username)
 	return list;
 }
 
-GSList *file_storage_discover_users()
+GSList *file_storage_discover_users(void)
 {
 	g_autoptr(GError) err = NULL;
 	GSList *list = NULL;
