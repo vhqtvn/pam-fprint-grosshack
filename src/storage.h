@@ -29,7 +29,7 @@ typedef int (*storage_print_data_delete)(FpDevice   *dev,
                                          FpFinger    finger,
                                          const char *username);
 typedef GSList *(*storage_discover_prints)(FpDevice *dev, const char *username);
-typedef GSList *(*storage_discover_users)();
+typedef GSList *(*storage_discover_users)(void);
 typedef int (*storage_init)(void);
 typedef int (*storage_deinit)(void);
 
