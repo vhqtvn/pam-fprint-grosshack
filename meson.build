@@ -40,6 +40,7 @@ common_cflags = cc.get_supported_arguments([
     '-Werror=missing-braces',
     '-Werror=nonnull',
     '-Werror=pointer-to-int-cast',
+    '-Werror=redundant-decls',
     '-Werror=return-type',
     '-Werror=sequence-point',
     '-Werror=trigraphs',
