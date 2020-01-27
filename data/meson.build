@@ -22,17 +22,10 @@ configure_file(
 )
 
 polkit_policy = 'net.reactivated.fprint.device.policy'
-polkit_policy_target = custom_target(polkit_policy,
+polkit_policy_target = i18n.merge_file(polkit_policy,
     input: '@0@.in'.format(polkit_policy),
     output: polkit_policy,
-    command: [
-        find_program('intltool-merge'),
-        '-x',
-        '-u',
-        meson.source_root() / 'po',
-        '@INPUT@',
-        '@OUTPUT@',
-    ],
+    po_dir: meson.source_root() / 'po',
     install: true,
     install_dir: polkit_policy_directory,
 )
