@@ -588,16 +588,10 @@ out:
 	return ret;
 }
 
-PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
-				   const char **argv)
+static bool
+is_remote (pam_handle_t *pamh)
 {
 	const char *rhost = NULL;
-	const char *username;
-	unsigned i;
-	int r;
-
-	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
-	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 
 	pam_get_item(pamh, PAM_RHOST, (const void **)(const void*) &rhost);
 
@@ -607,8 +601,24 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 	if (rhost != NULL &&
 	    *rhost != '\0' &&
 	    strcmp (rhost, "localhost") != 0) {
-		return PAM_AUTHINFO_UNAVAIL;
+		return true;
 	}
+
+	return false;
+}
+
+PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
+				   const char **argv)
+{
+	const char *username;
+	unsigned i;
+	int r;
+
+	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
+	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+
+	if (is_remote (pamh))
+		return PAM_AUTHINFO_UNAVAIL;
 
 	r = pam_get_user(pamh, &username, NULL);
 	if (r != PAM_SUCCESS)
