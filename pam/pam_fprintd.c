@@ -505,7 +505,6 @@ release_device (pam_handle_t *pamh,
 		 const char   *dev)
 {
 	sd_bus_error error = SD_BUS_ERROR_NULL;
-	sd_bus_message *m = NULL;
 	int r;
 
 	r = sd_bus_call_method (bus,
@@ -514,17 +513,13 @@ release_device (pam_handle_t *pamh,
 				"net.reactivated.Fprint.Device",
 				"Release",
 				&error,
-				&m,
+				NULL,
 				NULL,
 				NULL);
 	if (r < 0) {
 		pam_syslog (pamh, LOG_ERR, "ReleaseDevice failed: %s", error.message);
 		sd_bus_error_free (&error);
-		return;
 	}
-
-	//FIXME needed?
-	sd_bus_message_unref (m);
 }
 
 static bool
@@ -534,7 +529,6 @@ claim_device (pam_handle_t *pamh,
 	      const char   *username)
 {
 	sd_bus_error error = SD_BUS_ERROR_NULL;
-	sd_bus_message *m = NULL;
 	int r;
 
 	r = sd_bus_call_method (bus,
@@ -543,7 +537,7 @@ claim_device (pam_handle_t *pamh,
 				"net.reactivated.Fprint.Device",
 				"Claim",
 				&error,
-				&m,
+				NULL,
 				"s",
 				username);
 	if (r < 0) {
@@ -552,9 +546,6 @@ claim_device (pam_handle_t *pamh,
 		sd_bus_error_free (&error);
 		return false;
 	}
-
-	//FIXME needed?
-	sd_bus_message_unref (m);
 
 	return true;
 }
