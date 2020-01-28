@@ -139,7 +139,6 @@ enum fprint_device_signals {
 	NUM_SIGNALS,
 };
 
-static GObjectClass *parent_class = NULL;
 static guint32 last_id = ~0;
 static guint signals[NUM_SIGNALS] = { 0, };
 
@@ -214,7 +213,6 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 
 	dbus_g_object_type_install_info(FPRINT_TYPE_DEVICE,
 		&dbus_glib_fprint_device_object_info);
-	parent_class = g_type_class_peek_parent(klass);
 
 	gobject_class->finalize = fprint_device_finalize;
 	gobject_class->set_property = fprint_device_set_property;
@@ -727,7 +725,7 @@ static void fprint_device_release(FprintDevice *rdev,
 static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
-	struct FprintDevice *rdev = user_data;
+	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	gboolean success;
 	const char *name;
@@ -775,7 +773,7 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
-	struct FprintDevice *rdev = user_data;
+	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	const char *name;
 	gboolean success;
@@ -969,7 +967,7 @@ static void enroll_progress_cb(FpDevice *dev,
                                gpointer  user_data,
                                GError   *error)
 {
-	struct FprintDevice *rdev = user_data;
+	FprintDevice *rdev = user_data;
 	const char *name = enroll_result_to_name (FALSE, FALSE, error);
 
 	g_debug("enroll_stage_cb: result %s", name);
@@ -1072,7 +1070,7 @@ fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
 static void enroll_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
-	struct FprintDevice *rdev = user_data;
+	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(FpPrint) print = NULL;
 	const char *name;

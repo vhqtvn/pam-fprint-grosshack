@@ -48,47 +48,23 @@ typedef enum {
 
 /* Manager */
 #define FPRINT_TYPE_MANAGER            (fprint_manager_get_type())
-#define FPRINT_MANAGER(object)         (G_TYPE_CHECK_INSTANCE_CAST((object), FPRINT_TYPE_MANAGER, FprintManager))
-#define FPRINT_MANAGER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass), FPRINT_TYPE_MANAGER, FprintManagerClass))
-#define FPRINT_IS_MANAGER(object)      (G_TYPE_CHECK_INSTANCE_TYPE((object), FPRINT_TYPE_MANAGER))
-#define FPRINT_IS_MANAGER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), FPRINT_TYPE_MANAGER))
-#define FPRINT_MANAGER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj), FPRINT_TYPE_MANAGER, FprintManagerClass))
+G_DECLARE_FINAL_TYPE (FprintManager, fprint_manager, FPRINT, MANAGER, GObject)
 
-struct FprintManager {
+struct _FprintManager {
 	GObject parent;
 };
 
-struct FprintManagerClass {
-	GObjectClass parent;
-};
-
-typedef struct FprintManager FprintManager;
-typedef struct FprintManagerClass FprintManagerClass;
-
 FprintManager *fprint_manager_new(gboolean no_timeout);
-GType fprint_manager_get_type(void);
 
 /* Device */
 #define FPRINT_TYPE_DEVICE            (fprint_device_get_type())
-#define FPRINT_DEVICE(object)         (G_TYPE_CHECK_INSTANCE_CAST((object), FPRINT_DEVICE_TYPE, FprintDevice))
-#define FPRINT_DEVICE_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass), FPRINT_DEVICE_TYPE, FprintDeviceClass))
-#define FPRINT_IS_DEVICE(object)      (G_TYPE_CHECK_INSTANCE_TYPE((object), FPRINT_TYPE_DEVICE))
-#define FPRINT_IS_DEVICE_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), FPRINT_TYPE_DEVICE))
-#define FPRINT_DEVICE_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj), FPRINT_TYPE_DEVICE, FprintDeviceClass))
+G_DECLARE_FINAL_TYPE (FprintDevice, fprint_device, FPRINT, DEVICE, GObject)
 
-struct FprintDevice {
+struct _FprintDevice {
 	GObject parent;
 };
 
-struct FprintDeviceClass {
-	GObjectClass parent;
-};
-
-typedef struct FprintDevice FprintDevice;
-typedef struct FprintDeviceClass FprintDeviceClass;
-
 FprintDevice *fprint_device_new(FpDevice *dev);
-GType fprint_device_get_type(void);
 guint32 _fprint_device_get_id(FprintDevice *rdev);
 /* Print */
 /* TODO */

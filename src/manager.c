@@ -44,8 +44,6 @@ typedef struct
 	guint timeout_id;
 } FprintManagerPrivate;
 
-static GObjectClass *parent_class = NULL;
-
 G_DEFINE_TYPE_WITH_CODE(FprintManager, fprint_manager, G_TYPE_OBJECT, G_ADD_PRIVATE (FprintManager))
 
 static void fprint_manager_finalize(GObject *object)
@@ -55,7 +53,7 @@ static void fprint_manager_finalize(GObject *object)
 	g_clear_object (&priv->context);
 	g_slist_free(priv->dev_registry);
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(fprint_manager_parent_class)->finalize(object);
 }
 
 static void fprint_manager_class_init(FprintManagerClass *klass)
@@ -65,7 +63,6 @@ static void fprint_manager_class_init(FprintManagerClass *klass)
 	dbus_g_error_domain_register (FPRINT_ERROR, FPRINT_ERROR_DBUS_INTERFACE, FPRINT_TYPE_ERROR);
 
 	G_OBJECT_CLASS(klass)->finalize = fprint_manager_finalize;
-	parent_class = g_type_class_peek_parent(klass);
 }
 
 static gchar *get_device_path(FprintDevice *rdev)
