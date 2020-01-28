@@ -57,11 +57,10 @@ static gboolean
 load_storage_module (const char *module_name)
 {
 	GModule *module;
-	char *filename;
+	g_autofree char *filename = NULL;
 
 	filename = g_module_build_path (PLUGINDIR, module_name);
 	module = g_module_open (filename, 0);
-	g_free (filename);
 	if (module == NULL)
 		return FALSE;
 
@@ -83,46 +82,29 @@ load_storage_module (const char *module_name)
 static gboolean
 load_conf (void)
 {
-	GKeyFile *file;
-	char *filename;
-	char *module_name;
-	GError *error = NULL;
-	gboolean ret;
+	g_autofree char *filename = NULL;
+	g_autofree char *module_name = NULL;
+	g_autoptr(GKeyFile) file = NULL;
+	g_autoptr(GError) error = NULL;
 
 	filename = g_build_filename (SYSCONFDIR, "fprintd.conf", NULL);
 	file = g_key_file_new ();
 	g_debug("About to load configuration file '%s'", filename);
 	if (!g_key_file_load_from_file (file, filename, G_KEY_FILE_NONE, &error)) {
 		g_warning ("Could not open \"%s\": %s\n", filename, error->message);
-		goto bail;
+		return FALSE;
 	}
-
-	g_free (filename);
-	filename = NULL;
 
 	module_name = g_key_file_get_string (file, "storage", "type", &error);
 	if (module_name == NULL)
-		goto bail;
-
-	g_key_file_free (file);
+		return FALSE;
 
 	if (g_str_equal (module_name, "file")) {
-		g_free (module_name);
 		set_storage_file ();
 		return TRUE;
 	}
 
-	ret = load_storage_module (module_name);
-	g_free (module_name);
-
-	return ret;
-
-bail:
-	g_key_file_free (file);
-	g_free (filename);
-	g_error_free (error);
-
-	return FALSE;
+	return load_storage_module (module_name);
 }
 
 static const GOptionEntry entries[] = {
