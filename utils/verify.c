@@ -171,7 +171,7 @@ int main(int argc, char **argv)
 	GOptionContext *context;
 	GError *err = NULL;
 	DBusGProxy *dev;
-	char *username;
+	const char *username = NULL;
 
 	setlocale (LC_ALL, "");
 
