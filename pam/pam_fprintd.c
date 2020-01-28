@@ -32,6 +32,7 @@
 
 #include <libintl.h>
 #include <systemd/sd-bus.h>
+#include <systemd/sd-login.h>
 
 #define PAM_SM_AUTH
 #include <security/pam_modules.h>
@@ -603,6 +604,9 @@ is_remote (pam_handle_t *pamh)
 	    strcmp (rhost, "localhost") != 0) {
 		return true;
 	}
+
+	if (sd_session_is_remote (NULL) > 0)
+		return true;
 
 	return false;
 }
