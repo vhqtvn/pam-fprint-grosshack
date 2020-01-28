@@ -140,9 +140,9 @@ static gboolean sigterm_callback(gpointer data)
 
 int main(int argc, char **argv)
 {
-	GOptionContext *context;
-	GMainLoop *loop;
-	GError *error = NULL;
+	g_autoptr(GOptionContext) context = NULL;
+	g_autoptr(GMainLoop) loop = NULL;
+	g_autoptr(GError) error = NULL;
 	FprintManager *manager;
 	DBusGProxy *driver_proxy;
 	guint32 request_name_ret;
@@ -158,7 +158,6 @@ int main(int argc, char **argv)
 
 	if (g_option_context_parse (context, &argc, &argv, &error) == FALSE) {
 		g_warning ("couldn't parse command-line options: %s\n", error->message);
-		g_error_free (error);
 		return 1;
 	}
 
