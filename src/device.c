@@ -1349,7 +1349,7 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 						  DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	char *user, *sender;
 	gboolean opened;
 
@@ -1365,14 +1365,12 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 						  &error);
 	if (user == NULL) {
 		dbus_g_method_return_error (context, error);
-		g_error_free (error);
 		return;
 	}
 
 	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
 		g_free (user);
 		dbus_g_method_return_error (context, error);
-		g_error_free (error);
 		return;
 	}
 
@@ -1383,7 +1381,6 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 			return;
 		}
 
-		g_clear_error (&error);
 		opened = FALSE;
 	} else {
 		opened = TRUE;
