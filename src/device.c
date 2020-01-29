@@ -81,18 +81,18 @@ typedef enum {
 	ACTION_ENROLL
 } FprintDeviceAction;
 
-struct session_data {
+typedef struct {
 	/* method invocation for async ClaimDevice() */
 	DBusGMethodInvocation *context_claim_device;
 
 	/* method invocation for async ReleaseDevice() */
 	DBusGMethodInvocation *context_release_device;
-};
+} SessionData;
 
 typedef struct {
 	guint32 id;
 	FpDevice *dev;
-	struct session_data *session;
+	SessionData *session;
 
 	PolkitAuthority *auth;
 
@@ -555,8 +555,7 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 		if (!fp_device_close_sync (priv->dev, NULL, &error))
 			g_warning ("Error closing device after disconnect: %s", error->message);
 
-		g_slice_free (struct session_data, priv->session);
-		priv->session = NULL;
+		g_clear_pointer(&priv->session, g_free);
 		g_clear_pointer (&priv->sender, g_free);
 		g_clear_pointer (&priv->username, g_free);
 	}
@@ -592,7 +591,7 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	struct session_data *session = priv->session;
+	SessionData *session = priv->session;
 
 	if (!fp_device_open_finish (dev, res, &error)) {
 		g_autoptr(GError) dbus_error = NULL;
@@ -603,8 +602,7 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		                          FPRINT_ERROR_INTERNAL,
 		                          "Open failed with error: %s", error->message);
 		dbus_g_method_return_error(session->context_claim_device, dbus_error);
-		g_slice_free(struct session_data, priv->session);
-		priv->session = NULL;
+		g_clear_pointer(&priv->session, g_free);
 		return;
 	}
 
@@ -664,7 +662,7 @@ static void fprint_device_claim(FprintDevice *rdev,
 
 	g_debug ("user '%s' claiming the device: %d", priv->username, priv->id);
 
-	priv->session = g_slice_new0(struct session_data);
+	priv->session = g_new0(SessionData, 1);
 	priv->session->context_claim_device = context;
 
 	fp_device_open (priv->dev, NULL, (GAsyncReadyCallback) dev_open_cb, rdev);
@@ -675,7 +673,7 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	struct session_data *session = priv->session;
+	SessionData *session = priv->session;
 
 	if (!fp_device_close_finish (dev, res, &error)) {
 		g_autoptr(GError) dbus_error = NULL;
@@ -693,8 +691,7 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 
 	dbus_g_method_return(session->context_release_device);
 
-	g_slice_free (struct session_data, priv->session);
-	priv->session = NULL;
+	g_clear_pointer(&priv->session, g_free);
 	g_clear_pointer (&priv->sender, g_free);
 	g_clear_pointer (&priv->username, g_free);
 }
@@ -703,7 +700,7 @@ static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	struct session_data *session = priv->session;
+	SessionData *session = priv->session;
 	GError *error = NULL;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
