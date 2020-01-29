@@ -179,7 +179,7 @@ int main(int argc, char **argv)
 {
 	g_autoptr(FprintDBusDevice) dev = NULL;
 	GOptionContext *context;
-	GError *err = NULL;
+	g_autoptr(GError) err = NULL;
 
 	setlocale (LC_ALL, "");
 
@@ -188,7 +188,6 @@ int main(int argc, char **argv)
 
 	if (g_option_context_parse (context, &argc, &argv, &err) == FALSE) {
 		g_print ("couldn't parse command-line options: %s\n", err->message);
-		g_error_free (err);
 		return 1;
 	}
 
