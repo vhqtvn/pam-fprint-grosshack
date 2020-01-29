@@ -603,6 +603,8 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		                          FPRINT_ERROR_INTERNAL,
 		                          "Open failed with error: %s", error->message);
 		dbus_g_method_return_error(session->context_claim_device, dbus_error);
+		g_slice_free(struct session_data, priv->session);
+		priv->session = NULL;
 		return;
 	}
 
