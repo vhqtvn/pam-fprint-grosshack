@@ -103,9 +103,6 @@ typedef struct {
 	 * what was passed as a username argument */
 	char *username;
 
-	/* type of storage */
-	int storage_type;
-
 	/* Hashtable of connected clients */
 	GHashTable *clients;
 
