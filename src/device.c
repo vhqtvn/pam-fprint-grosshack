@@ -489,9 +489,9 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev,
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	const char *sender;
-	PolkitSubject *subject;
-	PolkitAuthorizationResult *result;
-	GError *_error = NULL;
+	g_autoptr(GError) _error = NULL;
+	g_autoptr(PolkitAuthorizationResult) result = NULL;
+	g_autoptr(PolkitSubject) subject = NULL;
 
 	/* Check that caller is privileged */
 	sender = g_dbus_method_invocation_get_sender (invocation);
@@ -503,13 +503,10 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev,
 							    NULL,
                                                             POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
 					                    NULL, &_error);
-	g_object_unref (subject);
-
 	if (result == NULL) {
 		g_set_error (error, FPRINT_ERROR,
 			     FPRINT_ERROR_PERMISSION_DENIED,
 			     "Not Authorized: %s", _error->message);
-		g_error_free (_error);
 		return FALSE;
 	}
 
@@ -517,11 +514,8 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev,
 		g_set_error (error, FPRINT_ERROR,
 			     FPRINT_ERROR_PERMISSION_DENIED,
 			     "Not Authorized: %s", action);
-		g_object_unref (result);
 		return FALSE;
 	}
-
-	g_object_unref (result);
 
 	return TRUE;
 }
@@ -1028,7 +1022,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	}
 
 	if (finger_num == -1) {
-		GSList *prints;
+		g_autoptr(GSList) prints = NULL;
 
 		prints = store.discover_prints(priv->dev, session->username);
 		if (prints == NULL) {
@@ -1053,7 +1047,6 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 		} else {
 			finger_num = GPOINTER_TO_INT (prints->data);
 		}
-		g_slist_free(prints);
 	}
 
 	if (fp_device_supports_identify (priv->dev) && finger_num == -1) {
@@ -1110,7 +1103,7 @@ static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 	g_autoptr(SessionData) session = NULL;
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 
 	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
@@ -1118,16 +1111,16 @@ static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 	}
 
 	if (priv->current_action == ACTION_NONE) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
-			    "No verification in progress");
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
+		g_dbus_method_invocation_return_error_literal (invocation,
+							       FPRINT_ERROR,
+							       FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
+							       "No verification in progress");
 		return TRUE;
 	} else if (priv->current_action == ACTION_ENROLL) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-			    "Enrollment in progress");
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
+		g_dbus_method_invocation_return_error_literal (invocation,
+							       FPRINT_ERROR,
+							       FPRINT_ERROR_ALREADY_IN_USE,
+							       "Enrollment in progress");
 		return TRUE;
 	}
 
@@ -1180,7 +1173,8 @@ static gboolean try_delete_print(FprintDevice *rdev)
 
 	for (user = users; user; user = user->next) {
 		const char *username = user->data;
-		GSList *fingers, *finger;
+		g_autoptr(GSList) fingers = NULL;
+		GSList *finger;
 
 		fingers = store.discover_prints (priv->dev, username);
 
@@ -1205,8 +1199,6 @@ static gboolean try_delete_print(FprintDevice *rdev)
 			/* Found an equal print, remove it */
 			g_ptr_array_remove_index (device_prints, index);
 		}
-
-		g_slist_free (fingers);
 	}
 
 	g_slist_free_full (users, g_free);
@@ -1230,14 +1222,18 @@ static gboolean try_delete_print(FprintDevice *rdev)
 	return TRUE;
 }
 
+#if !GLIB_CHECK_VERSION (2, 63, 3)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (GDate, g_date_free);
+#endif
+
 static FpPrint*
 fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
 {
 	g_autoptr(SessionData) session = NULL;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+	g_autoptr(GDateTime) datetime = NULL;
+	g_autoptr(GDate) date = NULL;
 	FpPrint *template = NULL;
-	GDateTime *datetime = NULL;
-	GDate *date = NULL;
 	gint year, month, day;
 
 	session = session_data_get (priv);
@@ -1249,8 +1245,6 @@ fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
 	g_date_time_get_ymd (datetime, &year, &month, &day);
 	date = g_date_new_dmy (day, month, year);
 	fp_print_set_enroll_date (template, date);
-	g_date_free (date);
-	g_date_time_unref (datetime);
 
 	return template;
 }
@@ -1415,8 +1409,7 @@ static gboolean fprint_device_list_enrolled_fingers (FprintDBusDevice *dbus_dev,
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr (GPtrArray) ret = NULL;
-	GError *error = NULL;
-	GSList *prints;
+	g_autoptr(GSList) prints = NULL;
 	GSList *item;
 	const char *sender;
 	const char *user;
@@ -1429,10 +1422,10 @@ static gboolean fprint_device_list_enrolled_fingers (FprintDBusDevice *dbus_dev,
 	prints = store.discover_prints(priv->dev, user);
 
 	if (!prints) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
-			"Failed to discover prints");
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
+		g_dbus_method_invocation_return_error_literal (invocation,
+							       FPRINT_ERROR,
+							       FPRINT_ERROR_NO_ENROLLED_PRINTS,
+							       "Failed to discover prints");
 		return TRUE;
 	}
 
@@ -1442,8 +1435,6 @@ static gboolean fprint_device_list_enrolled_fingers (FprintDBusDevice *dbus_dev,
 		g_ptr_array_add (ret, (char *) finger_num_to_name (finger_num));
 	}
 	g_ptr_array_add (ret, NULL);
-
-	g_slist_free(prints);
 
 	fprint_dbus_device_complete_list_enrolled_fingers  (dbus_dev,
 		invocation, (const gchar *const *) ret->pdata);
