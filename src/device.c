@@ -684,6 +684,9 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		                          FPRINT_ERROR_INTERNAL,
 		                          "Release failed with error: %s", error->message);
 		dbus_g_method_return_error(session->context_release_device, dbus_error);
+		g_clear_pointer(&priv->session, g_free);
+		g_clear_pointer(&priv->sender, g_free);
+		g_clear_pointer(&priv->username, g_free);
 		return;
 	}
 
