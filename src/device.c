@@ -82,11 +82,15 @@ typedef enum {
 } FprintDeviceAction;
 
 typedef struct {
-	/* method invocation for async ClaimDevice() */
-	DBusGMethodInvocation *context_claim_device;
+	/* current method invocation */
+	DBusGMethodInvocation *context;
 
-	/* method invocation for async ReleaseDevice() */
-	DBusGMethodInvocation *context_release_device;
+	/* The current user of the device, if claimed */
+	char *sender;
+
+	/* The current user of the device, or if allowed,
+	 * what was passed as a username argument */
+	char *username;
 } SessionData;
 
 typedef struct {
@@ -95,13 +99,6 @@ typedef struct {
 	SessionData *session;
 
 	PolkitAuthority *auth;
-
-	/* The current user of the device, if claimed */
-	char *sender;
-
-	/* The current user of the device, or if allowed,
-	 * what was passed as a username argument */
-	char *username;
 
 	/* Hashtable of connected clients */
 	GHashTable *clients;
@@ -139,12 +136,22 @@ enum fprint_device_signals {
 static guint32 last_id = ~0;
 static guint signals[NUM_SIGNALS] = { 0, };
 
+static void session_data_free(SessionData *session)
+{
+	g_clear_pointer(&session->sender, g_free);
+	g_clear_pointer(&session->username, g_free);
+	g_nullify_pointer((gpointer *) &session->context);
+	g_free(session);
+}
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(SessionData, session_data_free);
+
 static void fprint_device_finalize(GObject *object)
 {
 	FprintDevice *self = (FprintDevice *) object;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(self);
 
 	g_hash_table_destroy (priv->clients);
+	g_clear_pointer(&priv->session, session_data_free);
 	/* FIXME close and stuff */
 
 	G_OBJECT_CLASS(fprint_device_parent_class)->finalize(object);
@@ -397,17 +404,18 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 	gboolean retval;
 
 	/* The device wasn't claimed, exit */
-	if (priv->sender == NULL) {
+	if (priv->session == NULL) {
 		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
 			     _("Device was not claimed before use"));
 		return FALSE;
 	}
 
 	sender = dbus_g_method_get_sender (context);
-	retval = g_str_equal (sender, priv->sender);
+	retval = g_str_equal (sender, priv->session->sender);
 	g_free (sender);
 
-	if (retval == FALSE) {
+	if (retval == FALSE ||
+	    priv->session->context != NULL) {
 		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
 			     _("Device already in use by another user"));
 	}
@@ -542,7 +550,8 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 
 	/* Was that the client that claimed the device? */
-	if (g_strcmp0 (priv->sender, name) == 0) {
+	if (priv->session != NULL &&
+	    g_strcmp0 (priv->session->sender, name) == 0) {
 		while (priv->current_action != ACTION_NONE) {
 			g_cancellable_cancel (priv->current_cancellable);
 
@@ -552,9 +561,7 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 		if (!fp_device_close_sync (priv->dev, NULL, &error))
 			g_warning ("Error closing device after disconnect: %s", error->message);
 
-		g_clear_pointer(&priv->session, g_free);
-		g_clear_pointer (&priv->sender, g_free);
-		g_clear_pointer (&priv->username, g_free);
+		g_clear_pointer(&priv->session, session_data_free);
 	}
 	g_hash_table_remove (priv->clients, name);
 
@@ -588,25 +595,22 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	SessionData *session = priv->session;
+	DBusGMethodInvocation *context = g_steal_pointer(&priv->session->context);
 
 	if (!fp_device_open_finish (dev, res, &error)) {
 		g_autoptr(GError) dbus_error = NULL;
 
-		g_clear_pointer (&priv->sender, g_free);
-
 		dbus_error = g_error_new (FPRINT_ERROR,
 		                          FPRINT_ERROR_INTERNAL,
 		                          "Open failed with error: %s", error->message);
-		dbus_g_method_return_error(session->context_claim_device, dbus_error);
-		g_clear_pointer(&priv->username, g_free);
-		g_clear_pointer(&priv->session, g_free);
+		dbus_g_method_return_error(context, dbus_error);
+		g_clear_pointer(&priv->session, session_data_free);
 		return;
 	}
 
 	g_debug("claimed device %d", priv->id);
 
-	dbus_g_method_return(session->context_claim_device);
+	dbus_g_method_return(context);
 }
 
 static void fprint_device_claim(FprintDevice *rdev,
@@ -618,7 +622,7 @@ static void fprint_device_claim(FprintDevice *rdev,
 	char *sender, *user;
 
 	/* Is it already claimed? */
-	if (priv->sender != NULL) {
+	if (priv->session) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
 			    "Device was already claimed");
 		dbus_g_method_return_error(context, error);
@@ -626,8 +630,7 @@ static void fprint_device_claim(FprintDevice *rdev,
 		return;
 	}
 
-	g_assert (priv->username == NULL);
-	g_assert (priv->sender == NULL);
+	g_assert_null(priv->session);
 
 	sender = NULL;
 	user = _fprint_device_check_for_username (rdev,
@@ -655,13 +658,12 @@ static void fprint_device_claim(FprintDevice *rdev,
 
 	_fprint_device_add_client (rdev, sender);
 
-	priv->username = user;
-	priv->sender = sender;
-
-	g_debug ("user '%s' claiming the device: %d", priv->username, priv->id);
-
 	priv->session = g_new0(SessionData, 1);
-	priv->session->context_claim_device = context;
+	priv->session->context = context;
+	priv->session->username = user;
+	priv->session->sender = sender;
+
+	g_debug ("user '%s' claiming the device: %d", priv->session->username, priv->id);
 
 	fp_device_open (priv->dev, NULL, (GAsyncReadyCallback) dev_open_cb, rdev);
 }
@@ -671,37 +673,28 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	SessionData *session = priv->session;
+	g_autoptr(SessionData) session = g_steal_pointer(&priv->session);
+	DBusGMethodInvocation *context = g_steal_pointer(&session->context);
 
 	if (!fp_device_close_finish (dev, res, &error)) {
 		g_autoptr(GError) dbus_error = NULL;
 
-		g_clear_pointer (&priv->sender, g_free);
-
 		dbus_error = g_error_new (FPRINT_ERROR,
 		                          FPRINT_ERROR_INTERNAL,
 		                          "Release failed with error: %s", error->message);
-		dbus_g_method_return_error(session->context_release_device, dbus_error);
-		g_clear_pointer(&priv->session, g_free);
-		g_clear_pointer(&priv->sender, g_free);
-		g_clear_pointer(&priv->username, g_free);
+		dbus_g_method_return_error(context, dbus_error);
 		return;
 	}
 
 	g_debug("released device %d", priv->id);
 
-	dbus_g_method_return(session->context_release_device);
-
-	g_clear_pointer(&priv->session, g_free);
-	g_clear_pointer (&priv->sender, g_free);
-	g_clear_pointer (&priv->username, g_free);
+	dbus_g_method_return(context);
 }
 
 static void fprint_device_release(FprintDevice *rdev,
 	DBusGMethodInvocation *context)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	SessionData *session = priv->session;
 	GError *error = NULL;
 
 	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
@@ -720,7 +713,7 @@ static void fprint_device_release(FprintDevice *rdev,
 		return;
 	}
 
-	session->context_release_device = context;
+	priv->session->context = context;
 	fp_device_close (priv->dev, NULL, (GAsyncReadyCallback) dev_close_cb, rdev);
 }
 
@@ -854,7 +847,7 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 	if (finger_num == -1) {
 		GSList *prints;
 
-		prints = store.discover_prints(priv->dev, priv->username);
+		prints = store.discover_prints(priv->dev, priv->session->username);
 		if (prints == NULL) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
 				    "No fingerprints enrolled");
@@ -869,7 +862,7 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 			for (l = prints; l != NULL; l = l->next) {
 				g_debug ("adding finger %d to the gallery", GPOINTER_TO_INT (l->data));
 				store.print_data_load(priv->dev, GPOINTER_TO_INT (l->data),
-						      priv->username, &print);
+						      priv->session->username, &print);
 
 				if (print)
 					g_ptr_array_add (gallery, g_steal_pointer (&print));
@@ -902,7 +895,7 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		g_debug("start verification device %d finger %d", priv->id, finger_num);
 
 		store.print_data_load(priv->dev, finger_num,
-				      priv->username, &print);
+				      priv->session->username, &print);
 
 		if (!print) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
@@ -1058,7 +1051,7 @@ fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
 
 	template = fp_print_new (priv->dev);
 	fp_print_set_finger (template, finger_num);
-	fp_print_set_username (template, priv->username);
+	fp_print_set_username (template, priv->session->username);
 	datetime = g_date_time_new_now_local ();
 	g_date_time_get_ymd (datetime, &year, &month, &day);
 	date = g_date_new_dmy (day, month, year);
@@ -1430,7 +1423,7 @@ static void fprint_device_delete_enrolled_fingers2(FprintDevice *rdev,
 		return;
 	}
 
-	delete_enrolled_fingers (rdev, priv->username);
+	delete_enrolled_fingers (rdev, priv->session->username);
 
 	dbus_g_method_return(context);
 }
