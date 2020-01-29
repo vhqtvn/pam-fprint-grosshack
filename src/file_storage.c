@@ -79,7 +79,7 @@ static char *get_path_to_storedir(const char *driver, const char * device_id, ch
 static char *__get_path_to_print(const char *driver, const char * device_id,
 	FpFinger finger, char *base_store)
 {
-	char *dirpath;
+	g_autofree char *dirpath = NULL;
 	char *path;
 	char fingername[2];
 
@@ -87,7 +87,6 @@ static char *__get_path_to_print(const char *driver, const char * device_id,
 
 	dirpath = get_path_to_storedir(driver, device_id, base_store);
 	path = g_build_filename(dirpath, fingername, NULL);
-	g_free(dirpath);
 	return path;
 }
 
@@ -188,7 +187,7 @@ int file_storage_print_data_load(FpDevice *dev,
 {
 	g_autofree gchar *path = NULL;
 	g_autofree gchar *base_store = NULL;
-	FpPrint *new = NULL;
+	g_autoptr(FpPrint) new = NULL;
 	int r;
 
 	base_store = file_storage_get_basestore_for_username(username);
@@ -201,11 +200,10 @@ int file_storage_print_data_load(FpDevice *dev,
 		return r;
 
 	if (!fp_print_compatible (new, dev)) {
-		g_object_unref (new);
 		return -EINVAL;
 	}
 
-	*print = new;
+	*print = g_steal_pointer (&new);
 	return 0;
 }
 
