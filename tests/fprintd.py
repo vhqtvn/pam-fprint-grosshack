@@ -270,7 +270,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
         with Connection(self.sockaddr) as con:
             mem = img.get_data()
             mem = mem.tobytes()
-            assert len(mem) == img.get_width() * img.get_height()
+            self.assertEqual(len(mem), img.get_width() * img.get_height())
 
             encoded_img = struct.pack('ii', img.get_width(), img.get_height())
             encoded_img += mem
@@ -348,11 +348,11 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         while not self._abort:
             ctx.iteration(True)
 
-        assert self._last_result == 'enroll-completed'
+        self.assertEqual(self._last_result, 'enroll-completed')
 
         self.device.EnrollStop()
 
-        assert os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7'))
+        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
         # Finger is enrolled, try to verify it
         self.device.VerifyStart('(s)', 'any')
@@ -362,8 +362,8 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         self._abort = False
         while not self._abort:
             ctx.iteration(True)
-        assert self._verify_stopped == True
-        assert self._last_result == 'verify-no-match'
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-no-match')
 
         self.device.VerifyStop()
         self.device.VerifyStart('(s)', 'any')
@@ -373,22 +373,22 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         self._abort = False
         while not self._abort:
             ctx.iteration(True)
-        assert self._verify_stopped == False
-        assert self._last_result == 'verify-swipe-too-short'
+        self.assertFalse(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-swipe-too-short')
 
         # Try the correct print; will stop verification
         self.send_image('whorl')
         self._abort = False
         while not self._abort:
             ctx.iteration(True)
-        assert self._verify_stopped == True
-        assert self._last_result == 'verify-match'
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-match')
 
 
         # And delete the print(s) again
         self.device.DeleteEnrolledFingers('(s)', 'testuser')
 
-        assert not os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7'))
+        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
         self.device.Release()
 
@@ -404,16 +404,16 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         while not self._abort:
             ctx.iteration(True)
 
-        assert self._last_result == 'enroll-completed'
+        self.assertEqual(self._last_result, 'enroll-completed')
 
         self.device.EnrollStop()
 
-        assert os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7'))
+        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
         # And delete the print(s) again using the new API
         self.device.DeleteEnrolledFingers2()
 
-        assert not os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7'))
+        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
         self.device.Release()
 
