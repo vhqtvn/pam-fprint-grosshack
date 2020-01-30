@@ -16,6 +16,7 @@
 # Authors:
 #       Christian J. Kellner <christian@kellner.me>
 #       Benjamin Berg <bberg@redhat.com>
+#       Marco Trevisan <marco.trevisan@canonical.com>
 
 import unittest
 import time
@@ -276,7 +277,11 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
             con.sendall(encoded_img)
 
-    def test_enroll_verify_delete(self):
+
+class FPrintdVirtualDeviceTest(FPrintdTest):
+    def setUp(self):
+        super().setUp()
+
         self.polkitd_start()
         self.daemon_start()
 
@@ -290,7 +295,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
             print("Test timed out, hard exiting")
             sys.exit(1)
 
-        timeout = GLib.timeout_add(get_timeout('test') * 1000, timeout_cb)
+        self.test_timeout = GLib.timeout_add(get_timeout('test') * 1000, timeout_cb)
 
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
                                       'net.reactivated.fprint.device.enroll',
@@ -320,7 +325,18 @@ class FPrintdTest(dbusmock.DBusTestCase):
                 self._abort = True
                 self._last_result = 'Unexpected signal'
 
-        signal_id = self.device.connect('g-signal', signal_cb)
+        self.g_signal_id = self.device.connect('g-signal', signal_cb)
+
+    def tearDown(self):
+        super().tearDown()
+
+        GLib.source_remove(self.test_timeout)
+        self.device.disconnect(self.g_signal_id)
+
+        self.daemon_stop()
+        self.polkitd_stop()
+
+    def test_enroll_verify_list_delete(self):
 
         self.device.Claim('(s)', 'testuser')
 
@@ -374,59 +390,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
         assert not os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7'))
 
-        GLib.source_remove(timeout)
-
-        self.device.disconnect(signal_id)
-
         self.device.Release()
-        self.daemon_stop()
-        self.polkitd_stop()
 
     def test_enroll_delete2(self):
-        self.polkitd_start()
-        self.daemon_start()
-
-        if self.device is None:
-            self.daemon_stop()
-            self.polkitd_stop()
-            self.skipTest("Need virtual_image device to run the test")
-
-        def timeout_cb(*args):
-            # Note: With meson we could just rely on it to kill us
-            print("Test timed out, hard exiting")
-            sys.exit(1)
-
-        timeout = GLib.timeout_add(get_timeout('test') * 1000, timeout_cb)
-
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
-                                      'net.reactivated.fprint.device.enroll',
-                                      'net.reactivated.fprint.device.verify'])
-
-        def signal_cb(proxy, sender, signal, params):
-            print(signal, params)
-            if signal == 'EnrollStatus':
-                self._abort = params[1]
-                self._last_result = params[0]
-
-                if not self._abort and self._last_result == 'enroll-stage-passed':
-                    self.send_image('whorl')
-                elif self._abort:
-                    pass
-                else:
-                    self._abort = True
-                    self._last_result = 'Unexpected signal values'
-                    print('Unexpected signal values')
-            elif signal == 'VerifyFingerSelected':
-                pass
-            elif signal == 'VerifyStatus':
-                self._abort = True
-                self._last_result = params[0]
-                self._verify_stopped = params[1]
-            else:
-                self._abort = True
-                self._last_result = 'Unexpected signal'
-
-        signal_id = self.device.connect('g-signal', signal_cb)
 
         self.device.Claim('(s)', 'testuser')
 
@@ -449,13 +415,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
         assert not os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7'))
 
-        GLib.source_remove(timeout)
-
-        self.device.disconnect(signal_id)
-
         self.device.Release()
-        self.daemon_stop()
-        self.polkitd_stop()
 
 if __name__ == '__main__':
     if len(sys.argv) == 2 and sys.argv[1] == "list-tests":
