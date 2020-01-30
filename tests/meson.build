@@ -14,6 +14,7 @@ foreach t: tests
         ],
         env: [
             'G_DEBUG=fatal-criticals',
+            'G_MESSAGES_DEBUG=all',
             'FPRINT_BUILD_DIR=' + meson.build_root() / 'src',
             'TOPSRCDIR=' + meson.source_root(),
         ],
