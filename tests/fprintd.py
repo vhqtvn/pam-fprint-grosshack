@@ -340,6 +340,91 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         return self.assertRaisesRegex(GLib.Error,
             '.*net\.reactivated\.Fprint\.Error\.{}.*'.format(fprint_error))
 
+    def test_allowed_claim(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
+                                      'net.reactivated.fprint.device.enroll'])
+        self.device.Claim('(s)', 'testuser')
+        self.device.Release()
+
+    def test_unallowed_claim(self):
+        self._polkitd_obj.SetAllowed([''])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.Claim('(s)', 'testuser')
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.Claim('(s)', 'testuser')
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.Claim('(s)', 'testuser')
+
+    def test_multiple_claims(self):
+        self.device.Claim('(s)', 'testuser')
+
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.Claim('(s)', 'testuser')
+
+        self.device.Release()
+
+    def test_unallowed_release(self):
+        self.device.Claim('(s)', 'testuser')
+
+        self._polkitd_obj.SetAllowed([''])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.Release()
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.Release()
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self.device.Release()
+
+    def test_unclaimed_release(self):
+        with self.assertFprintError('ClaimDevice'):
+            self.device.Release()
+
+    def test_unclaimed_verify_start(self):
+        with self.assertFprintError('ClaimDevice'):
+            self.device.VerifyStart('(s)', 'any')
+
+    def test_unclaimed_verify_stop(self):
+        with self.assertFprintError('ClaimDevice'):
+            self.device.VerifyStop()
+
+    def test_unclaimed_enroll_start(self):
+        with self.assertFprintError('ClaimDevice'):
+            self.device.EnrollStart('(s)', 'left-index-finger')
+
+    def test_unclaimed_enroll_stop(self):
+        with self.assertFprintError('ClaimDevice'):
+            self.device.EnrollStop()
+
+    def test_wrong_finger_enroll_start(self):
+        self.device.Claim('(s)', 'testuser')
+
+        with self.assertFprintError('InvalidFingername'):
+            self.device.EnrollStart('(s)', 'any')
+
+        self.device.Release()
+
+    def test_unclaimed_delete_enrolled_fingers(self):
+        self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+    def test_unclaimed_delete_enrolled_fingers2(self):
+        with self.assertFprintError('ClaimDevice'):
+            self.device.DeleteEnrolledFingers2()
+
+    def test_unclaimed_list_enrolled_fingers(self):
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.ListEnrolledFingers('(s)', 'testuser')
+
     def test_enroll_verify_list_delete(self):
 
         self.device.Claim('(s)', 'testuser')
