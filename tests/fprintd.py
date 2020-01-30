@@ -344,6 +344,12 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
         self.device.Claim('(s)', 'testuser')
 
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.ListEnrolledFingers('(s)', 'testuser')
+
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.ListEnrolledFingers('(s)', 'nottestuser')
+
         self.device.EnrollStart('(s)', 'right-index-finger')
 
         self.send_image('whorl')
@@ -357,6 +363,11 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         self.device.EnrollStop()
 
         self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.ListEnrolledFingers('(s)', 'nottestuser')
+
+        self.assertEqual(self.device.ListEnrolledFingers('(s)', 'testuser'), ['right-index-finger'])
 
         # Finger is enrolled, try to verify it
         self.device.VerifyStart('(s)', 'any')
@@ -388,11 +399,15 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
 
+        self.assertEqual(self.device.ListEnrolledFingers('(s)', 'testuser'), ['right-index-finger'])
 
         # And delete the print(s) again
         self.device.DeleteEnrolledFingers('(s)', 'testuser')
 
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.ListEnrolledFingers('(s)', 'testuser')
 
         self.device.Release()
 
