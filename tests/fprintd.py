@@ -336,6 +336,10 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         self.daemon_stop()
         self.polkitd_stop()
 
+    def assertFprintError(self, fprint_error):
+        return self.assertRaisesRegex(GLib.Error,
+            '.*net\.reactivated\.Fprint\.Error\.{}.*'.format(fprint_error))
+
     def test_enroll_verify_list_delete(self):
 
         self.device.Claim('(s)', 'testuser')
