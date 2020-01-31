@@ -31,6 +31,7 @@ class TestFprintd(dbusmock.DBusTestCase):
     def setUpClass(klass):
         klass.start_system_bus()
         klass.dbus_con = klass.get_dbus(True)
+        klass.sleep_time = 0.5
 
         template_path = './'
         if 'TOPSRCDIR' in os.environ:
@@ -44,6 +45,17 @@ class TestFprintd(dbusmock.DBusTestCase):
             print ('Using tools from %s' % klass.tools_prefix)
         else:
             print ('Using tools from $PATH')
+
+        klass.wrapper_args = []
+        klass.valgrind = False
+        if 'VALGRIND' in os.environ:
+            valgrind = os.environ['VALGRIND']
+            if valgrind is not None:
+                klass.valgrind = True
+                klass.sleep_time *= 4
+                klass.wrapper_args = ['valgrind', '--leak-check=full']
+                if os.path.exists(valgrind):
+                    klass.wrapper_args += ['--suppressions={}'.format(valgrind)]
 
     def setUp(self):
         (self.p_mock, self.obj_fprintd_manager) = self.spawn_server_template(
@@ -66,19 +78,19 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.setup_device()
 
         mock_log = tempfile.NamedTemporaryFile()
-        process = subprocess.Popen([self.tools_prefix + 'fprintd-enroll', '-f', 'right-index-finger', 'toto'],
+        process = subprocess.Popen(self.wrapper_args + [self.tools_prefix + 'fprintd-enroll', '-f', 'right-index-finger', 'toto'],
                                    stdout=mock_log,
                                    stderr=subprocess.STDOUT,
                                    universal_newlines=True)
 
-        time.sleep(0.5)
+        time.sleep(self.sleep_time)
 
         with open(mock_log.name) as f:
             out = f.read()
             self.assertRegex(out, r'right-index-finger')
 
         self.device_mock.EmitEnrollStatus('enroll-completed', True)
-        time.sleep(0.5)
+        time.sleep(self.sleep_time)
 
         with open(mock_log.name) as f:
             out = f.read()
@@ -88,12 +100,12 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.setup_device()
 
         mock_log = tempfile.NamedTemporaryFile()
-        process = subprocess.Popen([self.tools_prefix + 'fprintd-verify', 'toto'],
+        process = subprocess.Popen(self.wrapper_args + [self.tools_prefix + 'fprintd-verify', 'toto'],
                                    stdout=mock_log,
                                    stderr=subprocess.STDOUT,
                                    universal_newlines=True)
 
-        time.sleep(0.5)
+        time.sleep(self.sleep_time)
 
         with open(mock_log.name) as f:
             out = f.read()
@@ -101,7 +113,7 @@ class TestFprintd(dbusmock.DBusTestCase):
             self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
 
         self.device_mock.EmitVerifyStatus('verify-match', True)
-        time.sleep(0.5)
+        time.sleep(self.sleep_time)
 
         with open(mock_log.name) as f:
             out = f.read()
@@ -115,12 +127,12 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.device_mock.SetVerifyScript(script)
 
         mock_log = tempfile.NamedTemporaryFile()
-        process = subprocess.Popen([self.tools_prefix + 'fprintd-verify', 'toto'],
+        process = subprocess.Popen(self.wrapper_args + [self.tools_prefix + 'fprintd-verify', 'toto'],
                                    stdout=mock_log,
                                    stderr=subprocess.STDOUT,
                                    universal_newlines=True)
 
-        time.sleep(0.5)
+        time.sleep(self.sleep_time)
 
         with open(mock_log.name) as f:
             out = f.read()
@@ -137,13 +149,13 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.setup_device()
 
         # Rick has no fingerprints enrolled
-        out = subprocess.check_output([self.tools_prefix + 'fprintd-list', 'rick'],
+        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-list', 'rick'],
                                       stderr=subprocess.STDOUT,
                                       universal_newlines=True)
         self.assertRegex(out, r'has no fingers enrolled for')
 
         # Toto does
-        out = subprocess.check_output([self.tools_prefix + 'fprintd-list', 'toto'],
+        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-list', 'toto'],
                                       universal_newlines=True)
         self.assertRegex(out, r'left-little-finger')
         self.assertRegex(out, r'right-little-finger')
@@ -152,20 +164,20 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.setup_device()
 
         # Has fingerprints enrolled
-        out = subprocess.check_output([self.tools_prefix + 'fprintd-list', 'toto'],
+        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-list', 'toto'],
                                       stderr=subprocess.STDOUT,
                                       universal_newlines=True)
         self.assertRegex(out, r'left-little-finger')
         self.assertRegex(out, r'right-little-finger')
 
         # Delete fingerprints
-        out = subprocess.check_output([self.tools_prefix + 'fprintd-delete', 'toto'],
+        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-delete', 'toto'],
                                       stderr=subprocess.STDOUT,
                                       universal_newlines=True)
         self.assertRegex(out, r'Fingerprints deleted')
 
         # Doesn't have fingerprints
-        out = subprocess.check_output([self.tools_prefix + 'fprintd-list', 'toto'],
+        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-list', 'toto'],
                                       stderr=subprocess.STDOUT,
                                       universal_newlines=True)
         self.assertRegex(out, r'has no fingers enrolled for')
