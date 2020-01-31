@@ -116,7 +116,7 @@ def AddDevice(self, device_name, num_enroll_stages, scan_type):
     path = '/net/reactivated/Fprint/Device/%d' % self.last_device_id
     device_properties = {
         'name': dbus.String(device_name, variant_level=1),
-        'num-enroll-stages': dbus.UInt32(num_enroll_stages, variant_level=1),
+        'num-enroll-stages': dbus.Int32(num_enroll_stages, variant_level=1),
         'scan-type': scan_type
     }
 
