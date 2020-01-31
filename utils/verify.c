@@ -55,8 +55,8 @@ static void create_manager(void)
 static FprintDBusDevice *open_device (const char *username)
 {
 	g_autoptr(FprintDBusDevice) dev = NULL;
-	GError *error = NULL;
-	gchar *path;
+	g_autoptr(GError) error = NULL;
+	g_autofree char *path = NULL;
 
 	if (!fprint_dbus_manager_call_get_default_device_sync (manager, &path,
 							       NULL, &error)) {
@@ -70,8 +70,6 @@ static FprintDBusDevice *open_device (const char *username)
 						 G_DBUS_PROXY_FLAGS_NONE,
 						 "net.reactivated.Fprint",
 						 path, NULL, &error);
-
-	g_free (path);
 
 	if (error) {
 		g_print ("failed to connect to device: %s\n", error->message);
@@ -88,8 +86,8 @@ static FprintDBusDevice *open_device (const char *username)
 
 static void find_finger (FprintDBusDevice *dev, const char *username)
 {
-	GError *error = NULL;
-	char **fingers;
+	g_autoptr(GError) error = NULL;
+	g_auto(GStrv) fingers = NULL;
 	guint i;
 
 	if (!fprint_dbus_device_call_list_enrolled_fingers_sync (dev, username,
@@ -120,8 +118,6 @@ static void find_finger (FprintDBusDevice *dev, const char *username)
 	if (finger_name == NULL) {
 		finger_name = g_strdup (fingers[0]);
 	}
-
-	g_strfreev (fingers);
 }
 
 static void verify_result(GObject *object, const char *result, gboolean done, void *user_data)
@@ -159,7 +155,7 @@ static void proxy_signal_cb (GDBusProxy *proxy,
 
 static void do_verify (FprintDBusDevice *dev)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	gboolean verify_completed = FALSE;
 
 	g_signal_connect (dev, "g-signal", G_CALLBACK (proxy_signal_cb),
@@ -186,7 +182,7 @@ static void do_verify (FprintDBusDevice *dev)
 
 static void release_device (FprintDBusDevice *dev)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	if (!fprint_dbus_device_call_release_sync (dev, NULL, &error)) {
 		g_print("ReleaseDevice failed: %s\n", error->message);
 		exit (1);
@@ -203,8 +199,8 @@ static const GOptionEntry entries[] = {
 int main(int argc, char **argv)
 {
 	g_autoptr(FprintDBusDevice) dev = NULL;
+	g_autoptr(GError) err = NULL;
 	GOptionContext *context;
-	GError *err = NULL;
 	const char *username = NULL;
 
 	setlocale (LC_ALL, "");
@@ -214,7 +210,6 @@ int main(int argc, char **argv)
 
 	if (g_option_context_parse (context, &argc, &argv, &err) == FALSE) {
 		g_print ("couldn't parse command-line options: %s\n", err->message);
-		g_error_free (err);
 		return 1;
 	}
 

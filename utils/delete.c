@@ -28,7 +28,7 @@ static GDBusConnection *connection = NULL;
 
 static void create_manager(void)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 
 	connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &error);
 	if (connection == NULL) {
@@ -49,7 +49,7 @@ static void create_manager(void)
 
 static void delete_fingerprints (FprintDBusDevice *dev, const char *username)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 
 	if (!fprint_dbus_device_call_claim_sync (dev, username, NULL, &error)) {
 		g_print("failed to claim device: %s\n", error->message);
@@ -76,12 +76,12 @@ static void delete_fingerprints (FprintDBusDevice *dev, const char *username)
 		} else {
 			g_print ("No fingerprints to delete on %s\n",
 				 fprint_dbus_device_get_name (dev));
-			g_clear_error (&error);
 		}
 	} else {
 			g_print ("Fingerprints deleted on %s\n",
 				 fprint_dbus_device_get_name (dev));
 	}
+	g_clear_error (&error);
 
 	if (!fprint_dbus_device_call_release_sync (dev, NULL, &error)) {
 		g_print("ReleaseDevice failed: %s\n", error->message);
@@ -91,7 +91,7 @@ static void delete_fingerprints (FprintDBusDevice *dev, const char *username)
 
 static void process_devices(char **argv)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	g_auto(GStrv) devices = NULL;
 	char *path;
 	guint num_devices;
@@ -122,10 +122,11 @@ static void process_devices(char **argv)
 		path = devices[i];
 		g_print("Using device %s\n", path);
 
+		/* NOTE: We should handle error cases! */
 		dev = fprint_dbus_device_proxy_new_sync (connection,
 							 G_DBUS_PROXY_FLAGS_NONE,
 							 "net.reactivated.Fprint",
-							 path, NULL, &error);
+							 path, NULL, NULL);
 
 		for (j = 1; argv[j] != NULL; j++)
 			delete_fingerprints (dev, argv[j]);

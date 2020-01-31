@@ -35,7 +35,7 @@ static char **usernames = NULL;
 
 static void create_manager(void)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 
 	connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &error);
 	if (connection == NULL) {
@@ -57,8 +57,8 @@ static void create_manager(void)
 static FprintDBusDevice *open_device (const char *username)
 {
 	g_autoptr(FprintDBusDevice) dev = NULL;
-	GError *error = NULL;
-	gchar *path;
+	g_autoptr(GError) error = NULL;
+	g_autofree char *path = NULL;
 
 	if (!fprint_dbus_manager_call_get_default_device_sync (manager, &path,
 							       NULL, &error)) {
@@ -72,8 +72,6 @@ static FprintDBusDevice *open_device (const char *username)
 						 G_DBUS_PROXY_FLAGS_NONE,
 						 "net.reactivated.Fprint",
 						 path, NULL, &error);
-
-	g_free (path);
 
 	if (error) {
 		g_print ("failed to connect to device: %s\n", error->message);
@@ -112,7 +110,7 @@ static void proxy_signal_cb (GDBusProxy *proxy,
 
 static void do_enroll (FprintDBusDevice *dev)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	gboolean enroll_completed = FALSE;
 	gboolean found;
 	guint i;
@@ -128,7 +126,7 @@ static void do_enroll (FprintDBusDevice *dev)
 		}
 	}
 	if (!found) {
-		GString *s;
+		g_autoptr(GString) s = NULL;
 
 		s = g_string_new (NULL);
 		g_string_append_printf (s, "Invalid finger name '%s'. Name must be one of ", finger_name);
@@ -138,7 +136,6 @@ static void do_enroll (FprintDBusDevice *dev)
 				g_string_append (s, ", ");
 		}
 		g_warning ("%s", s->str);
-		g_string_free (s, TRUE);
 		exit (1);
 	}
 
@@ -162,7 +159,7 @@ static void do_enroll (FprintDBusDevice *dev)
 
 static void release_device (FprintDBusDevice *dev)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	if (!fprint_dbus_device_call_release_sync (dev, NULL, &error)) {
 		g_print("ReleaseDevice failed: %s\n", error->message);
 		exit (1);

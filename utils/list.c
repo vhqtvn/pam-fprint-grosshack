@@ -28,7 +28,7 @@ static GDBusConnection *connection = NULL;
 
 static void create_manager(void)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 
 	connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &error);
 	if (connection == NULL) {
@@ -49,8 +49,8 @@ static void create_manager(void)
 
 static void list_fingerprints (FprintDBusDevice *dev, const char *username)
 {
-	GError *error = NULL;
-	char **fingers;
+	g_autoptr(GError) error = NULL;
+	g_auto(GStrv) fingers = NULL;
 	guint i;
 
 	if (!fprint_dbus_device_call_list_enrolled_fingers_sync (dev, username,
@@ -69,9 +69,6 @@ static void list_fingerprints (FprintDBusDevice *dev, const char *username)
 		if (!ignore_error) {
 			g_print("ListEnrolledFingers failed: %s\n", error->message);
 			exit (1);
-		} else {
-			g_clear_error (&error);
-			fingers = NULL;
 		}
 	}
 
@@ -89,14 +86,12 @@ static void list_fingerprints (FprintDBusDevice *dev, const char *username)
 	for (i = 0; fingers[i] != NULL; i++) {
 		g_print(" - #%d: %s\n", i, fingers[i]);
 	}
-
-	g_strfreev (fingers);
 }
 
 static void process_devices(char **argv)
 {
 	g_auto(GStrv) devices = NULL;
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	char *path;
 	guint num_devices;
 	guint i;
@@ -126,10 +121,11 @@ static void process_devices(char **argv)
 		path = devices[i];
 		g_print("Using device %s\n", path);
 
+		/* NOTE: We should handle error cases! */
 		dev = fprint_dbus_device_proxy_new_sync (connection,
 							 G_DBUS_PROXY_FLAGS_NONE,
 							 "net.reactivated.Fprint",
-							 path, NULL, &error);
+							 path, NULL, NULL);
 
 		for (j = 1; argv[j] != NULL; j++)
 			list_fingerprints (dev, argv[j]);
