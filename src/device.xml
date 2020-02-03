@@ -12,9 +12,6 @@
 
 <node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
 	<interface name="net.reactivated.Fprint.Device">
-		<annotation name="org.freedesktop.DBus.GLib.CSymbol"
-			value="fprint_device" />
-
 		<doc:doc>
 			<doc:title id="polkit-integration">
 				PolicyKit integration
@@ -282,8 +279,6 @@
 			<arg type="as" name="enrolled_fingers" direction="out">
 				<doc:doc><doc:summary>An array of strings representing the enrolled fingerprints. See <doc:ref type="description" to="fingerprint-names">Fingerprint names</doc:ref>.</doc:summary></doc:doc>
 			</arg>
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-
 			<doc:doc>
 				<doc:description>
 					<doc:para>
@@ -304,8 +299,6 @@
 			<arg type="s" name="username" direction="in">
 				<doc:doc><doc:summary>The username for whom to delete the enrolled fingerprints. See <doc:ref type="description" to="usernames">Usernames</doc:ref>.</doc:summary></doc:doc>
 			</arg>
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-
 			<doc:doc>
 				<doc:description>
 					<doc:para>
@@ -327,8 +320,6 @@
 		<!-- ************************************************************ -->
 
 		<method name="DeleteEnrolledFingers2">
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-
 			<doc:doc>
 				<doc:description>
 					<doc:para>
@@ -348,8 +339,6 @@
 			<arg type="s" name="username" direction="in">
 				<doc:doc><doc:summary>The username for whom to claim the device. See <doc:ref type="description" to="usernames">Usernames</doc:ref>.</doc:summary></doc:doc>
 			</arg>
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-
 			<doc:doc>
 				<doc:description>
 					<doc:para>
@@ -368,8 +357,6 @@
 		<!-- ************************************************************ -->
 
 		<method name="Release">
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-
 			<doc:doc>
 				<doc:description>
 					<doc:para>
@@ -390,8 +377,6 @@
 			<arg type="s" name="finger_name" direction="in">
 				<doc:doc><doc:summary>A string representing the finger to verify. See <doc:ref type="description" to="fingerprint-names">Fingerprint names</doc:ref>.</doc:summary></doc:doc>
 			</arg>
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-
 			<doc:doc>
 				<doc:description>
 					<doc:para>
@@ -415,8 +400,6 @@
 		<!-- ************************************************************ -->
 
 		<method name="VerifyStop">
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-
 			<doc:doc>
 				<doc:description>
 					<doc:para>
@@ -486,8 +469,6 @@
 				<doc:ref type="description" to="fingerprint-names">Fingerprint names</doc:ref>.
 				Note that "any" is not a valid finger name for this method.</doc:summary></doc:doc>
 			</arg>
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-
 			<doc:doc>
 				<doc:description>
 					<doc:para>
@@ -511,8 +492,6 @@
 		<!-- ************************************************************ -->
 
 		<method name="EnrollStop">
-			<annotation name="org.freedesktop.DBus.GLib.Async" value="" />
-
 			<doc:doc>
 				<doc:description>
 					<doc:para>

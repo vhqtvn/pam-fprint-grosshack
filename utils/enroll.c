@@ -1,6 +1,7 @@
 /*
  * fprintd example to enroll right index finger
  * Copyright (C) 2008 Daniel Drake <dsd@gentoo.org>
+ * Copyright (C) 2020 Marco Trevisan <marco.trevisan@canonical.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,17 +22,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
-#include <dbus/dbus-glib-bindings.h>
-#include "manager-dbus-glue.h"
-#include "device-dbus-glue.h"
-#include "fprintd-marshal.h"
+#include "fprintd-dbus.h"
 
 #define N_(x) x
 #define TR(x) x
 #include "fingerprint-strings.h"
 
-static DBusGProxy *manager = NULL;
-static DBusGConnection *connection = NULL;
+static FprintDBusManager *manager = NULL;
+static GDBusConnection *connection = NULL;
 static char *finger_name = NULL;
 static char **usernames = NULL;
 
@@ -39,41 +37,54 @@ static void create_manager(void)
 {
 	GError *error = NULL;
 
-	connection = dbus_g_bus_get(DBUS_BUS_SYSTEM, &error);
+	connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &error);
 	if (connection == NULL) {
 		g_print("Failed to connect to session bus: %s\n", error->message);
 		exit (1);
 	}
 
-	manager = dbus_g_proxy_new_for_name(connection,
-		"net.reactivated.Fprint", "/net/reactivated/Fprint/Manager",
-		"net.reactivated.Fprint.Manager");
+	manager = fprint_dbus_manager_proxy_new_sync (connection,
+						      G_DBUS_PROXY_FLAGS_NONE,
+						      "net.reactivated.Fprint",
+						      "/net/reactivated/Fprint/Manager",
+						      NULL, &error);
+	if (manager == NULL) {
+		g_print ("Failed to get Fprintd manager: %s\n", error->message);
+		exit (1);
+	}
 }
 
-static DBusGProxy *open_device(const char *username)
+static FprintDBusDevice *open_device (const char *username)
 {
+	g_autoptr(FprintDBusDevice) dev = NULL;
 	GError *error = NULL;
 	gchar *path;
-	DBusGProxy *dev;
 
-	if (!net_reactivated_Fprint_Manager_get_default_device(manager, &path, &error)) {
+	if (!fprint_dbus_manager_call_get_default_device_sync (manager, &path,
+							       NULL, &error)) {
 		g_print("Impossible to enroll: %s\n", error->message);
 		exit (1);
 	}
 
 	g_print("Using device %s\n", path);
 
-	/* FIXME use for_name_owner?? */
-	dev = dbus_g_proxy_new_for_name(connection, "net.reactivated.Fprint",
-		path, "net.reactivated.Fprint.Device");
+	dev = fprint_dbus_device_proxy_new_sync (connection,
+						 G_DBUS_PROXY_FLAGS_NONE,
+						 "net.reactivated.Fprint",
+						 path, NULL, &error);
 
 	g_free (path);
 
-	if (!net_reactivated_Fprint_Device_claim(dev, username, &error)) {
+	if (error) {
+		g_print ("failed to connect to device: %s\n", error->message);
+		exit (1);
+	}
+
+	if (!fprint_dbus_device_call_claim_sync (dev, username, NULL, &error)) {
 		g_print("failed to claim device: %s\n", error->message);
 		exit (1);
 	}
-	return dev;
+	return g_steal_pointer (&dev);
 }
 
 static void enroll_result(GObject *object, const char *result, gboolean done, void *user_data)
@@ -84,16 +95,30 @@ static void enroll_result(GObject *object, const char *result, gboolean done, vo
 		*enroll_completed = TRUE;
 }
 
-static void do_enroll(DBusGProxy *dev)
+static void proxy_signal_cb (GDBusProxy *proxy,
+			     const gchar *sender_name,
+			     const gchar *signal_name,
+			     GVariant *parameters,
+			     gpointer user_data)
+{
+	if (g_str_equal (signal_name, "EnrollStatus")) {
+		const gchar *result;
+		gboolean done;
+
+		g_variant_get (parameters, "(&sb)", &result, &done);
+		enroll_result (G_OBJECT (proxy), result, done, user_data);
+	}
+}
+
+static void do_enroll (FprintDBusDevice *dev)
 {
 	GError *error = NULL;
 	gboolean enroll_completed = FALSE;
 	gboolean found;
 	guint i;
 
-	dbus_g_proxy_add_signal(dev, "EnrollStatus", G_TYPE_STRING, G_TYPE_BOOLEAN, NULL);
-	dbus_g_proxy_connect_signal(dev, "EnrollStatus", G_CALLBACK(enroll_result),
-				    &enroll_completed, NULL);
+	g_signal_connect (dev, "g-signal", G_CALLBACK (proxy_signal_cb),
+			  &enroll_completed);
 
 	found = FALSE;
 	for (i = 0; fingers[i].dbus_name != NULL; i++) {
@@ -118,7 +143,8 @@ static void do_enroll(DBusGProxy *dev)
 	}
 
 	g_print("Enrolling %s finger.\n", finger_name);
-	if (!net_reactivated_Fprint_Device_enroll_start(dev, finger_name, &error)) {
+	if (!fprint_dbus_device_call_enroll_start_sync (dev, finger_name, NULL,
+							&error)) {
 		g_print("EnrollStart failed: %s\n", error->message);
 		exit (1);
 	}
@@ -126,19 +152,18 @@ static void do_enroll(DBusGProxy *dev)
 	while (!enroll_completed)
 		g_main_context_iteration(NULL, TRUE);
 
-	dbus_g_proxy_disconnect_signal(dev, "EnrollStatus",
-		G_CALLBACK(enroll_result), &enroll_completed);
+	g_signal_handlers_disconnect_by_func (dev, proxy_signal_cb, &enroll_result);
 
-	if (!net_reactivated_Fprint_Device_enroll_stop(dev, &error)) {
+	if (!fprint_dbus_device_call_enroll_stop_sync (dev, NULL, &error)) {
 		g_print("VerifyStop failed: %s\n", error->message);
 		exit(1);
 	}
 }
 
-static void release_device(DBusGProxy *dev)
+static void release_device (FprintDBusDevice *dev)
 {
 	GError *error = NULL;
-	if (!net_reactivated_Fprint_Device_release(dev, &error)) {
+	if (!fprint_dbus_device_call_release_sync (dev, NULL, &error)) {
 		g_print("ReleaseDevice failed: %s\n", error->message);
 		exit (1);
 	}
@@ -152,14 +177,11 @@ static const GOptionEntry entries[] = {
 
 int main(int argc, char **argv)
 {
+	g_autoptr(FprintDBusDevice) dev = NULL;
 	GOptionContext *context;
 	GError *err = NULL;
-	DBusGProxy *dev;
 
 	setlocale (LC_ALL, "");
-
-	dbus_g_object_register_marshaller (fprintd_marshal_VOID__STRING_BOOLEAN,
-					   G_TYPE_NONE, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INVALID);
 
 	context = g_option_context_new ("Enroll a fingerprint");
 	g_option_context_add_main_entries (context, entries, NULL);
@@ -175,7 +197,7 @@ int main(int argc, char **argv)
 
 	create_manager();
 
-	dev = open_device(usernames ? usernames[0] : NULL);
+	dev = open_device (usernames ? usernames[0] : "");
 	do_enroll(dev);
 	release_device(dev);
 	g_free(finger_name);

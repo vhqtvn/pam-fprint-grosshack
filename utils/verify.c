@@ -1,6 +1,7 @@
 /*
  * fprintd example to verify a fingerprint
  * Copyright (C) 2008 Daniel Drake <dsd@gentoo.org>
+ * Copyright (C) 2020 Marco Trevisan <marco.trevisan@canonical.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,66 +22,79 @@
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
-#include <dbus/dbus-glib-bindings.h>
-#include "manager-dbus-glue.h"
-#include "device-dbus-glue.h"
-#include "fprintd-marshal.h"
+#include <gio/gio.h>
+#include "fprintd-dbus.h"
 
-static DBusGProxy *manager = NULL;
-static DBusGConnection *connection = NULL;
+static FprintDBusManager *manager = NULL;
+static GDBusConnection *connection = NULL;
 static char *finger_name = NULL;
 static gboolean g_fatal_warnings = FALSE;
 static char **usernames = NULL;
 
 static void create_manager(void)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 
-	connection = dbus_g_bus_get(DBUS_BUS_SYSTEM, &error);
+	connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &error);
 	if (connection == NULL) {
 		g_print("Failed to connect to session bus: %s\n", error->message);
 		exit (1);
 	}
 
-	manager = dbus_g_proxy_new_for_name(connection,
-		"net.reactivated.Fprint", "/net/reactivated/Fprint/Manager",
-		"net.reactivated.Fprint.Manager");
+	manager = fprint_dbus_manager_proxy_new_sync (connection,
+						      G_DBUS_PROXY_FLAGS_NONE,
+						      "net.reactivated.Fprint",
+						      "/net/reactivated/Fprint/Manager",
+						      NULL, &error);
+	if (manager == NULL) {
+		g_print ("Failed to get Fprintd manager: %s\n", error->message);
+		exit (1);
+	}
 }
 
-static DBusGProxy *open_device(const char *username)
+static FprintDBusDevice *open_device (const char *username)
 {
+	g_autoptr(FprintDBusDevice) dev = NULL;
 	GError *error = NULL;
 	gchar *path;
-	DBusGProxy *dev;
 
-	if (!net_reactivated_Fprint_Manager_get_default_device(manager, &path, &error)) {
+	if (!fprint_dbus_manager_call_get_default_device_sync (manager, &path,
+							       NULL, &error)) {
 		g_print("Impossible to verify: %s\n", error->message);
 		exit (1);
 	}
 
 	g_print("Using device %s\n", path);
 
-	/* FIXME use for_name_owner?? */
-	dev = dbus_g_proxy_new_for_name(connection, "net.reactivated.Fprint",
-		path, "net.reactivated.Fprint.Device");
-	
+	dev = fprint_dbus_device_proxy_new_sync (connection,
+						 G_DBUS_PROXY_FLAGS_NONE,
+						 "net.reactivated.Fprint",
+						 path, NULL, &error);
+
 	g_free (path);
 
-	if (!net_reactivated_Fprint_Device_claim(dev, username, &error)) {
+	if (error) {
+		g_print ("failed to connect to device: %s\n", error->message);
+		exit (1);
+	}
+
+	if (!fprint_dbus_device_call_claim_sync (dev, username, NULL, &error)) {
 		g_print("failed to claim device: %s\n", error->message);
 		exit (1);
 	}
 
-	return dev;
+	return g_steal_pointer (&dev);
 }
 
-static void find_finger(DBusGProxy *dev, const char *username)
+static void find_finger (FprintDBusDevice *dev, const char *username)
 {
 	GError *error = NULL;
 	char **fingers;
 	guint i;
 
-	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, username, &fingers, &error)) {
+	if (!fprint_dbus_device_call_list_enrolled_fingers_sync (dev, username,
+								 &fingers,
+								 NULL, &error)) {
 		g_print("ListEnrolledFingers failed: %s\n", error->message);
 		exit (1);
 	}
@@ -123,19 +137,36 @@ static void verify_finger_selected(GObject *object, const char *name, void *user
 	g_print("Verifying: %s\n", name);
 }
 
-static void do_verify(DBusGProxy *dev)
+static void proxy_signal_cb (GDBusProxy *proxy,
+			     const gchar *sender_name,
+			     const gchar *signal_name,
+			     GVariant *parameters,
+			     gpointer user_data)
+{
+	if (g_str_equal (signal_name, "VerifyStatus")) {
+		const gchar *result;
+		gboolean done;
+
+		g_variant_get (parameters, "(&sb)", &result, &done);
+		verify_result (G_OBJECT (proxy), result, done, user_data);
+	} else if (g_str_equal (signal_name, "VerifyFingerSelected")) {
+		const gchar *name;
+
+		g_variant_get (parameters, "(&s)", &name);
+		verify_finger_selected (G_OBJECT (proxy), name, user_data);
+	}
+}
+
+static void do_verify (FprintDBusDevice *dev)
 {
 	GError *error = NULL;
 	gboolean verify_completed = FALSE;
 
-	dbus_g_proxy_add_signal(dev, "VerifyStatus", G_TYPE_STRING, G_TYPE_BOOLEAN, NULL);
-	dbus_g_proxy_add_signal(dev, "VerifyFingerSelected", G_TYPE_INT, NULL);
-	dbus_g_proxy_connect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result),
-				    &verify_completed, NULL);
-	dbus_g_proxy_connect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected),
-		NULL, NULL);
+	g_signal_connect (dev, "g-signal", G_CALLBACK (proxy_signal_cb),
+			  &verify_completed);
 
-	if (!net_reactivated_Fprint_Device_verify_start(dev, finger_name, &error)) {
+	if (!fprint_dbus_device_call_verify_start_sync (dev, finger_name, NULL,
+							&error)) {
 		g_print("VerifyStart failed: %s\n", error->message);
 		exit (1);
 	}
@@ -143,19 +174,20 @@ static void do_verify(DBusGProxy *dev)
 	while (!verify_completed)
 		g_main_context_iteration(NULL, TRUE);
 
-	dbus_g_proxy_disconnect_signal(dev, "VerifyStatus", G_CALLBACK(verify_result), &verify_completed);
-	dbus_g_proxy_disconnect_signal(dev, "VerifyFingerSelected", G_CALLBACK(verify_finger_selected), NULL);
 
-	if (!net_reactivated_Fprint_Device_verify_stop(dev, &error)) {
+	g_signal_handlers_disconnect_by_func (dev, proxy_signal_cb,
+					      &verify_completed);
+
+	if (!fprint_dbus_device_call_verify_stop_sync (dev, NULL, &error)) {
 		g_print("VerifyStop failed: %s\n", error->message);
 		exit (1);
 	}
 }
 
-static void release_device(DBusGProxy *dev)
+static void release_device (FprintDBusDevice *dev)
 {
 	GError *error = NULL;
-	if (!net_reactivated_Fprint_Device_release(dev, &error)) {
+	if (!fprint_dbus_device_call_release_sync (dev, NULL, &error)) {
 		g_print("ReleaseDevice failed: %s\n", error->message);
 		exit (1);
 	}
@@ -170,15 +202,12 @@ static const GOptionEntry entries[] = {
 
 int main(int argc, char **argv)
 {
+	g_autoptr(FprintDBusDevice) dev = NULL;
 	GOptionContext *context;
 	GError *err = NULL;
-	DBusGProxy *dev;
 	const char *username = NULL;
 
 	setlocale (LC_ALL, "");
-
-	dbus_g_object_register_marshaller (fprintd_marshal_VOID__STRING_BOOLEAN,
-					   G_TYPE_NONE, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INVALID);
 
 	context = g_option_context_new ("Verify a fingerprint");
 	g_option_context_add_main_entries (context, entries, NULL);

@@ -20,19 +20,19 @@
 #pragma once
 
 #include <glib.h>
-#include <dbus/dbus-glib.h>
+#include <gio/gio.h>
 #include <fprint.h>
+#include "fprintd-dbus.h"
 
 /* General */
 #define TIMEOUT 30
 #define FPRINT_SERVICE_NAME "net.reactivated.Fprint"
+#define FPRINT_SERVICE_PATH "/net/reactivated/Fprint"
 
 /* Errors */
 GQuark fprint_error_quark(void);
-GType fprint_error_get_type(void);
 
 #define FPRINT_ERROR fprint_error_quark()
-#define FPRINT_TYPE_ERROR fprint_error_get_type()
 #define FPRINT_ERROR_DBUS_INTERFACE "net.reactivated.Fprint.Error"
 typedef enum {
 	FPRINT_ERROR_CLAIM_DEVICE, /* developer didn't claim the device */
@@ -53,23 +53,18 @@ struct _FprintManager {
 	GObject parent;
 };
 
-FprintManager *fprint_manager_new(gboolean no_timeout);
+FprintManager *fprint_manager_new (GDBusConnection *connection, gboolean no_timeout);
 
 /* Device */
 #define FPRINT_TYPE_DEVICE            (fprint_device_get_type())
-G_DECLARE_FINAL_TYPE (FprintDevice, fprint_device, FPRINT, DEVICE, GObject)
+G_DECLARE_FINAL_TYPE (FprintDevice, fprint_device, FPRINT, DEVICE,
+		      FprintDBusDeviceSkeleton)
 
 struct _FprintDevice {
-	GObject parent;
+	FprintDBusDeviceSkeleton parent;
 };
 
 FprintDevice *fprint_device_new(FpDevice *dev);
 guint32 _fprint_device_get_id(FprintDevice *rdev);
 /* Print */
 /* TODO */
-
-/* Binding data included in main.c through server-bindings.h which individual
- * class implementations need to access.
- */
-extern const DBusGObjectInfo dbus_glib_fprint_manager_object_info;
-extern const DBusGObjectInfo dbus_glib_fprint_device_object_info;

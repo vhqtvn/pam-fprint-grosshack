@@ -1,6 +1,7 @@
 /*
  * fprintd example to list enrolled fingerprints
  * Copyright (C) 2008 Daniel Drake <dsd@gentoo.org>
+ * Copyright (C) 2020 Marco Trevisan <marco.trevisan@canonical.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,38 +21,52 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <locale.h>
-#include <dbus/dbus-glib-bindings.h>
-#include "manager-dbus-glue.h"
-#include "device-dbus-glue.h"
+#include "fprintd-dbus.h"
 
-static DBusGProxy *manager = NULL;
-static DBusGConnection *connection = NULL;
+static FprintDBusManager *manager = NULL;
+static GDBusConnection *connection = NULL;
 
 static void create_manager(void)
 {
 	GError *error = NULL;
 
-	connection = dbus_g_bus_get(DBUS_BUS_SYSTEM, &error);
+	connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &error);
 	if (connection == NULL) {
 		g_print("Failed to connect to session bus: %s\n", error->message);
 		exit (1);
 	}
 
-	manager = dbus_g_proxy_new_for_name(connection,
-		"net.reactivated.Fprint", "/net/reactivated/Fprint/Manager",
-		"net.reactivated.Fprint.Manager");
+	manager = fprint_dbus_manager_proxy_new_sync (connection,
+						      G_DBUS_PROXY_FLAGS_NONE,
+						      "net.reactivated.Fprint",
+						      "/net/reactivated/Fprint/Manager",
+						      NULL, &error);
+	if (manager == NULL) {
+		g_print ("Failed to get Fprintd manager: %s\n", error->message);
+		exit (1);
+	}
 }
 
-static void list_fingerprints(DBusGProxy *dev, const char *username)
+static void list_fingerprints (FprintDBusDevice *dev, const char *username)
 {
 	GError *error = NULL;
 	char **fingers;
-	GHashTable *props;
-	DBusGProxy *p;
 	guint i;
 
-	if (!net_reactivated_Fprint_Device_list_enrolled_fingers(dev, username, &fingers, &error)) {
-		if (dbus_g_error_has_name (error, "net.reactivated.Fprint.Error.NoEnrolledPrints") == FALSE) {
+	if (!fprint_dbus_device_call_list_enrolled_fingers_sync (dev, username,
+								 &fingers, NULL,
+								 &error)) {
+		gboolean ignore_error = FALSE;
+		if (g_dbus_error_is_remote_error (error)) {
+			g_autofree char *dbus_error =
+				g_dbus_error_get_remote_error (error);
+			if (g_str_equal (dbus_error,
+					 "net.reactivated.Fprint.Error.NoEnrolledPrints")) {
+				ignore_error = TRUE;
+			}
+		}
+
+		if (!ignore_error) {
 			g_print("ListEnrolledFingers failed: %s\n", error->message);
 			exit (1);
 		} else {
@@ -60,24 +75,16 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 		}
 	}
 
-	p = dbus_g_proxy_new_from_proxy(dev, "org.freedesktop.DBus.Properties", NULL);
-	if (!dbus_g_proxy_call (p, "GetAll", &error, G_TYPE_STRING, "net.reactivated.Fprint.Device", G_TYPE_INVALID,
-			   dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), &props, G_TYPE_INVALID)) {
-		g_print("GetAll on the Properties interface failed: %s\n", error->message);
-		exit (1);
-	}
-
 	if (fingers == NULL || g_strv_length (fingers) == 0) {
-		g_print("User %s has no fingers enrolled for %s.\n", username, g_value_get_string (g_hash_table_lookup (props, "name")));
+		g_print ("User %s has no fingers enrolled for %s.\n", username,
+			 fprint_dbus_device_get_name (dev));
 		return;
 	}
 
 	g_print("Fingerprints for user %s on %s (%s):\n",
 		username,
-		g_value_get_string (g_hash_table_lookup (props, "name")),
-		g_value_get_string (g_hash_table_lookup (props, "scan-type")));
-	g_hash_table_destroy (props);
-	g_object_unref (p);
+		fprint_dbus_device_get_name (dev),
+		fprint_dbus_device_get_scan_type (dev));
 
 	for (i = 0; fingers[i] != NULL; i++) {
 		g_print(" - #%d: %s\n", i, fingers[i]);
@@ -88,46 +95,45 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 
 static void process_devices(char **argv)
 {
+	g_auto(GStrv) devices = NULL;
 	GError *error = NULL;
-	GPtrArray *devices;
 	char *path;
+	guint num_devices;
 	guint i;
 
-	if (!net_reactivated_Fprint_Manager_get_devices(manager, &devices, &error)) {
+	if (!fprint_dbus_manager_call_get_devices_sync (manager, &devices, NULL,
+							&error)) {
 		g_print("Impossible to get devices: %s\n", error->message);
 		exit (1);
 	}
-	
-	if (devices->len == 0) {
+
+	num_devices = g_strv_length (devices);
+	if (num_devices == 0) {
 		g_print("No devices available\n");
 		exit(1);
 	}
 
-	g_print("found %d devices\n", devices->len);
-	for (i = 0; i < devices->len; i++) {
-		path = g_ptr_array_index(devices, i);
+	g_print ("found %u devices\n", num_devices);
+	for (i = 0; devices[i] != NULL; i++) {
+		path = devices[i];
 		g_print("Device at %s\n", path);
 	}
 
-	for (i = 0; i < devices->len; i++) {
+	for (i = 0; devices[i] != NULL; i++) {
+		g_autoptr(FprintDBusDevice) dev = NULL;
 		guint j;
-		DBusGProxy *dev;
 
-		path = g_ptr_array_index(devices, i);
+		path = devices[i];
 		g_print("Using device %s\n", path);
 
-		/* FIXME use for_name_owner?? */
-		dev = dbus_g_proxy_new_for_name(connection, "net.reactivated.Fprint",
-						path, "net.reactivated.Fprint.Device");
+		dev = fprint_dbus_device_proxy_new_sync (connection,
+							 G_DBUS_PROXY_FLAGS_NONE,
+							 "net.reactivated.Fprint",
+							 path, NULL, &error);
 
 		for (j = 1; argv[j] != NULL; j++)
 			list_fingerprints (dev, argv[j]);
-
-		g_object_unref (dev);
 	}
-	
-	g_ptr_array_foreach(devices, (GFunc) g_free, NULL);
-	g_ptr_array_free(devices, TRUE);
 }
 
 int main(int argc, char **argv)

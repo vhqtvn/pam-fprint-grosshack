@@ -1,6 +1,7 @@
 /*
  * fprint D-Bus daemon
  * Copyright (C) 2008 Daniel Drake <dsd@gentoo.org>
+ * Copyright (C) 2020 Marco Trevisan <marco.trevisan@canonical.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +24,7 @@
 #include <poll.h>
 #include <stdlib.h>
 
-#include <dbus/dbus-glib-bindings.h>
+#include <gio/gio.h>
 #include <glib.h>
 #include <glib/gi18n.h>
 #include <fprint.h>
@@ -37,7 +38,6 @@
 
 fp_storage store;
 
-DBusGConnection *fprintd_dbus_conn = NULL;
 static gboolean no_timeout = FALSE;
 static gboolean g_fatal_warnings = FALSE;
 
@@ -139,13 +139,33 @@ static gboolean sigterm_callback(gpointer data)
 	return FALSE;
 }
 
+static void
+on_name_acquired (GDBusConnection *connection,
+		  const char      *name,
+		  gpointer         user_data)
+{
+	g_debug ("D-Bus service launched with name: %s", name);
+}
+
+static void
+on_name_lost (GDBusConnection *connection,
+	      const char      *name,
+	      gpointer         user_data)
+{
+	GMainLoop *loop = user_data;
+
+	g_warning ("Failed to get name: %s", name);
+
+	g_main_loop_quit (loop);
+}
+
 int main(int argc, char **argv)
 {
 	g_autoptr(GOptionContext) context = NULL;
 	g_autoptr(GMainLoop) loop = NULL;
 	g_autoptr(GError) error = NULL;
-	FprintManager *manager;
-	DBusGProxy *driver_proxy;
+	g_autoptr(FprintManager) manager = NULL;
+	g_autoptr(GDBusConnection) connection = NULL;
 	guint32 request_name_ret;
 
 	setlocale (LC_ALL, "");
@@ -170,15 +190,12 @@ int main(int argc, char **argv)
 		g_log_set_always_fatal (fatal_mask);
 	}
 
-	/* Obtain a connection to the session bus */
-	fprintd_dbus_conn = dbus_g_bus_get(DBUS_BUS_SYSTEM, &error);
-	if (fprintd_dbus_conn == NULL) {
+	/* Obtain a connection to the system bus */
+	connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &error);
+	if (!G_IS_DBUS_CONNECTION (connection)) {
 		g_warning("Failed to open connection to bus: %s", error->message);
 		return 1;
 	}
-
-	driver_proxy = dbus_g_proxy_new_for_name(fprintd_dbus_conn,
-		DBUS_SERVICE_DBUS, DBUS_PATH_DBUS, DBUS_INTERFACE_DBUS);
 
 	/* Load the configuration file,
 	 * and the default storage plugin */
@@ -193,31 +210,22 @@ int main(int argc, char **argv)
 
 	/* create the one instance of the Manager object to be shared between
 	 * all fprintd users. This blocks until all the devices are enumerated */
-	manager = fprint_manager_new (no_timeout);
+	manager = fprint_manager_new (connection, no_timeout);
 
 	/* Obtain the well-known name after the manager has been initialized.
 	 * Otherwise a client immediately enumerating the devices will not see
 	 * any. */
-	if (!org_freedesktop_DBus_request_name(driver_proxy, FPRINT_SERVICE_NAME,
-			0, &request_name_ret, &error)) {
-		g_warning("Failed to get name: %s", error->message);
-		g_object_unref (manager);
-		return 1;
-	}
-
-	if (request_name_ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
-		g_warning ("Got result code %u from requesting name", request_name_ret);
-		g_object_unref (manager);
-		return 1;
-	}
-
-	g_debug("D-Bus service launched with name: %s", FPRINT_SERVICE_NAME);
+	request_name_ret = g_bus_own_name_on_connection (connection,
+							 FPRINT_SERVICE_NAME,
+							 G_BUS_NAME_OWNER_FLAGS_NONE,
+							 on_name_acquired,
+							 on_name_lost,
+							 loop, NULL);
 
 	g_debug("entering main loop");
 	g_main_loop_run(loop);
+	g_bus_unown_name (request_name_ret);
 	g_debug("main loop completed");
-
-	g_object_unref (manager);
 
 	return 0;
 }

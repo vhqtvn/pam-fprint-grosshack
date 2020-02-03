@@ -1,6 +1,7 @@
 /*
  * /net/reactivated/Fprint/Device/foo object implementation
  * Copyright (C) 2008 Daniel Drake <dsd@gentoo.org>
+ * Copyright (C) 2020 Marco Trevisan <marco.trevisan@canonical.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,8 +20,6 @@
 
 #include "config.h"
 
-#include <dbus/dbus-glib-bindings.h>
-#include <dbus/dbus-glib-lowlevel.h>
 #include <glib/gi18n.h>
 #include <gio/gio.h>
 #include <polkit/polkit.h>
@@ -30,7 +29,6 @@
 #include <pwd.h>
 #include <errno.h>
 
-#include "fprintd-marshal.h"
 #include "fprintd.h"
 #include "storage.h"
 
@@ -48,31 +46,7 @@ static const char *FINGERS_NAMES[] = {
 	"right-little-finger"
 };
 
-extern DBusGConnection *fprintd_dbus_conn;
-
-static void fprint_device_claim(FprintDevice *rdev,
-				const char *username,
-				DBusGMethodInvocation *context);
-static void fprint_device_release(FprintDevice *rdev,
-	DBusGMethodInvocation *context);
-static void fprint_device_verify_start(FprintDevice *rdev,
-	const char *finger_name, DBusGMethodInvocation *context);
-static void fprint_device_verify_stop(FprintDevice *rdev,
-	DBusGMethodInvocation *context);
-static void fprint_device_enroll_start(FprintDevice *rdev,
-	const char *finger_name, DBusGMethodInvocation *context);
-static void fprint_device_enroll_stop(FprintDevice *rdev,
-	DBusGMethodInvocation *context);
-static void fprint_device_list_enrolled_fingers(FprintDevice *rdev, 
-						const char *username,
-						DBusGMethodInvocation *context);
-static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
-						  const char *username,
-						  DBusGMethodInvocation *context);
-static void fprint_device_delete_enrolled_fingers2(FprintDevice *rdev,
-						    DBusGMethodInvocation *context);
-
-#include "device-dbus-glue.h"
+static void fprint_device_dbus_skeleton_iface_init (FprintDBusDeviceIface *);
 
 typedef enum {
 	ACTION_NONE = 0,
@@ -85,7 +59,7 @@ typedef enum {
 
 typedef struct {
 	/* current method invocation */
-	DBusGMethodInvocation *context;
+	GDBusMethodInvocation *invocation;
 
 	/* The current user of the device, if claimed */
 	char *sender;
@@ -115,10 +89,14 @@ typedef struct {
 	/* whether we're running an identify, or a verify */
 	FprintDeviceAction current_action;
 	GCancellable *current_cancellable;
-	DBusGMethodInvocation *current_cancel_context;
+	GDBusMethodInvocation *current_cancel_invocation;
 } FprintDevicePrivate;
 
-G_DEFINE_TYPE_WITH_CODE(FprintDevice, fprint_device, G_TYPE_OBJECT, G_ADD_PRIVATE (FprintDevice));
+G_DEFINE_TYPE_WITH_CODE (FprintDevice, fprint_device,
+			 FPRINT_DBUS_TYPE_DEVICE_SKELETON,
+			 G_ADD_PRIVATE (FprintDevice)
+			 G_IMPLEMENT_INTERFACE (FPRINT_DBUS_TYPE_DEVICE,
+			 			fprint_device_dbus_skeleton_iface_init));
 
 enum fprint_device_properties {
 	FPRINT_DEVICE_CONSTRUCT_DEV = 1,
@@ -142,7 +120,7 @@ static void session_data_free(SessionData *session)
 {
 	g_clear_pointer(&session->sender, g_free);
 	g_clear_pointer(&session->username, g_free);
-	g_nullify_pointer((gpointer *) &session->context);
+	g_clear_object (&session->invocation);
 	g_free(session);
 }
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(SessionData, session_data_free);
@@ -219,9 +197,6 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GParamSpec *pspec;
 
-	dbus_g_object_type_install_info(FPRINT_TYPE_DEVICE,
-		&dbus_glib_fprint_device_object_info);
-
 	gobject_class->finalize = fprint_device_finalize;
 	gobject_class->set_property = fprint_device_set_property;
 	gobject_class->get_property = fprint_device_get_property;
@@ -239,33 +214,24 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 	g_object_class_install_property(gobject_class,
 					FPRINT_DEVICE_IN_USE, pspec);
 
-	pspec = g_param_spec_string("name", "Name",
-				    "The product name of the device", NULL,
-				    G_PARAM_READABLE);
-	g_object_class_install_property(gobject_class,
-					FPRINT_DEVICE_NAME, pspec);
+	g_object_class_override_property (gobject_class,
+					  FPRINT_DEVICE_NAME,
+					  "name");
 
-	pspec = g_param_spec_string("scan-type", "Scan Type",
-				    "The scan type of the device", "press",
-				    G_PARAM_READABLE);
-	g_object_class_install_property(gobject_class,
-					FPRINT_DEVICE_SCAN_TYPE, pspec);
+	g_object_class_override_property (gobject_class,
+					  FPRINT_DEVICE_SCAN_TYPE,
+					  "scan-type");
 
-	pspec = g_param_spec_int("num-enroll-stages", "Number of enrollments stages",
-				  "Number of enrollment stages for the device.",
-				  -1, G_MAXINT, -1, G_PARAM_READABLE);
-	g_object_class_install_property(gobject_class,
-					FPRINT_DEVICE_NUM_ENROLL, pspec);
+	g_object_class_override_property (gobject_class,
+					  FPRINT_DEVICE_NUM_ENROLL,
+					  "num-enroll-stages");
 
-	signals[SIGNAL_VERIFY_STATUS] = g_signal_new("verify-status",
-		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-		fprintd_marshal_VOID__STRING_BOOLEAN, G_TYPE_NONE, 2, G_TYPE_STRING, G_TYPE_BOOLEAN);
-	signals[SIGNAL_ENROLL_STATUS] = g_signal_new("enroll-status",
-		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-		fprintd_marshal_VOID__STRING_BOOLEAN, G_TYPE_NONE, 2, G_TYPE_STRING, G_TYPE_BOOLEAN);
-	signals[SIGNAL_VERIFY_FINGER_SELECTED] = g_signal_new("verify-finger-selected",
-		G_TYPE_FROM_CLASS(gobject_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-		g_cclosure_marshal_VOID__STRING, G_TYPE_NONE, 1, G_TYPE_STRING);
+	signals[SIGNAL_VERIFY_STATUS] =
+		g_signal_lookup ("verify-status", FPRINT_TYPE_DEVICE);
+	signals[SIGNAL_ENROLL_STATUS] =
+		g_signal_lookup ("enroll-status", FPRINT_TYPE_DEVICE);
+	signals[SIGNAL_VERIFY_FINGER_SELECTED] =
+		g_signal_lookup ("verify-finger-selected", FPRINT_TYPE_DEVICE);
 }
 
 static void fprint_device_init(FprintDevice *device)
@@ -394,11 +360,11 @@ enroll_result_to_name (gboolean completed, gboolean enrolled, GError *error)
 
 static gboolean
 _fprint_device_check_claimed (FprintDevice *rdev,
-			      DBusGMethodInvocation *context,
+			      GDBusMethodInvocation *invocation,
 			      GError **error)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	char *sender;
+	const char *sender;
 	gboolean retval;
 
 	/* The device wasn't claimed, exit */
@@ -408,12 +374,11 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 		return FALSE;
 	}
 
-	sender = dbus_g_method_get_sender (context);
+	sender = g_dbus_method_invocation_get_sender (invocation);
 	retval = g_str_equal (sender, priv->session->sender);
-	g_free (sender);
 
 	if (retval == FALSE ||
-	    priv->session->context != NULL) {
+	    priv->session->invocation != NULL) {
 		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
 			     _("Device already in use by another user"));
 	}
@@ -422,18 +387,20 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 }
 
 static gboolean
-_fprint_device_check_polkit_for_action (FprintDevice *rdev, DBusGMethodInvocation *context, const char *action, GError **error)
+_fprint_device_check_polkit_for_action (FprintDevice *rdev,
+				        GDBusMethodInvocation *invocation,
+				        const char *action,
+				        GError **error)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	char *sender;
+	const char *sender;
 	PolkitSubject *subject;
 	PolkitAuthorizationResult *result;
 	GError *_error = NULL;
 
 	/* Check that caller is privileged */
-	sender = dbus_g_method_get_sender (context);
+	sender = g_dbus_method_invocation_get_sender (invocation);
 	subject = polkit_system_bus_name_new (sender);
-	g_free (sender);
 
 	result = polkit_authority_check_authorization_sync (priv->auth,
                                                             subject,
@@ -466,49 +433,60 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev, DBusGMethodInvocatio
 
 static gboolean
 _fprint_device_check_polkit_for_actions (FprintDevice *rdev,
-					 DBusGMethodInvocation *context,
+					 GDBusMethodInvocation *invocation,
 					 const char *action1,
 					 const char *action2,
 					 GError **error)
 {
-	if (_fprint_device_check_polkit_for_action (rdev, context, action1, error) != FALSE)
+	if (_fprint_device_check_polkit_for_action (rdev, invocation, action1, error) != FALSE)
 		return TRUE;
 
 	g_clear_error (error);
 
-	return _fprint_device_check_polkit_for_action (rdev, context, action2, error);
+	return _fprint_device_check_polkit_for_action (rdev, invocation, action2, error);
 }
 
 static char *
 _fprint_device_check_for_username (FprintDevice *rdev,
-				   DBusGMethodInvocation *context,
+				   GDBusMethodInvocation *invocation,
 				   const char *username,
 				   char **ret_sender,
 				   GError **error)
 {
-	DBusConnection *conn;
-	DBusError dbus_error;
-	char *sender;
-	unsigned long uid;
+	g_autoptr(GVariant) ret = NULL;
+	g_autoptr(GError) err = NULL;
+	GDBusConnection *connection;
+	const char *sender;
 	struct passwd *user;
+	guint32 uid;
 
 	/* Get details about the current sender, and username/uid */
-	conn = dbus_g_connection_get_connection (fprintd_dbus_conn);
-	sender = dbus_g_method_get_sender (context);
-	dbus_error_init (&dbus_error);
-	uid = dbus_bus_get_unix_user (conn, sender, &dbus_error);
+	connection = g_dbus_method_invocation_get_connection (invocation);
+	sender = g_dbus_method_invocation_get_sender (invocation);
 
-	if (dbus_error_is_set(&dbus_error)) {
-		g_free (sender);
-		dbus_set_g_error (error, &dbus_error);
+	ret = g_dbus_connection_call_sync (connection,
+					   "org.freedesktop.DBus",
+					   "/org/freedesktop/DBus",
+					   "org.freedesktop.DBus",
+					   "GetConnectionUnixUser",
+					   g_variant_new ("(s)", sender),
+					   NULL, G_DBUS_CALL_FLAGS_NONE, -1,
+					   NULL, &err);
+
+	if (!ret) {
+		g_autoptr(GError) e = NULL;
+
+		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
+			     "Could not get conection unix user ID: %s",
+			     err->message);
 		return NULL;
 	}
 
+	g_variant_get (ret, "(u)", &uid);
 	user = getpwuid (uid);
 	if (user == NULL) {
-		g_free (sender);
 		g_set_error(error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
-			    "Failed to get information about user UID %lu", uid);
+			    "Failed to get information about user UID %u", uid);
 		return NULL;
 	}
 
@@ -517,23 +495,20 @@ _fprint_device_check_for_username (FprintDevice *rdev,
 	 * anyway */
 	if (username == NULL || *username == '\0' || g_str_equal (username, user->pw_name)) {
 		if (ret_sender != NULL)
-			*ret_sender = sender;
-		else
-			g_free (sender);
+			*ret_sender = g_strdup (sender);
 		return g_strdup (user->pw_name);
 	}
 
 	/* If we're not allowed to set a different username,
 	 * then fail */
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.setusername", error) == FALSE) {
-		g_free (sender);
+	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
+						     "net.reactivated.fprint.device.setusername",
+						     error)) {
 		return NULL;
 	}
 
 	if (ret_sender != NULL)
-		*ret_sender = sender;
-	else
-		g_free (sender);
+		*ret_sender = g_strdup (sender);
 
 	return g_strdup (username);
 }
@@ -596,7 +571,8 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	DBusGMethodInvocation *context = g_steal_pointer(&priv->session->context);
+	g_autoptr(GDBusMethodInvocation) invocation =
+		g_steal_pointer (&priv->session->invocation);
 
 	priv->current_action = ACTION_NONE;
 	if (!fp_device_open_finish (dev, res, &error)) {
@@ -605,20 +581,22 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		dbus_error = g_error_new (FPRINT_ERROR,
 		                          FPRINT_ERROR_INTERNAL,
 		                          "Open failed with error: %s", error->message);
-		dbus_g_method_return_error(context, dbus_error);
+		g_dbus_method_invocation_return_gerror (invocation, dbus_error);
 		g_clear_pointer(&priv->session, session_data_free);
 		return;
 	}
 
 	g_debug("claimed device %d", priv->id);
 
-	dbus_g_method_return(context);
+	fprint_dbus_device_complete_claim (FPRINT_DBUS_DEVICE (rdev),
+					   invocation);
 }
 
-static void fprint_device_claim(FprintDevice *rdev,
-				const char *username,
-				DBusGMethodInvocation *context)
+static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
+				     GDBusMethodInvocation *invocation,
+				     const char *username)
 {
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 	char *sender, *user;
@@ -627,41 +605,41 @@ static void fprint_device_claim(FprintDevice *rdev,
 	if (priv->session) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
 			    "Device was already claimed");
-		dbus_g_method_return_error(context, error);
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free(error);
-		return;
+		return TRUE;
 	}
 
 	g_assert_null(priv->session);
 
 	sender = NULL;
 	user = _fprint_device_check_for_username (rdev,
-						  context,
+						  invocation,
 						  username,
 						  &sender,
 						  &error);
 	if (user == NULL) {
 		g_free (sender);
-		dbus_g_method_return_error (context, error);
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	}
 
-	if (_fprint_device_check_polkit_for_actions (rdev, context,
-						     "net.reactivated.fprint.device.verify",
-						     "net.reactivated.fprint.device.enroll",
-						     &error) == FALSE) {
+	if (!_fprint_device_check_polkit_for_actions (rdev, invocation,
+						      "net.reactivated.fprint.device.verify",
+						      "net.reactivated.fprint.device.enroll",
+						      &error)) {
 		g_free (sender);
 		g_free (user);
-		dbus_g_method_return_error (context, error);
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	}
 
 	_fprint_device_add_client (rdev, sender);
 
 	priv->session = g_new0(SessionData, 1);
-	priv->session->context = context;
+	priv->session->invocation = g_object_ref (invocation);
 	priv->session->username = user;
 	priv->session->sender = sender;
 
@@ -669,6 +647,8 @@ static void fprint_device_claim(FprintDevice *rdev,
 
 	priv->current_action = ACTION_OPEN;
 	fp_device_open (priv->dev, NULL, (GAsyncReadyCallback) dev_open_cb, rdev);
+
+	return TRUE;
 }
 
 static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
@@ -677,7 +657,8 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(SessionData) session = g_steal_pointer(&priv->session);
-	DBusGMethodInvocation *context = g_steal_pointer(&session->context);
+	g_autoptr(GDBusMethodInvocation) invocation =
+		g_steal_pointer (&session->invocation);
 
 	priv->current_action = ACTION_NONE;
 	if (!fp_device_close_finish (dev, res, &error)) {
@@ -686,35 +667,37 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		dbus_error = g_error_new (FPRINT_ERROR,
 		                          FPRINT_ERROR_INTERNAL,
 		                          "Release failed with error: %s", error->message);
-		dbus_g_method_return_error(context, dbus_error);
+		g_dbus_method_invocation_return_gerror (invocation, dbus_error);
 		return;
 	}
 
 	g_debug("released device %d", priv->id);
 
-	dbus_g_method_return(context);
+	fprint_dbus_device_complete_release  (FPRINT_DBUS_DEVICE (rdev),
+					      invocation);
 }
 
-static void fprint_device_release(FprintDevice *rdev,
-	DBusGMethodInvocation *context)
+static gboolean fprint_device_release (FprintDBusDevice *dbus_dev,
+				       GDBusMethodInvocation *invocation)
 {
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free(error);
-		return;
+		return TRUE;
 	}
 
 	/* People that can claim can also release */
-	if (_fprint_device_check_polkit_for_actions (rdev, context,
-						     "net.reactivated.fprint.device.verify",
-						     "net.reactivated.fprint.device.enroll",
-						     &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
+	if (!_fprint_device_check_polkit_for_actions (rdev, invocation,
+						      "net.reactivated.fprint.device.verify",
+						      "net.reactivated.fprint.device.enroll",
+						      &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free(error);
-		return;
+		return TRUE;
 	}
 
 	if (priv->current_cancellable) {
@@ -730,9 +713,11 @@ static void fprint_device_release(FprintDevice *rdev,
 			g_main_context_iteration (NULL, TRUE);
 	}
 
-	priv->session->context = context;
+	priv->session->invocation = g_object_ref (invocation);
 	priv->current_action = ACTION_CLOSE;
 	fp_device_close (priv->dev, NULL, (GAsyncReadyCallback) dev_close_cb, rdev);
+
+	return TRUE;
 }
 
 static void report_verify_status (FprintDevice *rdev,
@@ -786,6 +771,7 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+	FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
 	gboolean success;
 	const char *name;
 	gboolean match;
@@ -817,9 +803,9 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		}
 
 		/* Return the cancellation or reset action right away if vanished. */
-		if (priv->current_cancel_context) {
-			dbus_g_method_return(priv->current_cancel_context);
-			priv->current_cancel_context = NULL;
+		if (priv->current_cancel_invocation) {
+			fprint_dbus_device_complete_verify_stop (dbus_dev,
+				g_steal_pointer (&priv->current_cancel_invocation));
 			priv->current_action = ACTION_NONE;
 			priv->session->verify_status_reported = FALSE;
 		} else if (g_cancellable_is_cancelled (priv->current_cancellable)) {
@@ -837,6 +823,7 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(FpPrint) match = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+	FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
 	const char *name;
 	gboolean success;
 
@@ -867,9 +854,9 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		}
 
 		/* Return the cancellation or reset action right away if vanished. */
-		if (priv->current_cancel_context) {
-			dbus_g_method_return(priv->current_cancel_context);
-			priv->current_cancel_context = NULL;
+		if (priv->current_cancel_invocation) {
+			fprint_dbus_device_complete_verify_stop (dbus_dev,
+				g_steal_pointer (&priv->current_cancel_invocation));
 			priv->current_action = ACTION_NONE;
 		} else if (g_cancellable_is_cancelled (priv->current_cancellable)) {
 			priv->current_action = ACTION_NONE;
@@ -880,23 +867,27 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	}
 }
 
-static void fprint_device_verify_start(FprintDevice *rdev,
-	const char *finger_name, DBusGMethodInvocation *context)
+static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
+					    GDBusMethodInvocation *invocation,
+					    const char *finger_name)
 {
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GPtrArray) gallery = NULL;
 	g_autoptr(FpPrint) print = NULL;
 	g_autoptr(GError) error = NULL;
 	guint finger_num = finger_name_to_num (finger_name);
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
+	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
+						     "net.reactivated.fprint.device.verify",
+						     &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
 	if (priv->current_action != ACTION_NONE) {
@@ -907,8 +898,8 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
 				    "Verification already in progress");
 		}
-		dbus_g_method_return_error(context, error);
-		return;
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
 	if (finger_num == -1) {
@@ -918,8 +909,8 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		if (prints == NULL) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
 				    "No fingerprints enrolled");
-			dbus_g_method_return_error(context, error);
-			return;
+			g_dbus_method_invocation_return_gerror (invocation, error);
+			return TRUE;
 		}
 		if (fp_device_supports_identify (priv->dev)) {
 			GSList *l;
@@ -944,8 +935,8 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		if (gallery->len == 0) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
 				    "No fingerprints on that device");
-			dbus_g_method_return_error(context, error);
-			return;
+			g_dbus_method_invocation_return_gerror (invocation, error);
+			return TRUE;
 		}
 		priv->current_action = ACTION_IDENTIFY;
 
@@ -966,8 +957,9 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		if (!print) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
 				    "No such print %d", finger_num);
-			dbus_g_method_return_error(context, error);
-			return;
+			g_dbus_method_invocation_return_gerror (invocation,
+								error);
+			return TRUE;
 		}
 
 		priv->current_cancellable = g_cancellable_new ();
@@ -982,50 +974,57 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_FINGER_SELECTED],
 		      0, finger_num_to_name (finger_num));
 
-	dbus_g_method_return(context);
+	fprint_dbus_device_complete_verify_start  (dbus_dev, invocation);
+
+	return TRUE;
 }
 
-static void fprint_device_verify_stop(FprintDevice *rdev,
-	DBusGMethodInvocation *context)
+static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
+					   GDBusMethodInvocation *invocation)
 {
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free(error);
-		return;
+		return TRUE;
 	}
 
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
+	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
+						     "net.reactivated.fprint.device.verify",
+						     &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free(error);
-		return;
+		return TRUE;
 	}
 
 	if (priv->current_action == ACTION_NONE) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
 			    "No verification in progress");
-		dbus_g_method_return_error(context, error);
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	} else if (priv->current_action == ACTION_ENROLL) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
 			    "Enrollment in progress");
-		dbus_g_method_return_error(context, error);
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	}
 
 	if (priv->current_cancellable) {
 		/* We return only when the action was cancelled */
 		g_cancellable_cancel (priv->current_cancellable);
-		priv->current_cancel_context = context;
+		priv->current_cancel_invocation = invocation;
 	} else {
-		dbus_g_method_return (context);
+		fprint_dbus_device_complete_verify_stop (dbus_dev, invocation);
 		priv->current_action = ACTION_NONE;
 		priv->session->verify_status_reported = FALSE;
 	}
+
+	return TRUE;
 }
 
 static void enroll_progress_cb(FpDevice *dev,
@@ -1139,6 +1138,7 @@ static void enroll_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+	FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
 	g_autoptr(FpPrint) print = NULL;
 	const char *name;
 
@@ -1183,9 +1183,9 @@ static void enroll_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		g_warning ("Device reported an error during enroll: %s", error->message);
 
 	/* Return the cancellation or reset action right away if vanished. */
-	if (priv->current_cancel_context) {
-		dbus_g_method_return(priv->current_cancel_context);
-		priv->current_cancel_context = NULL;
+	if (priv->current_cancel_invocation) {
+		fprint_dbus_device_complete_enroll_stop (dbus_dev,
+			g_steal_pointer (&priv->current_cancel_invocation));
 		priv->current_action = ACTION_NONE;
 	} else if (g_cancellable_is_cancelled (priv->current_cancellable)) {
 		priv->current_action = ACTION_NONE;
@@ -1194,28 +1194,32 @@ static void enroll_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 }
 
 
-static void fprint_device_enroll_start(FprintDevice *rdev,
-	const char *finger_name, DBusGMethodInvocation *context)
+static gboolean fprint_device_enroll_start (FprintDBusDevice *dbus_dev,
+					    GDBusMethodInvocation *invocation,
+					    const char *finger_name)
 {
 	g_autoptr(GError) error = NULL;
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	int finger_num = finger_name_to_num (finger_name);
 
 	if (finger_num == -1) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_INVALID_FINGERNAME,
 			    "Invalid finger name");
-		dbus_g_method_return_error(context, error);
-		return;
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
+	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
+	 					     "net.reactivated.fprint.device.enroll",
+						     &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
 	if (priv->current_action != ACTION_NONE) {
@@ -1226,8 +1230,8 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
 				    "Verification in progress");
 		}
-		dbus_g_method_return_error(context, error);
-		return;
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
 	g_debug("start enrollment device %d finger %d", priv->id, finger_num);
@@ -1245,25 +1249,30 @@ static void fprint_device_enroll_start(FprintDevice *rdev,
 
 	priv->current_action = ACTION_ENROLL;
 
-	dbus_g_method_return(context);
+	fprint_dbus_device_complete_enroll_start (dbus_dev, invocation);
+
+	return TRUE;
 }
 
-static void fprint_device_enroll_stop(FprintDevice *rdev,
-	DBusGMethodInvocation *context)
+static gboolean fprint_device_enroll_stop (FprintDBusDevice *dbus_dev,
+					   GDBusMethodInvocation *invocation)
 {
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	}
 
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
+	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
+						     "net.reactivated.fprint.device.enroll",
+						     &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	}
 
 	if (priv->current_action != ACTION_ENROLL) {
@@ -1278,74 +1287,82 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 				     "Identification in progress");
 		} else
 			g_assert_not_reached ();
-		dbus_g_method_return_error(context, error);
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	}
 
 	if (priv->current_cancellable) {
 		/* We return only when the action was cancelled */
 		g_cancellable_cancel (priv->current_cancellable);
-		priv->current_cancel_context = context;
+		priv->current_cancel_invocation = invocation;
 	} else {
-		dbus_g_method_return (context);
+		fprint_dbus_device_complete_enroll_stop (dbus_dev, invocation);
 		priv->current_action = ACTION_NONE;
 	}
+
+	return TRUE;
 }
 
-static void fprint_device_list_enrolled_fingers(FprintDevice *rdev,
-						const char *username,
-						DBusGMethodInvocation *context)
+static gboolean fprint_device_list_enrolled_fingers (FprintDBusDevice *dbus_dev,
+						     GDBusMethodInvocation *invocation,
+						     const char *username)
 {
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+	g_autoptr (GPtrArray) ret = NULL;
 	GError *error = NULL;
 	GSList *prints;
 	GSList *item;
-	GPtrArray *ret;
-	char *user, *sender;
+	const char *sender;
+	char *user;
 
 	user = _fprint_device_check_for_username (rdev,
-						  context,
+						  invocation,
 						  username,
 						  NULL,
 						  &error);
 	if (user == NULL) {
-		dbus_g_method_return_error (context, error);
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	}
 
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.verify", &error) == FALSE) {
+	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
+						     "net.reactivated.fprint.device.verify",
+						     &error)) {
 		g_free (user);
-		dbus_g_method_return_error (context, error);
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	}
 
-	sender = dbus_g_method_get_sender (context);
+	sender = g_dbus_method_invocation_get_sender (invocation);
 	_fprint_device_add_client (rdev, sender);
-	g_free (sender);
 
 	prints = store.discover_prints(priv->dev, user);
 	g_free (user);
 	if (!prints) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
 			"Failed to discover prints");
-		dbus_g_method_return_error(context, error);
+		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
-		return;
+		return TRUE;
 	}
 
 	ret = g_ptr_array_new ();
 	for (item = prints; item; item = item->next) {
 		int finger_num = GPOINTER_TO_INT (item->data);
-		g_ptr_array_add (ret, g_strdup (finger_num_to_name (finger_num)));
+		g_ptr_array_add (ret, (char *) finger_num_to_name (finger_num));
 	}
 	g_ptr_array_add (ret, NULL);
 
 	g_slist_free(prints);
 
-	dbus_g_method_return(context, g_ptr_array_free (ret, FALSE));
+	fprint_dbus_device_complete_list_enrolled_fingers  (dbus_dev,
+		invocation, (const gchar *const *) ret->pdata);
+
+	return TRUE;
 }
 
 static void delete_enrolled_fingers(FprintDevice *rdev, const char *user)
@@ -1386,78 +1403,87 @@ static void delete_enrolled_fingers(FprintDevice *rdev, const char *user)
 }
 
 #ifdef __linux__
-static void log_offending_client(DBusGMethodInvocation *context)
+static void log_offending_client_cb (GObject *object,
+				     GAsyncResult *res,
+				     gpointer user_data)
 {
-	g_autofree char *sender = NULL;
+	GDBusConnection *connection = G_DBUS_CONNECTION (object);
+	g_autoptr(GVariant) ret = NULL;
 	g_autofree char *path = NULL;
 	g_autofree char *content = NULL;
-	DBusGProxy *proxy = NULL;
 	guint pid = 0;
 
-	sender = dbus_g_method_get_sender(context);
-	proxy = dbus_g_proxy_new_for_name (fprintd_dbus_conn,
-					    "org.freedesktop.DBus",
-					    "/org/freedesktop/DBus",
-					    "org.freedesktop.DBus");
+	ret = g_dbus_connection_call_finish (connection, res, NULL);
 
-	if (!dbus_g_proxy_call(proxy,
-			       "GetConnectionUnixProcessID",
-			       NULL,
-			       G_TYPE_STRING,
-			       sender,
-			       G_TYPE_INVALID,
-			       G_TYPE_UINT,
-			       &pid,
-			       G_TYPE_INVALID)) {
-		goto out;
-	}
+	if (!ret)
+		return;
 
+	g_variant_get (ret, "(u)", &pid);
 	path = g_strdup_printf ("/proc/%u/comm", pid);
 	if (g_file_get_contents (path, &content, NULL, NULL)) {
 		g_strchomp (content);
 		g_warning ("Offending API user is %s", content);
 	}
+}
 
-out:
-	g_clear_object (&proxy);
+static void log_offending_client (GDBusMethodInvocation *invocation)
+{
+	const char *sender;
+	GDBusConnection *connection;
+
+	connection = g_dbus_method_invocation_get_connection (invocation);
+	sender = g_dbus_method_invocation_get_sender (invocation);
+
+	g_dbus_connection_call (connection,
+			        "org.freedesktop.DBus",
+			        "/org/freedesktop/DBus",
+			        "org.freedesktop.DBus",
+			        "GetConnectionUnixProcessID",
+			        g_variant_new ("(s)", sender),
+			        NULL, G_DBUS_CALL_FLAGS_NONE,
+			        -1, NULL, log_offending_client_cb, NULL);
 }
 #endif
 
-static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
-						  const char *username,
-						  DBusGMethodInvocation *context)
+static gboolean fprint_device_delete_enrolled_fingers (FprintDBusDevice *dbus_dev,
+						       GDBusMethodInvocation *invocation,
+						       const char *username)
 {
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GError) error = NULL;
 	g_autofree char *user = NULL;
-	char *sender;
+	const char *sender;
 	gboolean opened;
 
 	g_warning ("The API user should be updated to use DeleteEnrolledFingers2 method!");
 #ifdef __linux__
-	log_offending_client(context);
+	log_offending_client (invocation);
 #endif
 
 	user = _fprint_device_check_for_username (rdev,
-						  context,
+						  invocation,
 						  username,
 						  NULL,
 						  &error);
 	if (user == NULL) {
-		dbus_g_method_return_error (context, error);
-		return;
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
+	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
+						     "net.reactivated.fprint.device.enroll",
+						     &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		/* Return error for anything but FPRINT_ERROR_CLAIM_DEVICE */
 		if (!g_error_matches (error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE)) {
-			dbus_g_method_return_error (context, error);
-			return;
+			g_dbus_method_invocation_return_gerror (invocation,
+								error);
+			return TRUE;
 		}
 
 		opened = FALSE;
@@ -1465,9 +1491,8 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 		opened = TRUE;
 	}
 
-	sender = dbus_g_method_get_sender (context);
+	sender = g_dbus_method_invocation_get_sender (invocation);
 	_fprint_device_add_client (rdev, sender);
-	g_free (sender);
 
 	if (!opened && fp_device_has_storage (priv->dev))
 		fp_device_open_sync (priv->dev, NULL, NULL);
@@ -1477,27 +1502,47 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 	if (!opened && fp_device_has_storage (priv->dev))
 		fp_device_close_sync (priv->dev, NULL, NULL);
 
-	dbus_g_method_return(context);
+	fprint_dbus_device_complete_delete_enrolled_fingers (dbus_dev,
+							     invocation);
+	return TRUE;
 }
 
-static void fprint_device_delete_enrolled_fingers2(FprintDevice *rdev,
-						    DBusGMethodInvocation *context)
+static gboolean fprint_device_delete_enrolled_fingers2 (FprintDBusDevice *dbus_dev,
+							GDBusMethodInvocation *invocation)
 {
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GError) error = NULL;
 
-	if (_fprint_device_check_claimed(rdev, context, &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
-	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
-		dbus_g_method_return_error (context, error);
-		return;
+	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
+						     "net.reactivated.fprint.device.enroll",
+						     &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
 	}
 
 	delete_enrolled_fingers (rdev, priv->session->username);
+	fprint_dbus_device_complete_delete_enrolled_fingers2 (dbus_dev,
+							      invocation);
 
-	dbus_g_method_return(context);
+	return TRUE;
+}
+
+static void fprint_device_dbus_skeleton_iface_init (FprintDBusDeviceIface *iface)
+{
+	iface->handle_claim = fprint_device_claim;
+	iface->handle_delete_enrolled_fingers = fprint_device_delete_enrolled_fingers;
+	iface->handle_delete_enrolled_fingers2 = fprint_device_delete_enrolled_fingers2;
+	iface->handle_enroll_start = fprint_device_enroll_start;
+	iface->handle_enroll_stop = fprint_device_enroll_stop;
+	iface->handle_list_enrolled_fingers = fprint_device_list_enrolled_fingers;
+	iface->handle_release = fprint_device_release;
+	iface->handle_verify_start = fprint_device_verify_start;
+	iface->handle_verify_stop = fprint_device_verify_stop;
 }
 

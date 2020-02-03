@@ -16,14 +16,11 @@ import unittest
 import sys
 import subprocess
 import dbus
-import dbus.mainloop.glib
 import dbusmock
 import fcntl
 import os
 import time
 import pypamtest
-
-dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
 PAM_SUCCESS = 0
 PAM_AUTH_ERR = 7
