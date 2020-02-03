@@ -174,7 +174,9 @@ fprint_manager_init (FprintManager *manager)
 				 manager,
 				 G_CONNECT_SWAPPED);
 
-	/* Prepare everything by enumerating all devices. */
+	/* Prepare everything by enumerating all devices.
+	 * This blocks the main loop until the existing devices are enumerated
+	 */
 	fp_context_enumerate (priv->context);
 
 	dbus_g_connection_register_g_object(fprintd_dbus_conn,

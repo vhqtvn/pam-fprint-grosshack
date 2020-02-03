@@ -191,8 +191,8 @@ int main(int argc, char **argv)
 	g_debug("Launching FprintObject");
 
 	/* create the one instance of the Manager object to be shared between
-	 * all fprintd users */
-	manager = fprint_manager_new(no_timeout);
+	 * all fprintd users. This blocks until all the devices are enumerated */
+	manager = fprint_manager_new (no_timeout);
 
 	/* Obtain the well-known name after the manager has been initialized.
 	 * Otherwise a client immediately enumerating the devices will not see
