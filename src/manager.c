@@ -127,7 +127,6 @@ device_removed_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 {
 	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
 	GSList *item;
-	g_autofree gchar *path = NULL;
 
 	for (item = priv->dev_registry; item; item = item->next) {
 		FprintDevice *rdev;
