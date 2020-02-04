@@ -119,6 +119,23 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.assertRegex(res.info[0], r'Place your left middle finger on FDO Sandpaper Reader')
         self.assertEqual(len(res.errors), 0)
 
+    def test_pam_fprintd_last_try_auth(self):
+        self.setup_device()
+        script = [
+            ( 'verify-no-match', True, 1 ),
+            ( 'verify-no-match', True, 1 ),
+            ( 'verify-match', True, 1 ),
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_SUCCESS)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
+        self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
+        self.assertEqual(len(res.errors), 2)
+        self.assertRegex(res.errors[0], r'Failed to match fingerprint')
+        self.assertRegex(res.errors[1], r'Failed to match fingerprint')
+
     def test_pam_fprintd_failed_auth(self):
         self.setup_device()
         script = [
