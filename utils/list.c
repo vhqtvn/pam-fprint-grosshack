@@ -55,6 +55,7 @@ static void list_fingerprints(DBusGProxy *dev, const char *username)
 			g_print("ListEnrolledFingers failed: %s\n", error->message);
 			exit (1);
 		} else {
+			g_clear_error (&error);
 			fingers = NULL;
 		}
 	}
