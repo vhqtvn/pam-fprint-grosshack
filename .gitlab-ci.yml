@@ -2,7 +2,7 @@ image: fedora:rawhide
 
 variables:
   DEPENDENCIES: dbus-glib-devel pam-devel polkit-devel
-                gtk-doc meson gettext intltool autoconf automake libtool
+                gtk-doc meson gettext gcovr intltool autoconf automake libtool
                 gcc gcc-c++ glibc-devel make python3-dbusmock python3-libpamtest systemd-devel
   DEPENDENCIES_STABLE: $DEPENDENCIES libfprint-devel
   DEPENDENCIES_DEV: $DEPENDENCIES git
@@ -80,10 +80,11 @@ test_dev_meson:
   stage: test
   <<: *install_libfprint_dev
   script:
-    - meson _build
+    - meson _build -Db_coverage=true
     - meson test -C _build --verbose --no-stdsplit --timeout-multiplier 3
+    - ninja -C _build coverage
   artifacts:
-    name: log
+    name: log-and-coverage
     when: always
     paths:
-      - _build/meson-logs/*.txt
+      - _build/meson-logs
