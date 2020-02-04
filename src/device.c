@@ -476,8 +476,7 @@ _fprint_device_check_polkit_for_actions (FprintDevice *rdev,
 	if (_fprint_device_check_polkit_for_action (rdev, context, action1, error) != FALSE)
 		return TRUE;
 
-	g_error_free (*error);
-	*error = NULL;
+	g_clear_error (error);
 
 	return _fprint_device_check_polkit_for_action (rdev, context, action2, error);
 }
