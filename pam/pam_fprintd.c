@@ -442,6 +442,8 @@ do_verify (pam_handle_t *pamh,
 	sd_bus_slot_unref (verify_status_slot);
 	sd_bus_slot_unref (verify_finger_selected_slot);
 
+	if (data->result)
+		free (data->result);
 	free (data->driver);
 	free (data);
 
