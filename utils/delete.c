@@ -66,6 +66,7 @@ static void delete_fingerprints(DBusGProxy *dev, const char *username)
 			exit (1);
 		} else {
 			g_print ("No fingerprints to delete on %s\n", g_value_get_string (g_hash_table_lookup (props, "name")));
+			g_clear_error (&error);
 		}
 	} else {
 			g_print ("Fingerprints deleted on %s\n", g_value_get_string (g_hash_table_lookup (props, "name")));
