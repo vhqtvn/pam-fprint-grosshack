@@ -417,6 +417,7 @@ do_verify (pam_handle_t *pamh,
 				ret = PAM_AUTH_ERR;
 			} else if (str_equal (data->result, "verify-match")) {
 				ret = PAM_SUCCESS;
+				break;
 			} else if (str_equal (data->result, "verify-unknown-error")) {
 				ret = PAM_AUTHINFO_UNAVAIL;
 			} else if (str_equal (data->result, "verify-disconnected")) {
