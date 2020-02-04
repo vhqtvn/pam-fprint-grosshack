@@ -67,7 +67,7 @@ build_stable_meson:
 build_dev_meson:
   <<: *install_libfprint_dev
   script:
-    - meson _build
+    - meson _build --werror
     - ninja -C _build -v
     - ninja -C _build -v install
   artifacts:
