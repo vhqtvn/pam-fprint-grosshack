@@ -24,7 +24,7 @@ variables:
     # So we don't get error about this libfprint file
     - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
 
-build_stable_meson:
+build_stable:
   # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
   allow_failure: true
   before_script:
@@ -34,7 +34,7 @@ build_stable_meson:
     - ninja -C _build -v
     - ninja -C _build -v install
 
-build_dev_meson:
+build_dev:
   <<: *install_libfprint_dev
   script:
     - meson _build --werror
@@ -46,7 +46,7 @@ build_dev_meson:
     paths:
       - _build/meson-logs/*.txt
 
-test_dev_meson:
+test_dev:
   stage: test
   <<: *install_libfprint_dev
   script:
