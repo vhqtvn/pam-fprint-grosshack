@@ -53,6 +53,8 @@ fprintd_deps = declare_dependency(
     ],
 )
 
+symbol_visibility = get_option('b_coverage') ? 'default' : 'hidden'
+
 libfprintd_private = static_library('fprintd-private',
     sources: [
         'device.c',
@@ -62,7 +64,7 @@ libfprintd_private = static_library('fprintd-private',
         fprintd_marshal,
     ],
     dependencies: fprintd_deps,
-    gnu_symbol_visibility: 'hidden',
+    gnu_symbol_visibility: symbol_visibility,
 )
 
 fprintd = executable('fprintd',
@@ -75,7 +77,7 @@ fprintd = executable('fprintd',
     ],
     dependencies: fprintd_deps,
     link_with: libfprintd_private,
-    gnu_symbol_visibility: 'hidden',
+    gnu_symbol_visibility: symbol_visibility,
     install: true,
     install_dir: fprintd_installdir,
 )
