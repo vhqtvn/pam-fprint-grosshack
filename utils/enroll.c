@@ -184,6 +184,7 @@ int main(int argc, char **argv)
 	do_enroll(dev);
 	release_device(dev);
 	g_free(finger_name);
+	g_strfreev(usernames);
 	return 0;
 }
 
