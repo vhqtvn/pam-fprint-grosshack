@@ -11,9 +11,20 @@ variables:
   FEDORA_TAG: rawhide
   FEDORA_VERSION: rawhide
   FEDORA_IMAGE: "$CI_REGISTRY/libfprint/$CI_PROJECT_NAME/fedora/$FEDORA_VERSION:$FEDORA_TAG"
-  DEPENDENCIES: dbus-glib-devel pam-devel polkit-devel
-                gtk-doc meson gettext gcovr git
-                gcc gcc-c++ glibc-devel python3-dbusmock python3-libpamtest systemd-devel
+  DEPENDENCIES: dbus-glib-devel
+                gcc
+                gcovr
+                gettext
+                git
+                glibc-devel
+                gtk-doc
+                libfprint-devel
+                meson
+                pam-devel
+                polkit-devel
+                python3-dbusmock
+                python3-libpamtest
+                systemd-devel
 
 image: "$FEDORA_IMAGE"
 
