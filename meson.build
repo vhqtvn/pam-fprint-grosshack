@@ -142,7 +142,7 @@ cdata.set_quoted('VERSION', meson.project_version())
 cdata.set_quoted('SYSCONFDIR', sysconfdir)
 
 config_h = configure_file(
-  input: 'config.h.meson',
+  input: 'config.h.in',
   output: 'config.h',
   configuration: cdata
 )
