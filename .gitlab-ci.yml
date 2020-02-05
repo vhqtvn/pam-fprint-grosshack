@@ -1,20 +1,26 @@
-image: fedora:rawhide
-
 include:
   - project: 'libfprint/libfprint'
     ref: master
     file: '/.gitlab-ci/libfprint-templates.yaml'
+  - project: 'wayland/ci-templates'
+    ref: master
+    file: '/templates/fedora.yml'
 
 variables:
+  extends: .libfprint_common_variables
+  FEDORA_TAG: rawhide
+  FEDORA_VERSION: rawhide
+  FEDORA_IMAGE: "$CI_REGISTRY/libfprint/$CI_PROJECT_NAME/fedora/$FEDORA_VERSION:$FEDORA_TAG"
   DEPENDENCIES: dbus-glib-devel pam-devel polkit-devel
-                gtk-doc meson gettext gcovr
+                gtk-doc meson gettext gcovr git
                 gcc gcc-c++ glibc-devel python3-dbusmock python3-libpamtest systemd-devel
-  DEPENDENCIES_STABLE: $DEPENDENCIES libfprint-devel
-  DEPENDENCIES_DEV: $DEPENDENCIES git
+
+image: "$FEDORA_IMAGE"
 
 .install_libfprint_dev: &install_libfprint_dev
   before_script:
-    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $LIBFPRINT_DEPENDENCIES $DEPENDENCIES_DEV
+    # Make sure we don't build or link against the system libfprint
+    - dnf remove -y libfprint-devel
     - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
     - cd libfprint
     - meson . _build --prefix=/usr -Ddrivers=virtual_image -Ddoc=false
@@ -25,16 +31,20 @@ variables:
     - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
 
 build_stable:
+  except:
+    variables:
+      - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
   # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
   allow_failure: true
-  before_script:
-    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_STABLE
   script:
     - meson _build
     - ninja -C _build -v
     - ninja -C _build -v install
 
 build_dev:
+  except:
+    variables:
+      - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
   <<: *install_libfprint_dev
   script:
     - meson _build --werror -Dgtk_doc=true
@@ -47,6 +57,9 @@ build_dev:
       - _build/meson-logs/*.txt
 
 test_dev:
+  except:
+    variables:
+      - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
   stage: test
   <<: *install_libfprint_dev
   script:
@@ -59,3 +72,16 @@ test_dev:
     when: always
     paths:
       - _build/meson-logs
+
+# CONTAINERS creation stage
+container_fedora_build:
+  extends: .fedora@container-build
+  only:
+    variables:
+      - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
+  variables:
+    GIT_STRATEGY: none # no need to pull the whole tree for rebuilding the image
+    # a list of packages to install
+    FEDORA_RPMS:
+      $DEPENDENCIES
+      $LIBFPRINT_DEPENDENCIES
