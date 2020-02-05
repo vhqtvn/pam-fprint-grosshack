@@ -27,6 +27,7 @@
 #include <glib/gi18n.h>
 #include <fprint.h>
 #include <glib-object.h>
+#include <glib-unix.h>
 #include <gmodule.h>
 
 #include "fprintd.h"
@@ -129,6 +130,14 @@ static const GOptionEntry entries[] = {
 	{ NULL }
 };
 
+static gboolean sigterm_callback(gpointer data)
+{
+	GMainLoop *loop = data;
+
+	g_main_loop_quit (loop);
+	return FALSE;
+}
+
 int main(int argc, char **argv)
 {
 	GOptionContext *context;
@@ -178,6 +187,7 @@ int main(int argc, char **argv)
 	store.init ();
 
 	loop = g_main_loop_new(NULL, FALSE);
+	g_unix_signal_add (SIGTERM, sigterm_callback, loop);
 
 	g_debug("Launching FprintObject");
 

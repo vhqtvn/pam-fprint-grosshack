@@ -233,7 +233,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
                 self.daemon.terminate()
             except OSError:
                 pass
-            self.daemon.wait()
+            self.daemon.wait(timeout=2)
 
         self.daemon = None
         self.client = None
