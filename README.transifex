@@ -1,3 +1,9 @@
+Updating translations
+=====================
+
+The update-transifex.sh script should be run regularly to both pull
+translations from the Transifex service, and push new strings to translate.
+
 Transifex.net Token Verification
 ================================
 
