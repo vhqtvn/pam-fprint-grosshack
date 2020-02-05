@@ -24,36 +24,6 @@ variables:
     # So we don't get error about this libfprint file
     - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
 
-build_stable_autotools:
-  # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
-  allow_failure: true
-  before_script:
-    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_STABLE
-  script:
-    - ./autogen.sh --disable-dependency-tracking
-    - make
-    - make install
-
-build_dev_autotools:
-  <<: *install_libfprint_dev
-  script:
-    - ./autogen.sh --disable-dependency-tracking
-    - make
-    - make install
-
-test_dev_autotools:
-  stage: test
-  <<: *install_libfprint_dev
-  script:
-    - ./autogen.sh --disable-dependency-tracking
-    - make
-    - make check
-  artifacts:
-    name: log
-    when: always
-    paths:
-      - tests/*.log
-
 build_stable_meson:
   # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
   allow_failure: true
