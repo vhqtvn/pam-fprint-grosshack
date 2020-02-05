@@ -1,7 +1,6 @@
 {
 global:
 	pam_*;
-	__gcov_*;
 local:
 	*;
 };
