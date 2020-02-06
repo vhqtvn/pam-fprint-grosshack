@@ -290,13 +290,6 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
             self.polkitd_stop()
             self.skipTest("Need virtual_image device to run the test")
 
-        def timeout_cb(*args):
-            # Note: With meson we could just rely on it to kill us
-            print("Test timed out, hard exiting")
-            sys.exit(1)
-
-        self.test_timeout = GLib.timeout_add(get_timeout('test') * 1000, timeout_cb)
-
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
                                       'net.reactivated.fprint.device.enroll',
                                       'net.reactivated.fprint.device.verify'])
@@ -331,7 +324,6 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
     def tearDown(self):
         super().tearDown()
 
-        GLib.source_remove(self.test_timeout)
         self.device.disconnect(self.g_signal_id)
 
         self.daemon_stop()
