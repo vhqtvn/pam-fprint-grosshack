@@ -426,14 +426,6 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         with self.assertFprintError('ClaimDevice'):
             self.device.EnrollStop()
 
-    def test_wrong_finger_enroll_start(self):
-        self.device.Claim('(s)', 'testuser')
-
-        with self.assertFprintError('InvalidFingername'):
-            self.device.EnrollStart('(s)', 'any')
-
-        self.device.Release()
-
     def test_unclaimed_delete_enrolled_fingers(self):
         self.device.DeleteEnrolledFingers('(s)', 'testuser')
 
@@ -444,6 +436,14 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
     def test_unclaimed_list_enrolled_fingers(self):
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
+
+    def test_wrong_finger_enroll_start(self):
+        self.device.Claim('(s)', 'testuser')
+
+        with self.assertFprintError('InvalidFingername'):
+            self.device.EnrollStart('(s)', 'any')
+
+        self.device.Release()
 
     def test_enroll_verify_list_delete(self):
 
