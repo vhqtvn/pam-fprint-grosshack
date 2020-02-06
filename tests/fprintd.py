@@ -1114,6 +1114,12 @@ class FPrintdUtilsTest(FPrintdVirtualDeviceBaseTest):
         self.device.Claim('(s)', self.get_current_user())
         self.device.Release()
 
+    def test_already_claimed_same_user_delete_enrolled_fingers(self):
+        self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+    def test_already_claimed_other_user_delete_enrolled_fingers(self):
+        self.device.DeleteEnrolledFingers('(s)', 'nottestuser')
+
 
 
 def list_tests():
