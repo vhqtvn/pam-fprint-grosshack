@@ -1114,6 +1114,11 @@ class FPrintdUtilsTest(FPrintdVirtualDeviceBaseTest):
         self.device.Release()
 
 
+
+def list_tests():
+    import unittest_inspector
+    return unittest_inspector.list_tests(sys.modules[__name__])
+
 if __name__ == '__main__':
     if len(sys.argv) == 2 and sys.argv[1] == "list-tests":
         for machine, human in list_tests():
