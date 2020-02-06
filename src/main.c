@@ -19,6 +19,7 @@
 
 #include "config.h"
 
+#include <locale.h>
 #include <poll.h>
 #include <stdlib.h>
 
