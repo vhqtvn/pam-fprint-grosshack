@@ -2,8 +2,8 @@ docbook_xml_header = custom_target('docbook_xml_header',
     output: 'docbook-xml-header.xml',
     command: [
         'echo', '-n',
-        '<?xml version="1.0"?>',
-        '<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN" "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd">',
+        '<?xml version="1.0"?>\n',
+        '<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN" "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd">\n',
     ],
     capture: true,
 )
