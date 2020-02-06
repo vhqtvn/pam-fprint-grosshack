@@ -322,12 +322,12 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         self.g_signal_id = self.device.connect('g-signal', signal_cb)
 
     def tearDown(self):
-        super().tearDown()
-
         self.device.disconnect(self.g_signal_id)
 
         self.daemon_stop()
         self.polkitd_stop()
+
+        super().tearDown()
 
     def assertFprintError(self, fprint_error):
         return self.assertRaisesRegex(GLib.Error,
