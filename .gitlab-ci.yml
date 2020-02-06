@@ -53,6 +53,7 @@ test_dev:
     - meson _build -Db_coverage=true
     - meson test -C _build --verbose --no-stdsplit --timeout-multiplier 3
     - ninja -C _build coverage
+    - cat _build/meson-logs/coverage.txt
   artifacts:
     name: log-and-coverage
     when: always
