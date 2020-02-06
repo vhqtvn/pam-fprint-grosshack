@@ -37,7 +37,7 @@ build_stable:
 build_dev:
   <<: *install_libfprint_dev
   script:
-    - meson _build --werror
+    - meson _build --werror -Dgtk_doc=true
     - ninja -C _build -v
     - ninja -C _build -v install
   artifacts:
