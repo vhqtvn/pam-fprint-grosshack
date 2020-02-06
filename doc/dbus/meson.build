@@ -14,6 +14,7 @@ foreach interface_file: dbus_interfaces_files
     dbus_interfaces_refs += custom_target(basename + '_ref',
         input: docbook_xml_header,
         output: basename + '.ref.xml',
+        build_by_default: true,
         depends: interface_file,
         capture: true,
         command: [
