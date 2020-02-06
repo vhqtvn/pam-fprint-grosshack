@@ -340,6 +340,17 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         return self.assertRaisesRegex(GLib.Error,
             '.*net\.reactivated\.Fprint\.Error\.{}.*'.format(fprint_error))
 
+    def wait_for_result(self, expected=None):
+        self._abort = False
+        while not self._abort:
+            ctx.iteration(True)
+
+        self.assertTrue(self._abort)
+        self._abort = False
+
+        if expected is not None:
+            self.assertEqual(self._last_result, expected)
+
     def test_allowed_claim(self):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
                                       'net.reactivated.fprint.device.enroll'])
@@ -439,9 +450,7 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
         self.send_image('whorl')
 
-        self._abort = False
-        while not self._abort:
-            ctx.iteration(True)
+        self.wait_for_result()
 
         self.assertEqual(self._last_result, 'enroll-completed')
 
@@ -459,9 +468,7 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
         # Try a wrong print; will stop verification
         self.send_image('tented_arch')
-        self._abort = False
-        while not self._abort:
-            ctx.iteration(True)
+        self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-no-match')
 
@@ -470,17 +477,13 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
         # Send a retry error (swipe too short); will not stop verification
         self.send_retry()
-        self._abort = False
-        while not self._abort:
-            ctx.iteration(True)
+        self.wait_for_result()
         self.assertFalse(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-swipe-too-short')
 
         # Try the correct print; will stop verification
         self.send_image('whorl')
-        self._abort = False
-        while not self._abort:
-            ctx.iteration(True)
+        self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
 
@@ -504,9 +507,7 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
         self.send_image('whorl')
 
-        self._abort = False
-        while not self._abort:
-            ctx.iteration(True)
+        self.wait_for_result()
 
         self.assertEqual(self._last_result, 'enroll-completed')
 
