@@ -1,20 +1,20 @@
 image: fedora:rawhide
 
+include:
+  - project: 'libfprint/libfprint'
+    ref: master
+    file: '/.gitlab-ci/libfprint-templates.yaml'
+
 variables:
   DEPENDENCIES: dbus-glib-devel pam-devel polkit-devel
                 gtk-doc meson gettext gcovr
                 gcc gcc-c++ glibc-devel python3-dbusmock python3-libpamtest systemd-devel
   DEPENDENCIES_STABLE: $DEPENDENCIES libfprint-devel
   DEPENDENCIES_DEV: $DEPENDENCIES git
-  # Sync'ed up with https://gitlab.freedesktop.org/libfprint/libfprint/blob/master/.gitlab-ci.yml
-  # and stripped down to remove dependencies that are not strictly needed
-  DEPENDENCIES_LIBFPRINT: libgusb-devel glib2-devel meson
-                          gcc gcc-c++ glibc-devel
-                          gobject-introspection-devel python3-cairo python3-gobject
 
 .install_libfprint_dev: &install_libfprint_dev
   before_script:
-    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES_LIBFPRINT $DEPENDENCIES_DEV
+    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $LIBFPRINT_DEPENDENCIES $DEPENDENCIES_DEV
     - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
     - cd libfprint
     - meson . _build --prefix=/usr -Ddrivers=virtual_image -Ddoc=false
