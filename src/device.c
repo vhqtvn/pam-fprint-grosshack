@@ -1349,7 +1349,8 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GError) error = NULL;
-	char *user, *sender;
+	g_autofree char *user = NULL;
+	char *sender;
 	gboolean opened;
 
 	g_warning ("The API user should be updated to use DeleteEnrolledFingers2 method!");
@@ -1368,7 +1369,6 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 	}
 
 	if (_fprint_device_check_polkit_for_action (rdev, context, "net.reactivated.fprint.device.enroll", &error) == FALSE) {
-		g_free (user);
 		dbus_g_method_return_error (context, error);
 		return;
 	}
@@ -1396,8 +1396,6 @@ static void fprint_device_delete_enrolled_fingers(FprintDevice *rdev,
 
 	if (!opened && fp_device_has_storage (priv->dev))
 		fp_device_close_sync (priv->dev, NULL, NULL);
-
-	g_free (user);
 
 	dbus_g_method_return(context);
 }
