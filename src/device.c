@@ -562,7 +562,7 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 		}
 
 		if (!fp_device_close_sync (priv->dev, NULL, &error))
-			g_warning ("Error closing device after disconnect: %s", error->message);
+			g_debug ("Error closing device after disconnect: %s", error->message);
 
 		g_clear_pointer(&priv->session, session_data_free);
 	}
@@ -714,6 +714,19 @@ static void fprint_device_release(FprintDevice *rdev,
 		dbus_g_method_return_error (context, error);
 		g_error_free(error);
 		return;
+	}
+
+	if (priv->current_cancellable) {
+		if (priv->current_action == ACTION_ENROLL) {
+			g_warning("Enrollment was in progress, stopping it");
+		} else if (priv->current_action == ACTION_IDENTIFY ||
+			   priv->current_action == ACTION_VERIFY) {
+			g_warning("Verification was in progress, stopping it");
+		}
+
+		g_cancellable_cancel (priv->current_cancellable);
+		while (priv->current_action != ACTION_NONE)
+			g_main_context_iteration (NULL, TRUE);
 	}
 
 	priv->session->context = context;
