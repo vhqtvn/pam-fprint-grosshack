@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 # Copyright © 2017, 2019 Red Hat, Inc
+# Copyright © 2020 Canonical Ltd
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -157,12 +158,19 @@ class FPrintdTest(dbusmock.DBusTestCase):
             del os.environ['DBUS_SESSION_BUS_ADDRESS']
         except KeyError:
             pass
-        os.environ['DBUS_SYSTEM_BUS_ADDRESS'] = cls.test_bus.get_bus_address()
-        cls.dbus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        addr = cls.test_bus.get_bus_address()
+        os.environ['DBUS_SYSTEM_BUS_ADDRESS'] = addr
+        cls.dbus = Gio.DBusConnection.new_for_address_sync(addr,
+            Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION |
+            Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT, None, None)
+        assert cls.dbus.is_closed() == False
 
     @classmethod
     def tearDownClass(cls):
+        cls.dbus.close()
         cls.test_bus.down()
+        del cls.dbus
+        del cls.test_bus
         shutil.rmtree(cls.tmpdir)
         dbusmock.DBusTestCase.tearDownClass()
 
