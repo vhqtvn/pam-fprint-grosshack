@@ -154,10 +154,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
         cls.test_bus = Gio.TestDBus.new(Gio.TestDBusFlags.NONE)
         cls.test_bus.up()
-        try:
-            del os.environ['DBUS_SESSION_BUS_ADDRESS']
-        except KeyError:
-            pass
+        cls.test_bus.unset()
         addr = cls.test_bus.get_bus_address()
         os.environ['DBUS_SYSTEM_BUS_ADDRESS'] = addr
         cls.dbus = Gio.DBusConnection.new_for_address_sync(addr,
