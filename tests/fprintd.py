@@ -121,6 +121,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
     @classmethod
     def setUpClass(cls):
+        super().setUpClass()
         fprintd = None
 
         if 'FPRINT_BUILD_DIR' in os.environ:
