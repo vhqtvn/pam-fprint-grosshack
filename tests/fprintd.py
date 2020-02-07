@@ -557,6 +557,71 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.device.Release()
         self.wait_for_result(expected='verify-no-match')
 
+    def test_unallowed_enroll_start(self):
+        self._polkitd_obj.SetAllowed([''])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.EnrollStart('(s)', 'right-index-finger')
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self.enroll_image('whorl')
+
+    def test_unallowed_enroll_stop(self):
+        self.device.EnrollStart('(s)', 'right-index-finger')
+
+        self._polkitd_obj.SetAllowed([''])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.EnrollStop()
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self.device.EnrollStop()
+
+    def test_unallowed_verify_start(self):
+        self._polkitd_obj.SetAllowed([''])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.VerifyStart('(s)', 'any')
+
+    def test_unallowed_verify_stop(self):
+        self.enroll_image('whorl')
+        self.device.VerifyStart('(s)', 'any')
+
+        self._polkitd_obj.SetAllowed([''])
+        with self.assertFprintError('PermissionDenied'):
+            self.device.VerifyStop()
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self.device.VerifyStop()
+
+    def test_unallowed_list_enrolled_fingers(self):
+        self.enroll_image('whorl')
+
+        self._polkitd_obj.SetAllowed([''])
+        with self.assertFprintError('PermissionDenied'):
+            self.device.ListEnrolledFingers('(s)', 'testuser')
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+        with self.assertFprintError('PermissionDenied'):
+            self.device.ListEnrolledFingers('(s)', 'testuser')
+
+    def test_unallowed_delete_enrolled_fingers(self):
+        self.enroll_image('whorl')
+
+        self._polkitd_obj.SetAllowed([''])
+        with self.assertFprintError('PermissionDenied'):
+            self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+        with self.assertFprintError('PermissionDenied'):
+            self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+    def test_unallowed_delete_enrolled_fingers2(self):
+        self.enroll_image('whorl')
+
+        self._polkitd_obj.SetAllowed([''])
+        with self.assertFprintError('PermissionDenied'):
+            self.device.DeleteEnrolledFingers2()
 
 if __name__ == '__main__':
     if len(sys.argv) == 2 and sys.argv[1] == "list-tests":
