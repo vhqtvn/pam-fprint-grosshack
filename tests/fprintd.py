@@ -32,7 +32,8 @@ import socket
 import struct
 import dbusmock
 import gi
-from gi.repository import GLib, Gio
+gi.require_version('FPrint', '2.0')
+from gi.repository import GLib, Gio, FPrint
 import cairo
 
 try:
@@ -263,8 +264,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self.run_dir = os.path.join(self.test_dir, 'run')
 
     # From libfprint tests
-    def send_retry(self, retry_error=1):
-        # The default (1) is too-short
+    def send_retry(self, retry_error=FPrint.DeviceRetry.TOO_SHORT):
         with Connection(self.sockaddr) as con:
             con.sendall(struct.pack('ii', -1, retry_error))
 
@@ -622,6 +622,37 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self._polkitd_obj.SetAllowed([''])
         with self.assertFprintError('PermissionDenied'):
             self.device.DeleteEnrolledFingers2()
+
+
+class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
+
+    def setUp(self):
+        super().setUp()
+        self._abort = False
+        self.device.Claim('(s)', 'testuser')
+        self.device.EnrollStart('(s)', 'left-middle-finger')
+
+    def tearDown(self):
+        self.device.EnrollStop()
+        self.device.Release()
+        super().tearDown()
+
+    def assertEnrollRetry(self, device_error, expected_error):
+        self.send_retry(retry_error=device_error)
+        self.wait_for_result(expected=expected_error)
+
+    def test_enroll_retry_general(self):
+        self.assertEnrollRetry(FPrint.DeviceRetry.GENERAL, 'enroll-retry-scan')
+
+    def test_enroll_retry_too_short(self):
+        self.assertEnrollRetry(FPrint.DeviceRetry.TOO_SHORT, 'enroll-swipe-too-short')
+
+    def test_enroll_retry_remove_finger(self):
+        self.assertEnrollRetry(FPrint.DeviceRetry.REMOVE_FINGER, 'enroll-remove-and-retry')
+
+    def test_enroll_retry_center_finger(self):
+        self.assertEnrollRetry(FPrint.DeviceRetry.CENTER_FINGER, 'enroll-finger-not-centered')
+
 
 if __name__ == '__main__':
     if len(sys.argv) == 2 and sys.argv[1] == "list-tests":

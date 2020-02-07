@@ -125,6 +125,7 @@ python3_test_modules = {
     'dbus': true,
     'dbusmock': true,
     'gi': true,
+    'gi.repository.FPrint': true,
     'pypamtest': get_option('pam'),
 }
 python3_available_modules = []
