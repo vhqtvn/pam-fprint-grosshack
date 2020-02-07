@@ -371,9 +371,9 @@ enroll_result_to_name (gboolean completed, gboolean enrolled, GError *error)
 			case FP_DEVICE_RETRY_CENTER_FINGER:
 				return "enroll-finger-not-centered";
 			case FP_DEVICE_RETRY_REMOVE_FINGER:
-				return "verify-remove-and-retry";
-			default:
 				return "enroll-remove-and-retry";
+			default:
+				return "enroll-retry-scan";
 		}
 	} else {
 		/* Which errors should be mapped to disconnection?
