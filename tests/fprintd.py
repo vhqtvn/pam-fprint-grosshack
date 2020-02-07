@@ -654,6 +654,56 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
         self.assertEnrollRetry(FPrint.DeviceRetry.CENTER_FINGER, 'enroll-finger-not-centered')
 
 
+class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.enroll_finger = 'left-middle-finger'
+        cls.verify_finger = cls.enroll_finger
+
+    def setUp(self):
+        super().setUp()
+        self.device.Claim('(s)', 'testuser')
+        self.enroll_image('whorl', finger=self.enroll_finger)
+        self.device.VerifyStart('(s)', self.verify_finger)
+
+    def tearDown(self):
+        self.device.VerifyStop()
+        self.device.Release()
+        super().tearDown()
+
+    def assertVerifyRetry(self, device_error, expected_error):
+        self.send_retry(retry_error=device_error)
+        self.wait_for_result()
+        self.assertFalse(self._verify_stopped)
+        self.assertEqual(self._last_result, expected_error)
+
+    def test_verify_retry_general(self):
+        self.assertVerifyRetry(FPrint.DeviceRetry.GENERAL, 'verify-retry-scan')
+
+    def test_verify_retry_too_short(self):
+        self.assertVerifyRetry(FPrint.DeviceRetry.TOO_SHORT, 'verify-swipe-too-short')
+
+    def test_verify_retry_remove_finger(self):
+        self.assertVerifyRetry(FPrint.DeviceRetry.REMOVE_FINGER, 'verify-remove-and-retry')
+
+    def test_verify_retry_center_finger(self):
+        self.assertVerifyRetry(FPrint.DeviceRetry.CENTER_FINGER, 'verify-finger-not-centered')
+
+
+class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTests):
+    '''This class will just repeat the tests of FPrintdVirtualDeviceVerificationTests
+    but with 'any' finger parameter (leading to an identification, when possible
+    under the hood).
+    '''
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verify_finger = 'any'
+
+
 if __name__ == '__main__':
     if len(sys.argv) == 2 and sys.argv[1] == "list-tests":
         for machine, human in list_tests():
