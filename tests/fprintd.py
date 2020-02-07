@@ -185,7 +185,6 @@ class FPrintdTest(dbusmock.DBusTestCase):
                                        env=env,
                                        stdout=None,
                                        stderr=subprocess.STDOUT)
-        self.device = None
 
         timeout_count = timeout * 10
         timeout_sleep = 0.1
@@ -326,6 +325,9 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
         self.daemon_stop()
         self.polkitd_stop()
+
+        del self.manager
+        del self.device
 
         super().tearDown()
 
