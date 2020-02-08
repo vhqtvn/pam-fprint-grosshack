@@ -262,6 +262,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self.addCleanup(shutil.rmtree, self.test_dir)
         self.state_dir = os.path.join(self.test_dir, 'state')
         self.run_dir = os.path.join(self.test_dir, 'run')
+        os.environ['FP_DRIVERS_WHITELIST'] = 'virtual_image'
 
     # From libfprint tests
     def send_retry(self, retry_error=FPrint.DeviceRetry.TOO_SHORT):
