@@ -397,6 +397,30 @@ class FPrintdManagerPreStartTests(FPrintdTest):
         with self.assertFprintError('NoSuchDevice'):
             self.manager.GetDefaultDevice()
 
+    def test_manager_get_devices_on_name_appeared(self):
+        self._appeared = False
+
+        def on_name_appeared(connection, name, name_owner):
+            self._appeared = True
+            dev_path = connection.call_sync('net.reactivated.Fprint',
+                '/net/reactivated/Fprint/Manager',
+                'net.reactivated.Fprint.Manager',
+                'GetDefaultDevice', None, None,
+                Gio.DBusCallFlags.NO_AUTO_START, 500, None)
+            self.assertIsNotNone(dev_path)
+            self.assertTrue(dev_path.startswith('/net/reactivated/Fprint/Device/'))
+
+        id = Gio.bus_watch_name_on_connection(self.dbus,
+            'net.reactivated.Fprint', Gio.BusNameWatcherFlags.NONE,
+            on_name_appeared, None)
+
+        self.daemon_start()
+        while not self._appeared:
+            ctx.iteration(True)
+
+        self.assertTrue(self._appeared)
+        Gio.bus_unwatch_name(id)
+
 
 class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
