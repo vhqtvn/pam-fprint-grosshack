@@ -368,6 +368,36 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         self.assertEqual(self._last_result, 'enroll-completed')
 
 
+class FPrintdManagerTests(FPrintdVirtualDeviceBaseTest):
+
+    def setUp(self):
+        super().setUp()
+        self._polkitd_obj.SetAllowed([''])
+
+    def test_manager_get_devices(self):
+        self.assertListEqual(self.manager.GetDevices(),
+            [ self.device.get_object_path() ])
+
+    def test_manager_get_default_device(self):
+        self.assertEqual(self.manager.GetDefaultDevice(),
+            self.device.get_object_path())
+
+
+class FPrintdManagerPreStartTests(FPrintdTest):
+
+    def test_manager_get_no_devices(self):
+        os.environ['FP_DRIVERS_WHITELIST'] = 'hopefully_no_existing_driver'
+        self.daemon_start()
+        self.assertListEqual(self.manager.GetDevices(), [])
+
+    def test_manager_get_no_default_device(self):
+        os.environ['FP_DRIVERS_WHITELIST'] = 'hopefully_no_existing_driver'
+        self.daemon_start()
+
+        with self.assertFprintError('NoSuchDevice'):
+            self.manager.GetDefaultDevice()
+
+
 class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
     def test_allowed_claim(self):
