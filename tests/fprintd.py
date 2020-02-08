@@ -269,6 +269,11 @@ class FPrintdTest(dbusmock.DBusTestCase):
             con.sendall(struct.pack('ii', -1, retry_error))
 
     # From libfprint tests
+    def send_error(self, error=FPrint.DeviceError.GENERAL):
+        with Connection(self.sockaddr) as con:
+            con.sendall(struct.pack('ii', -2, error))
+
+    # From libfprint tests
     def send_image(self, image):
         img = self.prints[image]
         with Connection(self.sockaddr) as con:
@@ -641,6 +646,10 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
         self.send_retry(retry_error=device_error)
         self.wait_for_result(expected=expected_error)
 
+    def assertEnrollError(self, device_error, expected_error):
+        self.send_error(error=device_error)
+        self.wait_for_result(expected=expected_error)
+
     def test_enroll_retry_general(self):
         self.assertEnrollRetry(FPrint.DeviceRetry.GENERAL, 'enroll-retry-scan')
 
@@ -652,6 +661,33 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
 
     def test_enroll_retry_center_finger(self):
         self.assertEnrollRetry(FPrint.DeviceRetry.CENTER_FINGER, 'enroll-finger-not-centered')
+
+    def test_enroll_error_general(self):
+        self.assertEnrollError(FPrint.DeviceError.GENERAL, 'enroll-unknown-error')
+
+    def test_enroll_error_not_supported(self):
+        self.assertEnrollError(FPrint.DeviceError.NOT_SUPPORTED, 'enroll-unknown-error')
+
+    def test_enroll_error_not_open(self):
+        self.assertEnrollError(FPrint.DeviceError.NOT_OPEN, 'enroll-unknown-error')
+
+    def test_enroll_error_already_open(self):
+        self.assertEnrollError(FPrint.DeviceError.ALREADY_OPEN, 'enroll-unknown-error')
+
+    def test_enroll_error_busy(self):
+        self.assertEnrollError(FPrint.DeviceError.BUSY, 'enroll-unknown-error')
+
+    def test_enroll_error_proto(self):
+        self.assertEnrollError(FPrint.DeviceError.PROTO, 'enroll-disconnected')
+
+    def test_enroll_error_data_invalid(self):
+        self.assertEnrollError(FPrint.DeviceError.DATA_INVALID, 'enroll-unknown-error')
+
+    def test_enroll_error_data_not_found(self):
+        self.assertEnrollError(FPrint.DeviceError.DATA_NOT_FOUND, 'enroll-unknown-error')
+
+    def test_enroll_error_data_full(self):
+        self.assertEnrollError(FPrint.DeviceError.DATA_FULL, 'enroll-data-full')
 
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
@@ -679,6 +715,12 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         self.assertFalse(self._verify_stopped)
         self.assertEqual(self._last_result, expected_error)
 
+    def assertVerifyError(self, device_error, expected_error):
+        self.send_error(error=device_error)
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, expected_error)
+
     def test_verify_retry_general(self):
         self.assertVerifyRetry(FPrint.DeviceRetry.GENERAL, 'verify-retry-scan')
 
@@ -690,6 +732,33 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
     def test_verify_retry_center_finger(self):
         self.assertVerifyRetry(FPrint.DeviceRetry.CENTER_FINGER, 'verify-finger-not-centered')
+
+    def test_verify_error_general(self):
+        self.assertVerifyError(FPrint.DeviceError.GENERAL, 'verify-unknown-error')
+
+    def test_verify_error_not_supported(self):
+        self.assertVerifyError(FPrint.DeviceError.NOT_SUPPORTED, 'verify-unknown-error')
+
+    def test_verify_error_not_open(self):
+        self.assertVerifyError(FPrint.DeviceError.NOT_OPEN, 'verify-unknown-error')
+
+    def test_verify_error_already_open(self):
+        self.assertVerifyError(FPrint.DeviceError.ALREADY_OPEN, 'verify-unknown-error')
+
+    def test_verify_error_busy(self):
+        self.assertVerifyError(FPrint.DeviceError.BUSY, 'verify-unknown-error')
+
+    def test_verify_error_proto(self):
+        self.assertVerifyError(FPrint.DeviceError.PROTO, 'verify-disconnected')
+
+    def test_verify_error_data_invalid(self):
+        self.assertVerifyError(FPrint.DeviceError.DATA_INVALID, 'verify-unknown-error')
+
+    def test_verify_error_data_not_found(self):
+        self.assertVerifyError(FPrint.DeviceError.DATA_NOT_FOUND, 'verify-unknown-error')
+
+    def test_verify_error_data_full(self):
+        self.assertVerifyError(FPrint.DeviceError.DATA_FULL, 'verify-unknown-error')
 
 
 class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTests):
