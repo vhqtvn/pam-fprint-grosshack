@@ -264,6 +264,10 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self.run_dir = os.path.join(self.test_dir, 'run')
         os.environ['FP_DRIVERS_WHITELIST'] = 'virtual_image'
 
+    def assertFprintError(self, fprint_error):
+        return self.assertRaisesRegex(GLib.Error,
+            '.*net\.reactivated\.Fprint\.Error\.{}.*'.format(fprint_error))
+
     # From libfprint tests
     def send_retry(self, retry_error=FPrint.DeviceRetry.TOO_SHORT):
         with Connection(self.sockaddr) as con:
@@ -337,10 +341,6 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         del self.device
 
         super().tearDown()
-
-    def assertFprintError(self, fprint_error):
-        return self.assertRaisesRegex(GLib.Error,
-            '.*net\.reactivated\.Fprint\.Error\.{}.*'.format(fprint_error))
 
     def wait_for_result(self, expected=None):
         self._abort = False
