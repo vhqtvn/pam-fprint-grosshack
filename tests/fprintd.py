@@ -256,11 +256,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.test_dir)
         self.state_dir = os.path.join(self.test_dir, 'state')
         self.run_dir = os.path.join(self.test_dir, 'run')
-
-    def tearDown(self):
-        shutil.rmtree(self.test_dir)
 
     # From libfprint tests
     def send_retry(self, retry_error=1):
