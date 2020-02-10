@@ -53,7 +53,7 @@ i18n = import('i18n')
 cc = meson.get_compiler('c')
 host_system = host_machine.system()
 glib_min_version = '2.56'
-libfprint_min_version = '1.90.0'
+libfprint_min_version = '1.90.1'
 
 fprintd_installdir = get_option('prefix') / get_option('libexecdir')
 fprintd_plugindir = get_option('prefix') / get_option('libdir') / meson.project_name() / 'modules'
