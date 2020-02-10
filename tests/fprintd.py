@@ -501,6 +501,13 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
 
+    def test_claim_device_open_fail(self):
+        os.rename(self.tmpdir, self.tmpdir + '-moved')
+        self.addCleanup(os.rename, self.tmpdir + '-moved', self.tmpdir)
+
+        with self.assertFprintError('Internal'):
+            self.device.Claim('(s)', 'testuser')
+
 
 class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
 
