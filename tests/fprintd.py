@@ -353,7 +353,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         if expected is not None:
             self.assertEqual(self._last_result, expected)
 
-    def enroll_image(self, img, finger='right-index-finger'):
+    def enroll_image(self, img, finger='right-index-finger', expected_result='enroll-completed'):
         self.device.EnrollStart('(s)', finger)
 
         stages = self.device.get_cached_property('num-enroll-stages').unpack()
@@ -365,7 +365,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
                 self.wait_for_result('enroll-completed')
 
         self.device.EnrollStop()
-        self.assertEqual(self._last_result, 'enroll-completed')
+        self.assertEqual(self._last_result, expected_result)
 
 
 class FPrintdManagerTests(FPrintdVirtualDeviceBaseTest):
@@ -584,6 +584,11 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.device.DeleteEnrolledFingers2()
 
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+
+    def test_enroll_invalid_storage_dir(self):
+        os.makedirs(self.state_dir, mode=0o500)
+        self.addCleanup(os.chmod, self.state_dir, mode=0o700)
+        self.enroll_image('whorl', expected_result='enroll-failed')
 
     def test_enroll_stop_cancels(self):
         self.device.EnrollStart('(s)', 'left-index-finger')
