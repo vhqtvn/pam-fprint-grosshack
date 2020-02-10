@@ -1,5 +1,8 @@
 mapfile = files('pam_fprintd.ver')
-pam_modules_dir = '/' + get_option('libdir') / 'security'
+pam_modules_dir = get_option('pam_modules_dir')
+if pam_modules_dir == ''
+    pam_modules_dir = '/' / get_option('libdir') / 'security'
+endif
 
 pam_fprintd = shared_module('pam_fprintd',
     name_prefix: '',

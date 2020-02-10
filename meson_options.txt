@@ -12,6 +12,9 @@ option('systemd_system_unit_dir',
 option('dbus_service_dir',
     description: 'Directory for dbus service files',
     type: 'string')
+option('pam_modules_dir',
+    description: 'Directory for PAM modules',
+    type: 'string')
 option('gtk_doc',
     type: 'boolean',
     value: false,
