@@ -27,6 +27,7 @@ import os.path
 import sys
 import tempfile
 import glob
+import pwd
 import shutil
 import socket
 import struct
@@ -255,7 +256,8 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self._polkitd.terminate()
         self._polkitd.wait()
 
-
+    def get_current_user(self):
+        return pwd.getpwuid(os.getuid()).pw_name
 
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
@@ -430,6 +432,34 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         self.device.Claim('(s)', 'testuser')
         self.device.Release()
 
+    def test_allowed_claim_current_user(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self.device.Claim('(s)', '')
+        self.device.Release()
+
+        self.device.Claim('(s)', self.get_current_user())
+        self.device.Release()
+
+    def test_allowed_list_enrolled_fingers_empty_user(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self.device.Claim('(s)', '')
+        self.enroll_image('whorl', finger='left-thumb')
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+
+        self.assertEqual(self.device.ListEnrolledFingers('(s)', ''), ['left-thumb'])
+        self.assertEqual(self.device.ListEnrolledFingers('(s)', self.get_current_user()), ['left-thumb'])
+
+    def test_allowed_list_enrolled_fingers_current_user(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self.device.Claim('(s)', self.get_current_user())
+        self.enroll_image('whorl', finger='right-thumb')
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+
+        self.assertEqual(self.device.ListEnrolledFingers('(s)', ''), ['right-thumb'])
+        self.assertEqual(self.device.ListEnrolledFingers('(s)', self.get_current_user()), ['right-thumb'])
+
     def test_unallowed_claim(self):
         self._polkitd_obj.SetAllowed([''])
 
@@ -445,6 +475,15 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
         with self.assertFprintError('PermissionDenied'):
             self.device.Claim('(s)', 'testuser')
+
+    def test_unallowed_claim_current_user(self):
+        self._polkitd_obj.SetAllowed([''])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.Claim('(s)', '')
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.Claim('(s)', self.get_current_user())
 
     def test_multiple_claims(self):
         self.device.Claim('(s)', 'testuser')
@@ -677,6 +716,16 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
         self.device.VerifyStop()
 
+    def test_list_enrolled_fingers_current_user(self):
+        self.enroll_image('whorl')
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.ListEnrolledFingers('(s)', '')
+
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.ListEnrolledFingers('(s)', self.get_current_user())
+
     def test_unallowed_list_enrolled_fingers(self):
         self.enroll_image('whorl')
 
@@ -687,6 +736,23 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
         with self.assertFprintError('PermissionDenied'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
+
+    def test_unallowed_list_enrolled_fingers_current_user(self):
+        self.enroll_image('whorl')
+
+        self._polkitd_obj.SetAllowed([''])
+        with self.assertFprintError('PermissionDenied'):
+            self.device.ListEnrolledFingers('(s)', '')
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.ListEnrolledFingers('(s)', self.get_current_user())
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+        with self.assertFprintError('PermissionDenied'):
+            self.device.ListEnrolledFingers('(s)', '')
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.ListEnrolledFingers('(s)', self.get_current_user())
 
     def test_unallowed_delete_enrolled_fingers(self):
         self.enroll_image('whorl')
