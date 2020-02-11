@@ -794,7 +794,7 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_assert (!!success == !error);
 	name = verify_result_to_name (match != NULL, error);
 
-	g_debug("verify_cb: result %s", name);
+	g_debug("identify_cb: result %s", name);
 
 	set_disconnected (priv, name);
 
