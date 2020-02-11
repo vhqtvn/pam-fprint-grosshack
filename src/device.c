@@ -112,8 +112,6 @@ typedef struct {
 	FprintDeviceAction current_action;
 	GCancellable *current_cancellable;
 	DBusGMethodInvocation *current_cancel_context;
-	/* Whether the device was disconnected */
-	gboolean disconnected;
 } FprintDevicePrivate;
 
 G_DEFINE_TYPE_WITH_CODE(FprintDevice, fprint_device, G_TYPE_OBJECT, G_ADD_PRIVATE (FprintDevice));
@@ -388,14 +386,6 @@ enroll_result_to_name (gboolean completed, gboolean enrolled, GError *error)
 
 		return "enroll-unknown-error";
 	}
-}
-
-static void
-set_disconnected (FprintDevicePrivate *priv, const char *res)
-{
-	if (g_str_equal (res, "enroll-disconnected") ||
-	    g_str_equal (res, "verify-disconnected"))
-		priv->disconnected = TRUE;
 }
 
 static gboolean
@@ -748,8 +738,6 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 
 	g_debug("verify_cb: result %s", name);
 
-	set_disconnected (priv, name);
-
 	/* Automatically restart the operation for retry failures */
 	if (error && error->domain == FP_DEVICE_RETRY) {
 		g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, FALSE);
@@ -795,8 +783,6 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	name = verify_result_to_name (match != NULL, error);
 
 	g_debug("identify_cb: result %s", name);
-
-	set_disconnected (priv, name);
 
 	/* Automatically restart the operation for retry failures */
 	if (error && error->domain == FP_DEVICE_RETRY) {
@@ -1126,8 +1112,6 @@ static void enroll_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		if (r < 0)
 			name = "enroll-failed";
 	}
-
-	set_disconnected (priv, name);
 
 	g_signal_emit(rdev, signals[SIGNAL_ENROLL_STATUS], 0, name, TRUE);
 
