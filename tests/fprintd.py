@@ -293,6 +293,22 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
             con.sendall(encoded_img)
 
+    def call_device_method_from_other_client(self, method, args=[]):
+        try:
+            return subprocess.check_output([
+                'gdbus',
+                'call',
+                '--system',
+                '--dest',
+                self.device.get_name(),
+                '--object-path',
+                self.device.get_object_path(),
+                '--method',
+                '{}.{}'.format(self.device.get_interface_name(), method),
+            ] + args, stderr=subprocess.STDOUT, timeout=5)
+        except subprocess.CalledProcessError as e:
+            raise GLib.GError(e.output)
+
 
 class FPrintdVirtualDeviceBaseTest(FPrintdTest):
 
@@ -546,6 +562,11 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
         with self.assertFprintError('Internal'):
             self.device.Claim('(s)', 'testuser')
+
+    def test_claim_from_other_client_is_released_when_vanished(self):
+        self.call_device_method_from_other_client('Claim', ['testuser'])
+        self.device.Claim('(s)', 'testuser')
+        self.device.Release()
 
 
 class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
@@ -821,6 +842,26 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('PermissionDenied'):
             self.device.DeleteEnrolledFingers2()
 
+    def test_delete_enrolled_fingers_from_other_client(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.call_device_method_from_other_client('DeleteEnrolledFingers', ['testuser'])
+
+    def test_release_from_other_client(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.call_device_method_from_other_client('Release')
+
+    def test_enroll_start_from_other_client(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.call_device_method_from_other_client('EnrollStart', ['left-index-finger'])
+
+    def test_verify_start_from_other_client(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.call_device_method_from_other_client('VerifyStart', ['any'])
+
+    def test_verify_start_finger_from_other_client(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.call_device_method_from_other_client('VerifyStart', ['left-thumb'])
+
 
 class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
 
@@ -897,6 +938,10 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
     def test_verify_stop_during_enroll(self):
         with self.assertFprintError('AlreadyInUse'):
             self.device.VerifyStop()
+
+    def test_enroll_stop_from_other_client(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.call_device_method_from_other_client('EnrollStop')
 
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
@@ -980,6 +1025,10 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
     def test_enroll_stop_during_verify(self):
         with self.assertFprintError('AlreadyInUse'):
             self.device.EnrollStop()
+
+    def test_verify_stop_from_other_client(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.call_device_method_from_other_client('VerifyStop')
 
 
 class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTests):
