@@ -1043,6 +1043,72 @@ class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTe
         cls.verify_finger = 'any'
 
 
+class FPrintdUtilsTest(FPrintdVirtualDeviceBaseTest):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        utils = {
+            'delete': None,
+            'enroll': None,
+            'list': None,
+            'verify': None,
+        }
+
+        for util in utils:
+            util_bin = 'fprintd-{}'.format(util)
+            if 'FPRINT_BUILD_DIR' in os.environ:
+                print('Testing local build')
+                build_dir = os.environ['FPRINT_BUILD_DIR']
+                path = os.path.join(build_dir, '../utils', util_bin)
+            elif 'UNDER_JHBUILD' in os.environ:
+                print('Testing JHBuild version')
+                jhbuild_prefix = os.environ['JHBUILD_PREFIX']
+                path = os.path.join(jhbuild_prefix, 'bin', util_bin)
+
+            assert os.path.exists(path), 'failed to find {} in {}'.format(util, path)
+            utils[util] = path
+
+        cls.utils = utils
+        cls.utils_proc = {}
+
+    def util_start(self, name, args=[]):
+        env = os.environ.copy()
+        env['G_DEBUG'] = 'fatal-criticals'
+        env['STATE_DIRECTORY'] = self.state_dir
+        env['RUNTIME_DIRECTORY'] = self.run_dir
+
+        argv = [self.utils[name]] + args
+        valgrind = os.getenv('VALGRIND')
+        if valgrind is not None:
+            argv.insert(0, 'valgrind')
+            argv.insert(1, '--leak-check=full')
+            if os.path.exists(valgrind):
+                argv.insert(2, '--suppressions=%s' % valgrind)
+            self.valgrind = True
+        self.utils_proc[name] = subprocess.Popen(argv,
+                                                 env=env,
+                                                 stdout=None,
+                                                 stderr=subprocess.STDOUT)
+        self.addCleanup(self.utils_proc[name].terminate)
+        self.addCleanup(self.utils_proc[name].wait)
+        return self.utils_proc[name]
+
+    def test_vanished_client_operation_is_cancelled(self):
+        self.device.Claim('(s)', self.get_current_user())
+        self.enroll_image('whorl')
+        self.device.Release()
+
+        verify = self.util_start('verify')
+        time.sleep(1)
+        verify.terminate()
+        self.assertLess(verify.wait(), 128)
+        time.sleep(1)
+
+        self.device.Claim('(s)', self.get_current_user())
+        self.device.Release()
+
+
 if __name__ == '__main__':
     if len(sys.argv) == 2 and sys.argv[1] == "list-tests":
         for machine, human in list_tests():
