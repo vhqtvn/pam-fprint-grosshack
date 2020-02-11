@@ -590,6 +590,13 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.addCleanup(os.chmod, self.state_dir, mode=0o700)
         self.enroll_image('whorl', expected_result='enroll-failed')
 
+    def test_verify_invalid_storage_dir(self):
+        self.enroll_image('whorl')
+        os.chmod(self.state_dir, mode=0o000)
+        self.addCleanup(os.chmod, self.state_dir, mode=0o700)
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.VerifyStart('(s)', 'any')
+
     def test_enroll_stop_cancels(self):
         self.device.EnrollStart('(s)', 'left-index-finger')
         self.device.EnrollStop()
