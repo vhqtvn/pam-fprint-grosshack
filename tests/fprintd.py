@@ -841,6 +841,22 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
     def test_enroll_error_data_full(self):
         self.assertEnrollError(FPrint.DeviceError.DATA_FULL, 'enroll-data-full')
 
+    def test_enroll_start_during_enroll(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.EnrollStart('(s)', 'left-thumb')
+
+    def test_verify_start_during_enroll(self):
+        self.device.EnrollStop()
+        self.wait_for_result()
+        self.enroll_image('whorl')
+        self.device.EnrollStart('(s)', 'right-thumb')
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.VerifyStart('(s)', 'any')
+
+    def test_verify_stop_during_enroll(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.VerifyStop()
+
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
@@ -911,6 +927,18 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
     def test_verify_error_data_full(self):
         self.assertVerifyError(FPrint.DeviceError.DATA_FULL, 'verify-unknown-error')
+
+    def test_verify_start_during_verify(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.VerifyStart('(s)', self.verify_finger)
+
+    def test_enroll_start_during_verify(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.EnrollStart('(s)', 'right-thumb')
+
+    def test_enroll_stop_during_verify(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.EnrollStop()
 
 
 class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTests):
