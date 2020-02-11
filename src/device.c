@@ -93,6 +93,8 @@ typedef struct {
 	/* The current user of the device, or if allowed,
 	 * what was passed as a username argument */
 	char *username;
+
+	gboolean verify_status_reported;
 } SessionData;
 
 typedef struct {
@@ -733,6 +735,52 @@ static void fprint_device_release(FprintDevice *rdev,
 	fp_device_close (priv->dev, NULL, (GAsyncReadyCallback) dev_close_cb, rdev);
 }
 
+static void report_verify_status (FprintDevice *rdev,
+				  gboolean match,
+				  GError *error)
+{
+	FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+	const char *result = verify_result_to_name (match, error);
+	gboolean done;
+
+	done = (error == NULL || error->domain != FP_DEVICE_RETRY);
+
+	if (done && priv->session->verify_status_reported) {
+		/* It is completely fine for cancellation to occur after a
+		 * result has been reported. */
+		if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+			g_warning ("Verify status already reported. Ignoring %s", result);
+		return;
+	}
+
+	g_debug ("report_verify_status: result %s", result);
+	g_signal_emit (rdev, signals[SIGNAL_VERIFY_STATUS], 0, result, done);
+
+	if (done)
+		priv->session->verify_status_reported = TRUE;
+}
+
+static void match_cb (FpDevice *device,
+		      FpPrint *match,
+		      FpPrint *print,
+		      gpointer user_data,
+		      GError *error)
+{
+	FprintDevice *rdev = user_data;
+	FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+	gboolean matched;
+	gboolean cancelled;
+
+	g_assert_true (error == NULL || error->domain == FP_DEVICE_RETRY);
+
+	cancelled = g_cancellable_is_cancelled (priv->current_cancellable);
+	matched = match != NULL && cancelled == FALSE;
+
+	/* No-match is reported only after the operation completes.
+	 * This avoids problems when the operation is immediately restarted. */
+	report_verify_status (rdev, matched, error);
+}
+
 static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
@@ -750,29 +798,33 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 
 	/* Automatically restart the operation for retry failures */
 	if (error && error->domain == FP_DEVICE_RETRY) {
-		g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, FALSE);
-
-		/* TODO: Support early match result callback from libfprint */
 		fp_device_verify (priv->dev,
 				  priv->verify_data,
 				  priv->current_cancellable,
-				  NULL, NULL, NULL,
+				  match_cb, rdev, NULL,
 				  (GAsyncReadyCallback) verify_cb,
 				  rdev);
 	} else {
 		g_clear_object (&priv->verify_data);
-		g_signal_emit(rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, TRUE);
 
-		if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-			g_warning ("Device reported an error during verify: %s", error->message);
+		if (error) {
+			report_verify_status (rdev, FALSE, error);
+
+			if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+				g_warning ("Device reported an error during verify: %s",
+					   error->message);
+			}
+		}
 
 		/* Return the cancellation or reset action right away if vanished. */
 		if (priv->current_cancel_context) {
 			dbus_g_method_return(priv->current_cancel_context);
 			priv->current_cancel_context = NULL;
 			priv->current_action = ACTION_NONE;
+			priv->session->verify_status_reported = FALSE;
 		} else if (g_cancellable_is_cancelled (priv->current_cancellable)) {
 			priv->current_action = ACTION_NONE;
+			priv->session->verify_status_reported = FALSE;
 		}
 
 		g_clear_object (&priv->current_cancellable);
@@ -796,21 +848,23 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 
 	/* Automatically restart the operation for retry failures */
 	if (error && error->domain == FP_DEVICE_RETRY) {
-		g_signal_emit (rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, FALSE);
-
-		/* TODO: Support early match result callback from libfprint */
 		fp_device_identify (priv->dev,
 				    priv->identify_data,
 				    priv->current_cancellable,
-				    NULL, NULL, NULL,
+				    match_cb, rdev, NULL,
 				    (GAsyncReadyCallback) identify_cb,
 				    rdev);
 	} else {
 		g_clear_pointer (&priv->identify_data, g_ptr_array_unref);
-		g_signal_emit (rdev, signals[SIGNAL_VERIFY_STATUS], 0, name, TRUE);
 
-		if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-			g_warning ("Device reported an error during identify: %s", error->message);
+		if (error) {
+			report_verify_status (rdev, FALSE, error);
+
+			if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+				g_warning ("Device reported an error during identify: %s",
+					   error->message);
+			}
+		}
 
 		/* Return the cancellation or reset action right away if vanished. */
 		if (priv->current_cancel_context) {
@@ -819,6 +873,7 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 			priv->current_action = ACTION_NONE;
 		} else if (g_cancellable_is_cancelled (priv->current_cancellable)) {
 			priv->current_action = ACTION_NONE;
+			priv->session->verify_status_reported = FALSE;
 		}
 
 		g_clear_object (&priv->current_cancellable);
@@ -897,9 +952,8 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 		g_debug ("start identification device %d", priv->id);
 		priv->current_cancellable = g_cancellable_new ();
 		priv->identify_data = g_ptr_array_ref (gallery);
-		/* TODO: Support early match result callback from libfprint */
 		fp_device_identify (priv->dev, gallery, priv->current_cancellable,
-		                    NULL, NULL, NULL,
+				    match_cb, rdev, NULL,
 		                    (GAsyncReadyCallback) identify_cb, rdev);
 	} else {
 		priv->current_action = ACTION_VERIFY;
@@ -918,9 +972,8 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 
 		priv->current_cancellable = g_cancellable_new ();
 		priv->verify_data = g_object_ref (print);
-		/* TODO: Support early match result callback from libfprint */
 		fp_device_verify (priv->dev, print, priv->current_cancellable,
-		                  NULL, NULL, NULL,
+				  match_cb, rdev, NULL,
 		                  (GAsyncReadyCallback) verify_cb, rdev);
 	}
 
@@ -971,6 +1024,7 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 	} else {
 		dbus_g_method_return (context);
 		priv->current_action = ACTION_NONE;
+		priv->session->verify_status_reported = FALSE;
 	}
 }
 
