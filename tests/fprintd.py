@@ -653,11 +653,15 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
     def test_enroll_invalid_storage_dir(self):
+        if 'CI_PROJECT_NAME' in os.environ:
+            self.skipTest('Permissions aren\'t respected in CI environment')
         os.makedirs(self.state_dir, mode=0o500)
         self.addCleanup(os.chmod, self.state_dir, mode=0o700)
         self.enroll_image('whorl', expected_result='enroll-failed')
 
     def test_verify_invalid_storage_dir(self):
+        if 'CI_PROJECT_NAME' in os.environ:
+            self.skipTest('Permissions aren\'t respected in CI environment')
         self.enroll_image('whorl')
         os.chmod(self.state_dir, mode=0o000)
         self.addCleanup(os.chmod, self.state_dir, mode=0o700)
