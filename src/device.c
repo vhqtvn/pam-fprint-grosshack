@@ -914,7 +914,7 @@ static void fprint_device_verify_start(FprintDevice *rdev,
 				      priv->session->username, &print);
 
 		if (!print) {
-			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
+			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
 				    "No such print %d", finger_num);
 			dbus_g_method_return_error(context, error);
 			return;
