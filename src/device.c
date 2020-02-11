@@ -960,6 +960,12 @@ static void fprint_device_verify_stop(FprintDevice *rdev,
 		dbus_g_method_return_error(context, error);
 		g_error_free (error);
 		return;
+	} else if (priv->current_action == ACTION_ENROLL) {
+		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+			    "Enrollment in progress");
+		dbus_g_method_return_error(context, error);
+		g_error_free (error);
+		return;
 	}
 
 	if (priv->current_cancellable) {
@@ -1213,8 +1219,17 @@ static void fprint_device_enroll_stop(FprintDevice *rdev,
 	}
 
 	if (priv->current_action != ACTION_ENROLL) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
-			    "No enrollment in progress");
+		if (priv->current_action == ACTION_NONE) {
+			g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
+				     "No enrollment in progress");
+		} else if (priv->current_action == ACTION_VERIFY) {
+			g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				     "Verification in progress");
+		} else if (priv->current_action == ACTION_IDENTIFY) {
+			g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				     "Identification in progress");
+		} else
+			g_assert_not_reached ();
 		dbus_g_method_return_error(context, error);
 		g_error_free (error);
 		return;
