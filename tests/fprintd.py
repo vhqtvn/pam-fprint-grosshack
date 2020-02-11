@@ -687,6 +687,47 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('NoActionInProgress'):
             self.device.VerifyStop()
 
+    def test_verify_finger_match(self):
+        self.enroll_image('whorl', finger='left-thumb')
+        self.device.VerifyStart('(s)', 'left-thumb')
+        self.send_image('whorl')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-match')
+        self.device.VerifyStop()
+
+    def test_verify_finger_no_match(self):
+        self.enroll_image('whorl', finger='left-thumb')
+        self.device.VerifyStart('(s)', 'left-thumb')
+        self.send_image('tented_arch')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-no-match')
+        self.device.VerifyStop()
+
+    def test_verify_wrong_finger_match(self):
+        self.enroll_image('whorl', finger='left-thumb')
+        self.device.VerifyStart('(s)', 'left-toe')
+        self.send_image('whorl')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-match')
+        self.device.VerifyStop()
+
+    def test_verify_wrong_finger_no_match(self):
+        self.enroll_image('whorl', finger='right-thumb')
+        self.device.VerifyStart('(s)', 'right-toe')
+        self.send_image('tented_arch')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-no-match')
+        self.device.VerifyStop()
+
+    def test_verify_finger_not_enrolled(self):
+        self.enroll_image('whorl', finger='left-thumb')
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.VerifyStart('(s)', 'right-thumb')
+
     def test_unallowed_enroll_start(self):
         self._polkitd_obj.SetAllowed([''])
 
