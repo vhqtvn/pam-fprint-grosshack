@@ -344,7 +344,7 @@ verify_result_to_name (gboolean match, GError *error)
 		 * Are drivers/libfprint/fprintd really in agreement here?
 		 */
 		if (g_error_matches (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_PROTO))
-			return "verify-disconnect";
+			return "verify-disconnected";
 		else if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
 			return "verify-no-match";
 
