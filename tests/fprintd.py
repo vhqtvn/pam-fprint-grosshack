@@ -679,6 +679,14 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.device.Release()
         self.wait_for_result(expected='verify-no-match')
 
+    def test_enroll_stop_not_started(self):
+        with self.assertFprintError('NoActionInProgress'):
+            self.device.EnrollStop()
+
+    def test_verify_stop_not_started(self):
+        with self.assertFprintError('NoActionInProgress'):
+            self.device.VerifyStop()
+
     def test_unallowed_enroll_start(self):
         self._polkitd_obj.SetAllowed([''])
 
