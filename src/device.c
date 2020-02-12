@@ -767,11 +767,11 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
+	g_autoptr(FpPrint) match = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	const char *name;
 	gboolean success;
-	FpPrint *match;
 
 	success = fp_device_identify_finish (dev, res, &match, NULL, &error);
 	g_assert (!!success == !error);
