@@ -177,5 +177,7 @@ output += '  PAM module: ' + pam_dep.found().to_string()
 output += '  Manuals: ' + get_option('man').to_string()
 output += '  GTK Doc: ' + get_option('gtk_doc').to_string()
 output += '  XML Linter ' + xmllint.found().to_string()
+output += '\nTest setup:\n'
+output += '  With address sanitizer: ' + address_sanitizer.to_string()
 
 message('\n'+'\n'.join(output)+'\n')

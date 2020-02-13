@@ -4,10 +4,15 @@ tests = [
     'test_pam_fprintd',
 ]
 
-preloaded_libs = [
-    'pam_wrapper'
-]
+preloaded_libs = []
 pam_tests_ld_preload = []
+
+if address_sanitizer
+    # ASAN has to be the first in list
+    preloaded_libs += 'asan'
+endif
+
+preloaded_libs += 'pam_wrapper'
 
 foreach libname: preloaded_libs
     lib = run_command(meson.get_compiler('c'),

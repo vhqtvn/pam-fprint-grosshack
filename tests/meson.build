@@ -16,6 +16,8 @@ python_tests = [
     # }
 ]
 
+address_sanitizer = get_option('b_sanitize') == 'address'
+
 tests = [
     'fprintd',
     'test_fprintd_utils',
@@ -81,16 +83,36 @@ foreach pt: python_tests
     endforeach
 endforeach
 
+timeout_multiplier = 1
+test_envs = [
+    'G_SLICE=always-malloc',
+    'MALLOC_CHECK_=2',
+]
+
+if address_sanitizer
+    timeout_multiplier = 3
+    test_envs += [
+        'ADDRESS_SANITIZER=true',
+        'ASAN_OPTIONS=@0@'.format(':'.join([
+            'abort_on_error=true',
+            'symbolize=true',
+        ])),
+        'LSAN_OPTIONS=@0@'.format(':'.join([
+            'exitcode=0',
+            'strict_string_checks=true',
+            'suppressions=@0@'.format(
+                files(meson.current_source_dir() / 'LSAN-leaks-suppress.txt')[0]),
+        ])),
+    ]
+endif
+
 add_test_setup('default_setup',
     is_default: true,
-    env: [
-        'G_SLICE=always-malloc',
-        'MALLOC_CHECK_=2',
-        'MALLOC_PERTURB_=55',
-    ],
+    env: test_envs,
+    timeout_multiplier: timeout_multiplier
 )
 
-if find_program('valgrind', required: false).found()
+if not address_sanitizer and find_program('valgrind', required: false).found()
     glib_share = glib_dep.get_pkgconfig_variable('prefix') / 'share' / glib_dep.name()
     glib_suppressions = glib_share + '/valgrind/glib.supp'
     add_test_setup('valgrind',
