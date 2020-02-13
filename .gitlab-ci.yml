@@ -18,6 +18,7 @@ variables:
                 git
                 glibc-devel
                 gtk-doc
+                libasan
                 libfprint-devel
                 meson
                 pam-devel
@@ -80,6 +81,20 @@ test_dev:
   artifacts:
     name: log-and-coverage
     when: always
+    paths:
+      - _build/meson-logs
+
+test_dev_with_sanitizer:
+  extends:
+    - .fprintd_build_preconditions
+    - .install_libfprint_dev
+  stage: test
+  script:
+    - meson _build -Db_sanitize=address
+    - meson test -C _build --verbose --no-stdsplit --timeout-multiplier 5
+  artifacts:
+    name: meson-logs
+    when: on_failure
     paths:
       - _build/meson-logs
 
