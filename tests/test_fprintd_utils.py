@@ -146,7 +146,7 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.assertRegex(out, r'left-little-finger')
         self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
 
-        time.sleep(2)
+        time.sleep(self.sleep_time * 4)
 
         out = self.get_process_output(process)
         self.assertRegex(out, 'Verify result: verify-match \(done\)')
