@@ -84,6 +84,12 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.addCleanup(process.terminate)
         self.addCleanup(process.wait)
 
+        def print_proc_log(mock_log):
+            with open(mock_log.name) as f:
+                print(f.read())
+
+        self.addCleanup(print_proc_log, mock_log)
+
         if sleep:
             time.sleep(self.sleep_time)
 
