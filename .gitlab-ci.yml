@@ -33,7 +33,7 @@ image: "$FEDORA_IMAGE"
     variables:
       - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
 
-.install_libfprint_dev: &install_libfprint_dev
+.install_libfprint_dev:
   before_script:
     # Make sure we don't build or link against the system libfprint
     - dnf remove -y libfprint-devel
@@ -56,8 +56,9 @@ build_stable:
     - ninja -C _build -v install
 
 build_dev:
-  extends: .fprintd_build_preconditions
-  <<: *install_libfprint_dev
+  extends:
+    - .fprintd_build_preconditions
+    - .install_libfprint_dev
   script:
     - meson _build --werror -Dgtk_doc=true
     - ninja -C _build -v
@@ -69,9 +70,10 @@ build_dev:
       - _build/meson-logs/*.txt
 
 test_dev:
-  extends: .fprintd_build_preconditions
+  extends:
+    - .fprintd_build_preconditions
+    - .install_libfprint_dev
   stage: test
-  <<: *install_libfprint_dev
   script:
     - meson _build -Db_coverage=true
     - meson test -C _build --verbose --no-stdsplit --timeout-multiplier 3
