@@ -28,6 +28,11 @@ variables:
 
 image: "$FEDORA_IMAGE"
 
+.fprintd_build_preconditions:
+  except:
+    variables:
+      - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
+
 .install_libfprint_dev: &install_libfprint_dev
   before_script:
     # Make sure we don't build or link against the system libfprint
@@ -42,9 +47,7 @@ image: "$FEDORA_IMAGE"
     - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
 
 build_stable:
-  except:
-    variables:
-      - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
+  extends: .fprintd_build_preconditions
   # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
   allow_failure: true
   script:
@@ -53,9 +56,7 @@ build_stable:
     - ninja -C _build -v install
 
 build_dev:
-  except:
-    variables:
-      - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
+  extends: .fprintd_build_preconditions
   <<: *install_libfprint_dev
   script:
     - meson _build --werror -Dgtk_doc=true
@@ -68,9 +69,7 @@ build_dev:
       - _build/meson-logs/*.txt
 
 test_dev:
-  except:
-    variables:
-      - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
+  extends: .fprintd_build_preconditions
   stage: test
   <<: *install_libfprint_dev
   script:
