@@ -191,6 +191,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
                                        env=env,
                                        stdout=None,
                                        stderr=subprocess.STDOUT)
+        self.addCleanup(self.daemon_stop)
 
         timeout_count = timeout * 10
         timeout_sleep = 0.1
@@ -245,6 +246,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
     def polkitd_start(self):
         self._polkitd, self._polkitd_obj = self.spawn_server_template(
             'polkitd', {}, stdout=DEVNULL)
+        self.addCleanup(self.polkitd_stop)
 
     def polkitd_stop(self):
         if self._polkitd is None:
@@ -288,8 +290,6 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         self.daemon_start()
 
         if self.device is None:
-            self.daemon_stop()
-            self.polkitd_stop()
             self.skipTest("Need virtual_image device to run the test")
 
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
@@ -325,9 +325,6 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
     def tearDown(self):
         self.device.disconnect(self.g_signal_id)
-
-        self.daemon_stop()
-        self.polkitd_stop()
 
         del self.manager
         del self.device
