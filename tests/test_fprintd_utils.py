@@ -74,16 +74,33 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.device_mock = self.dbus_con.get_object('net.reactivated.Fprint', device_path)
         self.device_mock.SetEnrolledFingers('toto', ['left-little-finger', 'right-little-finger'])
 
-    def test_fprintd_enroll(self):
-        self.setup_device()
-
+    def start_utility_process(self, utility_name, args=[], sleep=True):
         mock_log = tempfile.NamedTemporaryFile()
-        process = subprocess.Popen(self.wrapper_args + [self.tools_prefix + 'fprintd-enroll', '-f', 'right-index-finger', 'toto'],
+        utility = [ os.path.join(self.tools_prefix, 'fprintd-{}'.format(utility_name)) ]
+        process = subprocess.Popen(self.wrapper_args + utility + args,
                                    stdout=mock_log,
                                    stderr=subprocess.STDOUT,
                                    universal_newlines=True)
+        self.addCleanup(process.terminate)
+        self.addCleanup(process.wait)
 
-        time.sleep(self.sleep_time)
+        if sleep:
+            time.sleep(self.sleep_time)
+
+        return (process, mock_log)
+
+    def run_utility_process(self, utility_name, args=[], sleep=True, timeout=None):
+        proc, mock_log = self.start_utility_process(utility_name, args=args, sleep=sleep)
+        ret = proc.wait(timeout=timeout if timeout is not None else self.sleep_time * 4)
+        self.assertLessEqual(ret, 128)
+
+        with open(mock_log.name) as f:
+            return f.read()
+
+    def test_fprintd_enroll(self):
+        self.setup_device()
+
+        process, mock_log = self.start_utility_process('enroll', ['-f', 'right-index-finger', 'toto'])
 
         with open(mock_log.name) as f:
             out = f.read()
@@ -99,13 +116,7 @@ class TestFprintd(dbusmock.DBusTestCase):
     def test_fprintd_verify(self):
         self.setup_device()
 
-        mock_log = tempfile.NamedTemporaryFile()
-        process = subprocess.Popen(self.wrapper_args + [self.tools_prefix + 'fprintd-verify', 'toto'],
-                                   stdout=mock_log,
-                                   stderr=subprocess.STDOUT,
-                                   universal_newlines=True)
-
-        time.sleep(self.sleep_time)
+        process, mock_log = self.start_utility_process('verify', ['toto'])
 
         with open(mock_log.name) as f:
             out = f.read()
@@ -126,13 +137,7 @@ class TestFprintd(dbusmock.DBusTestCase):
         ]
         self.device_mock.SetVerifyScript(script)
 
-        mock_log = tempfile.NamedTemporaryFile()
-        process = subprocess.Popen(self.wrapper_args + [self.tools_prefix + 'fprintd-verify', 'toto'],
-                                   stdout=mock_log,
-                                   stderr=subprocess.STDOUT,
-                                   universal_newlines=True)
-
-        time.sleep(self.sleep_time)
+        process, mock_log = self.start_utility_process('verify', ['toto'])
 
         with open(mock_log.name) as f:
             out = f.read()
@@ -149,37 +154,27 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.setup_device()
 
         # Rick has no fingerprints enrolled
-        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-list', 'rick'],
-                                      stderr=subprocess.STDOUT,
-                                      universal_newlines=True)
+        out = self.run_utility_process('list', ['rick'])
         self.assertRegex(out, r'has no fingers enrolled for')
 
         # Toto does
-        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-list', 'toto'],
-                                      universal_newlines=True)
-        self.assertRegex(out, r'left-little-finger')
+        out = self.run_utility_process('list', ['toto'])
         self.assertRegex(out, r'right-little-finger')
 
     def test_fprintd_delete(self):
         self.setup_device()
 
         # Has fingerprints enrolled
-        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-list', 'toto'],
-                                      stderr=subprocess.STDOUT,
-                                      universal_newlines=True)
+        out = self.run_utility_process('list', ['toto'])
         self.assertRegex(out, r'left-little-finger')
         self.assertRegex(out, r'right-little-finger')
 
         # Delete fingerprints
-        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-delete', 'toto'],
-                                      stderr=subprocess.STDOUT,
-                                      universal_newlines=True)
+        out = self.run_utility_process('delete', ['toto'])
         self.assertRegex(out, r'Fingerprints deleted')
 
         # Doesn't have fingerprints
-        out = subprocess.check_output(self.wrapper_args + [self.tools_prefix + 'fprintd-list', 'toto'],
-                                      stderr=subprocess.STDOUT,
-                                      universal_newlines=True)
+        out = self.run_utility_process('list', ['toto'])
         self.assertRegex(out, r'has no fingers enrolled for')
 
 if __name__ == '__main__':
