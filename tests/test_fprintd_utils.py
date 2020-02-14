@@ -57,6 +57,9 @@ class TestFprintd(dbusmock.DBusTestCase):
                 if os.path.exists(valgrind):
                     klass.wrapper_args += ['--suppressions={}'.format(valgrind)]
 
+        if 'ADDRESS_SANITIZER' in os.environ:
+            klass.sleep_time *= 2
+
     def setUp(self):
         (self.p_mock, self.obj_fprintd_manager) = self.spawn_server_template(
             self.template_name, {}, stdout=subprocess.PIPE)

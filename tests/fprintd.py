@@ -51,6 +51,11 @@ def get_timeout(topic='default'):
             'default': 20,
             'daemon_start': 60
         },
+        'asan': {
+            'test': 120,
+            'default': 6,
+            'daemon_start': 10
+        },
         'default': {
             'test': 60,
             'default': 3,
@@ -58,8 +63,13 @@ def get_timeout(topic='default'):
         }
     }
 
-    valgrind = os.getenv('VALGRIND')
-    lut = vals['valgrind' if valgrind is not None else 'default']
+    if os.getenv('VALGRIND') is not None:
+        lut = vals['valgrind']
+    elif os.getenv('ADDRESS_SANITIZER') is not None:
+        lut = vals['asan']
+    else:
+        lut = vals['default']
+
     if topic not in lut:
         raise ValueError('invalid topic')
     return lut[topic]
