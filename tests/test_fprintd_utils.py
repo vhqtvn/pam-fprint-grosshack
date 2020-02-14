@@ -75,66 +75,63 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.device_mock.SetEnrolledFingers('toto', ['left-little-finger', 'right-little-finger'])
 
     def start_utility_process(self, utility_name, args=[], sleep=True):
-        mock_log = tempfile.NamedTemporaryFile()
         utility = [ os.path.join(self.tools_prefix, 'fprintd-{}'.format(utility_name)) ]
         process = subprocess.Popen(self.wrapper_args + utility + args,
-                                   stdout=mock_log,
+                                   stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT,
                                    universal_newlines=True)
+        flags = fcntl.fcntl(process.stdout, fcntl.F_GETFL)
+        fcntl.fcntl(process.stdout, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+        self.addCleanup(lambda: print(process.stdout.read()))
         self.addCleanup(process.terminate)
         self.addCleanup(process.wait)
-
-        def print_proc_log(mock_log):
-            with open(mock_log.name) as f:
-                print(f.read())
-
-        self.addCleanup(print_proc_log, mock_log)
 
         if sleep:
             time.sleep(self.sleep_time)
 
-        return (process, mock_log)
+        return process
+
+    def get_process_output(self, process):
+        out = process.stdout.read()
+        self.addCleanup(print, out)
+        return out
 
     def run_utility_process(self, utility_name, args=[], sleep=True, timeout=None):
-        proc, mock_log = self.start_utility_process(utility_name, args=args, sleep=sleep)
+        proc = self.start_utility_process(utility_name, args=args, sleep=sleep)
         ret = proc.wait(timeout=timeout if timeout is not None else self.sleep_time * 4)
         self.assertLessEqual(ret, 128)
 
-        with open(mock_log.name) as f:
-            return f.read()
+        return self.get_process_output(proc)
 
     def test_fprintd_enroll(self):
         self.setup_device()
 
-        process, mock_log = self.start_utility_process('enroll', ['-f', 'right-index-finger', 'toto'])
+        process = self.start_utility_process('enroll', ['-f', 'right-index-finger', 'toto'])
 
-        with open(mock_log.name) as f:
-            out = f.read()
-            self.assertRegex(out, r'right-index-finger')
+        out = self.get_process_output(process)
+        self.assertRegex(out, r'right-index-finger')
 
         self.device_mock.EmitEnrollStatus('enroll-completed', True)
         time.sleep(self.sleep_time)
 
-        with open(mock_log.name) as f:
-            out = f.read()
-            self.assertRegex(out, 'Enroll result: enroll-completed')
+        out = self.get_process_output(process)
+        self.assertRegex(out, 'Enroll result: enroll-completed')
 
     def test_fprintd_verify(self):
         self.setup_device()
 
-        process, mock_log = self.start_utility_process('verify', ['toto'])
+        process = self.start_utility_process('verify', ['toto'])
 
-        with open(mock_log.name) as f:
-            out = f.read()
-            self.assertRegex(out, r'left-little-finger')
-            self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
+        out = self.get_process_output(process)
+        self.assertRegex(out, r'left-little-finger')
+        self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
 
         self.device_mock.EmitVerifyStatus('verify-match', True)
         time.sleep(self.sleep_time)
 
-        with open(mock_log.name) as f:
-            out = f.read()
-            self.assertRegex(out, 'Verify result: verify-match \(done\)')
+        out = self.get_process_output(process)
+        self.assertRegex(out, 'Verify result: verify-match \(done\)')
 
     def test_fprintd_verify_script(self):
         self.setup_device()
@@ -143,18 +140,16 @@ class TestFprintd(dbusmock.DBusTestCase):
         ]
         self.device_mock.SetVerifyScript(script)
 
-        process, mock_log = self.start_utility_process('verify', ['toto'])
+        process = self.start_utility_process('verify', ['toto'])
 
-        with open(mock_log.name) as f:
-            out = f.read()
-            self.assertRegex(out, r'left-little-finger')
-            self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
+        out = self.get_process_output(process)
+        self.assertRegex(out, r'left-little-finger')
+        self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
 
         time.sleep(2)
 
-        with open(mock_log.name) as f:
-            out = f.read()
-            self.assertRegex(out, 'Verify result: verify-match \(done\)')
+        out = self.get_process_output(process)
+        self.assertRegex(out, 'Verify result: verify-match \(done\)')
 
     def test_fprintd_list(self):
         self.setup_device()
