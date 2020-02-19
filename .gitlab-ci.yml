@@ -48,8 +48,6 @@ image: "$FEDORA_IMAGE"
 
 build_stable:
   extends: .fprintd_build_preconditions
-  # FIXME: Stable builds will fail until libfprintv 2 reaches rawhide
-  allow_failure: true
   script:
     - meson _build
     - ninja -C _build -v
