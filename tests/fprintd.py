@@ -178,7 +178,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
         timeout = get_timeout('daemon_start')  # seconds
         env = os.environ.copy()
         env['G_DEBUG'] = 'fatal-criticals'
-        env['STATE_DIRECTORY'] = self.state_dir
+        env['STATE_DIRECTORY'] = (self.state_dir + ':' + '/hopefully/a/state_dir_path/that/shouldnt/be/writable')
         env['RUNTIME_DIRECTORY'] = self.run_dir
 
         argv = [self.paths['daemon'], '-t']
