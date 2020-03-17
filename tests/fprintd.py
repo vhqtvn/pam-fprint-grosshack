@@ -282,7 +282,8 @@ class FPrintdTest(dbusmock.DBusTestCase):
             con.sendall(encoded_img)
 
 
-class FPrintdVirtualDeviceTest(FPrintdTest):
+class FPrintdVirtualDeviceBaseTest(FPrintdTest):
+
     def setUp(self):
         super().setUp()
 
@@ -359,6 +360,9 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
         self.device.EnrollStop()
         self.assertEqual(self._last_result, 'enroll-completed')
+
+
+class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
     def test_allowed_claim(self):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
@@ -437,18 +441,27 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
 
-    def test_wrong_finger_enroll_start(self):
+
+class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
+
+    def setUp(self):
+        super().setUp()
         self.device.Claim('(s)', 'testuser')
 
+    def tearDown(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        try:
+            self.device.Release()
+        except GLib.GError as e:
+            if not 'net.reactivated.Fprint.Error.ClaimDevice' in e.message:
+                raise(e)
+        super().tearDown()
+
+    def test_wrong_finger_enroll_start(self):
         with self.assertFprintError('InvalidFingername'):
             self.device.EnrollStart('(s)', 'any')
 
-        self.device.Release()
-
     def test_enroll_verify_list_delete(self):
-
-        self.device.Claim('(s)', 'testuser')
-
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
 
@@ -498,12 +511,7 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
 
-        self.device.Release()
-
     def test_enroll_delete2(self):
-
-        self.device.Claim('(s)', 'testuser')
-
         self.enroll_image('whorl')
 
         self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
@@ -513,36 +521,29 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
-        self.device.Release()
-
     def test_enroll_stop_cancels(self):
-        self.device.Claim('(s)', 'testuser')
         self.device.EnrollStart('(s)', 'left-index-finger')
         self.device.EnrollStop()
         self.wait_for_result(expected='enroll-failed')
 
     def test_verify_stop_cancels(self):
-        self.device.Claim('(s)', 'testuser')
         self.enroll_image('whorl')
         self.device.VerifyStart('(s)', 'any')
         self.device.VerifyStop()
         self.wait_for_result(expected='verify-no-match')
 
     def test_verify_finger_stop_cancels(self):
-        self.device.Claim('(s)', 'testuser')
         self.enroll_image('whorl', finger='left-thumb')
         self.device.VerifyStart('(s)', 'left-thumb')
         self.device.VerifyStop()
 
     def test_busy_device_release_on_enroll(self):
-        self.device.Claim('(s)', 'testuser')
         self.device.EnrollStart('(s)', 'left-index-finger')
 
         self.device.Release()
         self.wait_for_result(expected='enroll-failed')
 
     def test_busy_device_release_on_verify(self):
-        self.device.Claim('(s)', 'testuser')
         self.enroll_image('whorl', finger='left-index-finger')
         self.device.VerifyStart('(s)', 'any')
 
@@ -550,7 +551,6 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         self.wait_for_result(expected='verify-no-match')
 
     def test_busy_device_release_on_verify_finger(self):
-        self.device.Claim('(s)', 'testuser')
         self.enroll_image('whorl', finger='left-middle-finger')
         self.device.VerifyStart('(s)', 'left-middle-finger')
 
