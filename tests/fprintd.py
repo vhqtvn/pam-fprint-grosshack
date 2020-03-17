@@ -351,6 +351,15 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         if expected is not None:
             self.assertEqual(self._last_result, expected)
 
+    def enroll_image(self, img, finger='right-index-finger'):
+        self.device.EnrollStart('(s)', finger)
+
+        self.send_image(img)
+        self.wait_for_result()
+
+        self.device.EnrollStop()
+        self.assertEqual(self._last_result, 'enroll-completed')
+
     def test_allowed_claim(self):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
                                       'net.reactivated.fprint.device.enroll'])
@@ -446,15 +455,7 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'nottestuser')
 
-        self.device.EnrollStart('(s)', 'right-index-finger')
-
-        self.send_image('whorl')
-
-        self.wait_for_result()
-
-        self.assertEqual(self._last_result, 'enroll-completed')
-
-        self.device.EnrollStop()
+        self.enroll_image('whorl')
 
         self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
@@ -503,15 +504,7 @@ class FPrintdVirtualDeviceTest(FPrintdTest):
 
         self.device.Claim('(s)', 'testuser')
 
-        self.device.EnrollStart('(s)', 'right-index-finger')
-
-        self.send_image('whorl')
-
-        self.wait_for_result()
-
-        self.assertEqual(self._last_result, 'enroll-completed')
-
-        self.device.EnrollStop()
+        self.enroll_image('whorl')
 
         self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
