@@ -235,7 +235,6 @@ class FPrintdTest(dbusmock.DBusTestCase):
             self.daemon.wait(timeout=2)
 
         self.daemon = None
-        self.client = None
 
     def polkitd_start(self):
         self._polkitd, self._polkitd_obj = self.spawn_server_template(
