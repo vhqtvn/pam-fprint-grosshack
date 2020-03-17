@@ -42,18 +42,33 @@
 #define FILE_STORAGE_PATH "/var/lib/fprint"
 #define DIR_PERMS 0700
 
+static char *storage_path = NULL;
+
 static const char *get_storage_path(void)
 {
-	const char *path;
+	const char *path = NULL;
+
+	if (storage_path != NULL)
+		return storage_path;
 
 	/* set by systemd >= 240 to an absolute path
 	 * taking into account the StateDirectory
 	 * unit file setting */
 	path = g_getenv ("STATE_DIRECTORY");
-	if (path != NULL)
-		return path;
+	if (path != NULL) {
+		/* If multiple directories are set, then in the environment variable
+		 * the paths are concatenated with colon (":"). */
+		if (strchr (path, ':')) {
+			g_auto(GStrv) elems = NULL;
+			elems = g_strsplit (path, ":", -1);
+			storage_path = g_strdup (elems[0]);
+		}
+	}
 
-	return FILE_STORAGE_PATH;
+	if (storage_path == NULL)
+		storage_path = g_strdup (FILE_STORAGE_PATH);
+
+	return storage_path;
 }
 
 static char *get_path_to_storedir(const char *driver, const char * device_id, char *base_store)
@@ -296,6 +311,6 @@ int file_storage_init(void)
 
 int file_storage_deinit(void)
 {
-	/* Nothing to do */
+	g_clear_pointer (&storage_path, g_free);
 	return 0;
 }
