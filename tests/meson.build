@@ -18,6 +18,7 @@ foreach t: tests
             'FPRINT_BUILD_DIR=' + meson.build_root() / 'src',
             'TOPSRCDIR=' + meson.source_root(),
         ],
+        timeout: t == 'fprintd' ? 60 : 30,
     )
 endforeach
 
