@@ -315,6 +315,8 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
     def setUp(self):
         super().setUp()
 
+        self.manager = None
+        self.device = None
         self.polkitd_start()
         self.daemon_start()
 
@@ -354,9 +356,8 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
 
     def tearDown(self):
         self.device.disconnect(self.g_signal_id)
-
-        del self.manager
-        del self.device
+        self.device = None
+        self.manager = None
 
         super().tearDown()
 
