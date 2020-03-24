@@ -85,7 +85,7 @@ test_dev:
 
 # CONTAINERS creation stage
 container_fedora_build:
-  extends: .fdo.distribution_image@fedora
+  extends: .fedora@container-build
   only:
     variables:
       - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
