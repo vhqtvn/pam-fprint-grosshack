@@ -381,7 +381,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
             if stage < stages - 1:
                 self.wait_for_result('enroll-stage-passed')
             else:
-                self.wait_for_result('enroll-completed')
+                self.wait_for_result(expected_result)
 
         self.device.EnrollStop()
         self.assertEqual(self._last_result, expected_result)
