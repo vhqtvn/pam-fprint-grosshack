@@ -566,6 +566,7 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
     def test_claim_from_other_client_is_released_when_vanished(self):
         self.call_device_method_from_other_client('Claim', ['testuser'])
+        time.sleep(1)
         self.device.Claim('(s)', 'testuser')
         self.device.Release()
 
