@@ -24,7 +24,7 @@ import time
 
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
-class TestFprintd(dbusmock.DBusTestCase):
+class TestFprintdUtilsBase(dbusmock.DBusTestCase):
     '''Test fprintd utilities'''
 
     @classmethod
@@ -109,9 +109,13 @@ class TestFprintd(dbusmock.DBusTestCase):
 
         return self.get_process_output(proc)
 
-    def test_fprintd_enroll(self):
+
+class TestFprintdUtils(TestFprintdUtilsBase):
+    def setUp(self):
+        super().setUp()
         self.setup_device()
 
+    def test_fprintd_enroll(self):
         process = self.start_utility_process('enroll', ['-f', 'right-index-finger', 'toto'])
 
         out = self.get_process_output(process)
@@ -124,8 +128,6 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.assertRegex(out, 'Enroll result: enroll-completed')
 
     def test_fprintd_verify(self):
-        self.setup_device()
-
         process = self.start_utility_process('verify', ['toto'])
 
         out = self.get_process_output(process)
@@ -139,7 +141,6 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.assertRegex(out, 'Verify result: verify-match \(done\)')
 
     def test_fprintd_verify_script(self):
-        self.setup_device()
         script = [
             ( 'verify-match', True, 2 )
         ]
@@ -157,8 +158,6 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.assertRegex(out, 'Verify result: verify-match \(done\)')
 
     def test_fprintd_list(self):
-        self.setup_device()
-
         # Rick has no fingerprints enrolled
         out = self.run_utility_process('list', ['rick'])
         self.assertRegex(out, r'has no fingers enrolled for')
@@ -168,8 +167,6 @@ class TestFprintd(dbusmock.DBusTestCase):
         self.assertRegex(out, r'right-little-finger')
 
     def test_fprintd_delete(self):
-        self.setup_device()
-
         # Has fingerprints enrolled
         out = self.run_utility_process('list', ['toto'])
         self.assertRegex(out, r'left-little-finger')
