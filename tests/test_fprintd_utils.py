@@ -93,14 +93,23 @@ class TestFprintdUtilsBase(dbusmock.DBusTestCase):
         flags = fcntl.fcntl(process.stdout, fcntl.F_GETFL)
         fcntl.fcntl(process.stdout, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-        self.addCleanup(process.wait)
-        self.addCleanup(process.terminate)
-        self.addCleanup(lambda: print(process.stdout.read()))
+        self.addCleanup(self.try_stop_utility_process, process)
 
         if sleep:
             time.sleep(self.sleep_time)
 
         return process
+
+    def stop_utility_process(self, process):
+        print(process.stdout.read())
+        process.terminate()
+        process.wait()
+
+    def try_stop_utility_process(self, process):
+        try:
+            self.stop_utility_process(process)
+        except:
+            pass
 
     def get_process_output(self, process):
         out = process.stdout.read()
