@@ -22,6 +22,20 @@ import fcntl
 import os
 import time
 
+
+VALID_FINGER_NAMES = [
+    'left-thumb',
+    'left-index-finger',
+    'left-middle-finger',
+    'left-ring-finger',
+    'left-little-finger',
+    'right-thumb',
+    'right-index-finger',
+    'right-middle-finger',
+    'right-ring-finger',
+    'right-little-finger'
+]
+
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
 class TestFprintdUtilsBase(dbusmock.DBusTestCase):
@@ -181,6 +195,10 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
         self.assertNotRegex(out, r'Device already in use by [A-z]+')
         self.assertNotIn('Verify result:', out)
 
+        if checkEnrolled and finger:
+            self.assertNotIn('''Finger '{}' not enrolled for user {}'''.format(
+                finger, user), out)
+
         if checkEnrolled:
             for f in self.enrolled_fingers:
                 self.assertIn(f, out)
@@ -204,6 +222,13 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
             self.device_mock.EmitVerifyStatus('verify-match', True)
             time.sleep(self.sleep_time)
             self.assertVerifyMatch(True)
+
+    def test_fprintd_verify_not_enrolled_fingers(self):
+        for finger in [f for f in VALID_FINGER_NAMES if f not in self.enrolled_fingers]:
+            regex = r'Finger \'{}\' not enrolled'.format(finger)
+            with self.assertRaisesRegex(AssertionError, regex):
+                self.start_verify_process(finger=finger)
+            self.device_mock.Release()
 
     def test_fprintd_verify_script(self):
         script = [

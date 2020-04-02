@@ -100,6 +100,14 @@ static void find_finger(DBusGProxy *dev, const char *username)
 		g_print(" - #%d: %s\n", i, fingers[i]);
 	}
 
+	if (finger_name && !g_str_equal (finger_name, "any") &&
+	    !g_strv_contains ((const char **) fingers, finger_name)) {
+		g_print("Finger '%s' not enrolled for user %s.\n", finger_name,
+		        username);
+		g_free (finger_name);
+		exit(1);
+	}
+
 	if (finger_name == NULL || strcmp (finger_name, "any") == 0) {
 		g_free (finger_name);
 		finger_name = g_strdup (fingers[0]);
