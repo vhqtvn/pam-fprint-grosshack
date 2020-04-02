@@ -178,6 +178,7 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
         self.process = self.start_utility_process('verify', args)
         out = self.get_process_output(self.process)
 
+        self.assertNotRegex(out, r'Device already in use by [A-z]+')
         self.assertNotIn('Verify result:', out)
 
         if checkEnrolled:
@@ -205,6 +206,12 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
         self.start_verify_process()
         time.sleep(self.sleep_time * 4)
         self.assertVerifyMatch(True)
+
+    def test_fprintd_multiple_verify_fails(self):
+        self.start_verify_process()
+
+        with self.assertRaisesRegex(AssertionError, r'Device already in use'):
+            self.start_verify_process()
 
 if __name__ == '__main__':
     # avoid writing to stderr
