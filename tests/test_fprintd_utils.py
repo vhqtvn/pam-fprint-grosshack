@@ -61,6 +61,7 @@ class TestFprintd(dbusmock.DBusTestCase):
             klass.sleep_time *= 2
 
     def setUp(self):
+        super().setUp()
         (self.p_mock, self.obj_fprintd_manager) = self.spawn_server_template(
             self.template_name, {}, stdout=subprocess.PIPE)
         # set log to nonblocking
@@ -71,6 +72,7 @@ class TestFprintd(dbusmock.DBusTestCase):
     def tearDown(self):
         self.p_mock.terminate()
         self.p_mock.wait()
+        super().tearDown()
 
     def setup_device(self):
         device_path = self.obj_fprintd_mock.AddDevice('FDO Trigger Finger Laser Reader', 3, 'swipe')
