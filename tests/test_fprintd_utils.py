@@ -77,7 +77,12 @@ class TestFprintdUtilsBase(dbusmock.DBusTestCase):
     def setup_device(self):
         device_path = self.obj_fprintd_mock.AddDevice('FDO Trigger Finger Laser Reader', 3, 'swipe')
         self.device_mock = self.dbus_con.get_object('net.reactivated.Fprint', device_path)
-        self.device_mock.SetEnrolledFingers('toto', ['left-little-finger', 'right-little-finger'])
+        self.set_enrolled_fingers(['left-little-finger', 'right-little-finger'])
+
+    def set_enrolled_fingers(self, fingers, user='toto'):
+        self.enrolled_fingers = fingers
+        self.device_mock.SetEnrolledFingers('toto', self.enrolled_fingers,
+            signature='sas')
 
     def start_utility_process(self, utility_name, args=[], sleep=True):
         utility = [ os.path.join(self.tools_prefix, 'fprintd-{}'.format(utility_name)) ]
@@ -127,36 +132,6 @@ class TestFprintdUtils(TestFprintdUtilsBase):
         out = self.get_process_output(process)
         self.assertRegex(out, 'Enroll result: enroll-completed')
 
-    def test_fprintd_verify(self):
-        process = self.start_utility_process('verify', ['toto'])
-
-        out = self.get_process_output(process)
-        self.assertRegex(out, r'left-little-finger')
-        self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
-
-        self.device_mock.EmitVerifyStatus('verify-match', True)
-        time.sleep(self.sleep_time)
-
-        out = self.get_process_output(process)
-        self.assertRegex(out, 'Verify result: verify-match \(done\)')
-
-    def test_fprintd_verify_script(self):
-        script = [
-            ( 'verify-match', True, 2 )
-        ]
-        self.device_mock.SetVerifyScript(script)
-
-        process = self.start_utility_process('verify', ['toto'])
-
-        out = self.get_process_output(process)
-        self.assertRegex(out, r'left-little-finger')
-        self.assertNotRegex(out, 'Verify result: verify-match \(done\)')
-
-        time.sleep(self.sleep_time * 4)
-
-        out = self.get_process_output(process)
-        self.assertRegex(out, 'Verify result: verify-match \(done\)')
-
     def test_fprintd_list(self):
         # Rick has no fingerprints enrolled
         out = self.run_utility_process('list', ['rick'])
@@ -179,6 +154,48 @@ class TestFprintdUtils(TestFprintdUtilsBase):
         # Doesn't have fingerprints
         out = self.run_utility_process('list', ['toto'])
         self.assertRegex(out, r'has no fingers enrolled for')
+
+
+class TestFprintdUtilsVerify(TestFprintdUtilsBase):
+    def setUp(self):
+        super().setUp()
+        self.setup_device()
+
+    def start_verify_process(self, user='toto', finger=None, checkEnrolled=True):
+        args = [user]
+        if finger:
+            args += ['-f', finger]
+
+        self.process = self.start_utility_process('verify', args)
+        out = self.get_process_output(self.process)
+
+        self.assertNotIn('Verify result:', out)
+
+        if checkEnrolled:
+            for f in self.enrolled_fingers:
+                self.assertIn(f, out)
+
+    def assertVerifyMatch(self, match):
+        self.assertIn('Verify result: {} (done)'.format(
+            'verify-match' if match else 'verify-no-match'),
+            self.get_process_output(self.process))
+
+    def test_fprintd_verify(self):
+        self.start_verify_process()
+
+        self.device_mock.EmitVerifyStatus('verify-match', True)
+        time.sleep(self.sleep_time)
+        self.assertVerifyMatch(True)
+
+    def test_fprintd_verify_script(self):
+        script = [
+            ( 'verify-match', True, 2 )
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        self.start_verify_process()
+        time.sleep(self.sleep_time * 4)
+        self.assertVerifyMatch(True)
 
 if __name__ == '__main__':
     # avoid writing to stderr
