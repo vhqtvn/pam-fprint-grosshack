@@ -197,6 +197,14 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
         time.sleep(self.sleep_time)
         self.assertVerifyMatch(True)
 
+    def test_fprintd_verify_enrolled_fingers(self):
+        for finger in self.enrolled_fingers:
+            self.start_verify_process(finger=finger)
+
+            self.device_mock.EmitVerifyStatus('verify-match', True)
+            time.sleep(self.sleep_time)
+            self.assertVerifyMatch(True)
+
     def test_fprintd_verify_script(self):
         script = [
             ( 'verify-match', True, 2 )
