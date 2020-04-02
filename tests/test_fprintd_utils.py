@@ -93,9 +93,9 @@ class TestFprintdUtilsBase(dbusmock.DBusTestCase):
         flags = fcntl.fcntl(process.stdout, fcntl.F_GETFL)
         fcntl.fcntl(process.stdout, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-        self.addCleanup(lambda: print(process.stdout.read()))
-        self.addCleanup(process.terminate)
         self.addCleanup(process.wait)
+        self.addCleanup(process.terminate)
+        self.addCleanup(lambda: print(process.stdout.read()))
 
         if sleep:
             time.sleep(self.sleep_time)

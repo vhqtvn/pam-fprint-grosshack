@@ -1123,8 +1123,8 @@ class FPrintdUtilsTest(FPrintdVirtualDeviceBaseTest):
                                                  env=env,
                                                  stdout=None,
                                                  stderr=subprocess.STDOUT)
-        self.addCleanup(self.utils_proc[name].terminate)
         self.addCleanup(self.utils_proc[name].wait)
+        self.addCleanup(self.utils_proc[name].terminate)
         return self.utils_proc[name]
 
     def test_vanished_client_operation_is_cancelled(self):
