@@ -203,6 +203,10 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
             for f in self.enrolled_fingers:
                 self.assertIn(f, out)
 
+        if finger:
+            expected_finger = finger
+            self.assertEqual(self.device_mock.GetSelectedFinger(), expected_finger)
+
     def assertVerifyMatch(self, match):
         self.assertIn('Verify result: {} (done)'.format(
             'verify-match' if match else 'verify-no-match'),
