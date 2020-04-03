@@ -239,6 +239,10 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
         self.start_verify_process()
         self.assertEqual(self.process.poll(), 1)
 
+    def test_fprintd_list_all_fingers(self):
+        self.set_enrolled_fingers(VALID_FINGER_NAMES)
+        self.start_verify_process()
+
     def test_fprintd_verify_script(self):
         script = [
             ( 'verify-match', True, 2 )
