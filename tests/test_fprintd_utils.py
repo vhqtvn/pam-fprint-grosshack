@@ -89,8 +89,10 @@ class TestFprintdUtilsBase(dbusmock.DBusTestCase):
         super().tearDown()
 
     def setup_device(self):
-        device_path = self.obj_fprintd_mock.AddDevice('FDO Trigger Finger Laser Reader', 3, 'swipe')
-        self.device_mock = self.dbus_con.get_object('net.reactivated.Fprint', device_path)
+        self.device_path = self.obj_fprintd_mock.AddDevice(
+            'FDO Trigger Finger Laser Reader', 3, 'swipe')
+        self.device_mock = self.dbus_con.get_object('net.reactivated.Fprint',
+            self.device_path)
         self.set_enrolled_fingers(['left-little-finger', 'right-little-finger'])
 
     def set_enrolled_fingers(self, fingers, user='toto'):
@@ -230,6 +232,19 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
             self.assertVerifyMatch(True)
 
     def test_fprintd_verify_any_finger_no_identification(self):
+        self.start_verify_process(finger='any')
+
+        self.device_mock.EmitVerifyStatus('verify-match', True)
+        time.sleep(self.sleep_time)
+        self.assertVerifyMatch(True)
+
+    def test_fprintd_verify_any_finger_identification(self):
+        self.obj_fprintd_mock.RemoveDevice(self.device_path)
+        self.device_path = self.obj_fprintd_mock.AddDevice('Full powered device',
+            3, 'press', True)
+        self.device_mock = self.dbus_con.get_object('net.reactivated.Fprint',
+            self.device_path)
+        self.set_enrolled_fingers(VALID_FINGER_NAMES)
         self.start_verify_process(finger='any')
 
         self.device_mock.EmitVerifyStatus('verify-match', True)

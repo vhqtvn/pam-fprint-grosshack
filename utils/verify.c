@@ -108,8 +108,7 @@ static void find_finger(DBusGProxy *dev, const char *username)
 		exit(1);
 	}
 
-	if (finger_name == NULL || strcmp (finger_name, "any") == 0) {
-		g_free (finger_name);
+	if (finger_name == NULL) {
 		finger_name = g_strdup (fingers[0]);
 	}
 
