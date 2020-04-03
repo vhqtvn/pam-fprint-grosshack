@@ -146,6 +146,19 @@ def AddDevice(self, device_name, num_enroll_stages, scan_type):
 
     return path
 
+@dbus.service.method(MANAGER_MOCK_IFACE,
+                     in_signature='o')
+def RemoveDevice(self, path):
+    # This isn't compatible with hotplugging devices, which fprintd doesn't
+    # support yet, but it's meant to remove devices added to the mock for
+    # testing purposes.
+    if not path:
+        raise dbus.exceptions.DBusException(
+            'Invalid empty path.',
+            name='org.freedesktop.DBus.Error.InvalidArgs')
+
+    self.RemoveObject(path)
+
 @dbus.service.method(DEVICE_IFACE,
                      in_signature='s', out_signature='as')
 def ListEnrolledFingers(device, user):
