@@ -141,6 +141,7 @@ def AddDevice(self, device_name, num_enroll_stages, scan_type):
     device.fingers = {}
     device.claimed_user = None
     device.action = None
+    device.selected_finger = None
     device.verify_script = []
 
     return path
@@ -187,6 +188,7 @@ def Release(device):
             name='net.reactivated.Fprint.Error.ClaimDevice')
     device.claimed_user = None
     device.action = None
+    device.selected_finger = None
 
 def can_verify_finger(device, finger_name):
     # We should already have checked that there are enrolled fingers
@@ -231,6 +233,7 @@ def VerifyStart(device, finger_name):
 
     if finger_name == 'any':
         finger_name = device.fingers[device.claimed_user][0]
+    device.selected_finger = finger_name
     device.EmitSignal(DEVICE_IFACE, 'VerifyFingerSelected', 's', [
                           finger_name
                       ])
@@ -263,6 +266,7 @@ def VerifyStop(device):
             'No verification to stop',
             name='net.reactivated.Fprint.Error.NoActionInProgress')
     device.action = None
+    device.selected_finger = None
 
 @dbus.service.method(DEVICE_IFACE,
                      in_signature='s', out_signature='')
@@ -330,6 +334,20 @@ def SetEnrolledFingers(device, user, fingers):
                 name='org.freedesktop.DBus.Error.InvalidArgs')
 
     device.fingers[user] = fingers
+
+@dbus.service.method(DEVICE_MOCK_IFACE,
+                     in_signature='', out_signature='s')
+def GetSelectedFinger(device):
+    '''Convenience method to get the finger under verification
+
+    Returns the finger name that the user has selected for verifying
+    '''
+    if not device.selected_finger:
+        raise dbus.exceptions.DBusException(
+            'Device is not verifying',
+            name='net.reactivated.Fprint.Error.NoActionInProgress')
+
+    return device.selected_finger
 
 @dbus.service.method(DEVICE_MOCK_IFACE,
                      in_signature='a(sbi)', out_signature='')
