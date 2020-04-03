@@ -396,6 +396,25 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         self.device.EnrollStop()
         self.assertEqual(self._last_result, expected_result)
 
+    def enroll_multiple_images(self, images_override={}, return_index=-1):
+        enroll_map = {
+            'left-thumb': 'whorl',
+            'right-index-finger': 'arch',
+            'left-little-finger': 'loop-right',
+        }
+        enroll_map.update(images_override)
+
+        for finger, print in enroll_map.items():
+            self.enroll_image(print, finger=finger)
+
+        enrolled = self.device.ListEnrolledFingers('(s)', 'testuser')
+        self.assertCountEqual(enroll_map.keys(), enrolled)
+
+        if return_index >= 0:
+            return enroll_map[enrolled[return_index]]
+
+        return (enrolled, enroll_map)
+
 
 class FPrintdManagerTests(FPrintdVirtualDeviceBaseTest):
 
@@ -772,6 +791,26 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.enroll_image('whorl', finger='right-thumb')
         self.device.VerifyStart('(s)', 'right-toe')
         self.send_image('tented_arch')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-no-match')
+        self.device.VerifyStop()
+
+    def test_verify_any_finger_match(self):
+        second_image = self.enroll_multiple_images(return_index=1)
+        self.device.VerifyStart('(s)', 'any')
+        self.send_image(second_image)
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-match')
+        self.device.VerifyStop()
+
+    def test_verify_any_finger_no_match(self):
+        enrolled, _map = self.enroll_multiple_images()
+        verify_image = 'tented_arch'
+        self.assertNotIn(verify_image, enrolled)
+        self.device.VerifyStart('(s)', 'any')
+        self.send_image(verify_image)
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-no-match')
