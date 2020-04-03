@@ -54,13 +54,8 @@ static DBusGProxy *open_device(const char *username)
 	DBusGProxy *dev;
 
 	if (!net_reactivated_Fprint_Manager_get_default_device(manager, &path, &error)) {
-		g_print("list_devices failed: %s\n", error->message);
+		g_print("Impossible to verify: %s\n", error->message);
 		exit (1);
-	}
-	
-	if (path == NULL) {
-		g_print("No devices found\n");
-		exit(1);
 	}
 
 	g_print("Using device %s\n", path);

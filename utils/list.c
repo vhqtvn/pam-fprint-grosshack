@@ -94,12 +94,12 @@ static void process_devices(char **argv)
 	guint i;
 
 	if (!net_reactivated_Fprint_Manager_get_devices(manager, &devices, &error)) {
-		g_print("list_devices failed: %s\n", error->message);
+		g_print("Impossible to get devices: %s\n", error->message);
 		exit (1);
 	}
 	
 	if (devices->len == 0) {
-		g_print("No devices found\n");
+		g_print("No devices available\n");
 		exit(1);
 	}
 
