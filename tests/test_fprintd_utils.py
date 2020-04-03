@@ -186,6 +186,28 @@ class TestFprintdUtils(TestFprintdUtilsBase):
         self.assertEqual(ret, 0)
 
 
+class TestFprintdUtilsNoDeviceTests(TestFprintdUtilsBase):
+    def test_fprintd_enroll(self):
+        out, ret = self.run_utility_process('enroll', ['toto'])
+        self.assertIn('No devices available', out)
+        self.assertEqual(ret, 1)
+
+    def test_fprintd_list(self):
+        out, ret = self.run_utility_process('list', ['toto'])
+        self.assertIn('No devices available', out)
+        self.assertEqual(ret, 1)
+
+    def test_fprintd_delete(self):
+        out, ret = self.run_utility_process('delete', ['toto'])
+        self.assertIn('No devices available', out)
+        self.assertEqual(ret, 1)
+
+    def test_fprintd_verify(self):
+        out, ret = self.run_utility_process('verify', ['toto'])
+        self.assertIn('No devices available', out)
+        self.assertEqual(ret, 1)
+
+
 class TestFprintdUtilsVerify(TestFprintdUtilsBase):
     def setUp(self):
         super().setUp()
