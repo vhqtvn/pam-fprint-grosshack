@@ -205,6 +205,8 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
 
         if finger:
             expected_finger = finger
+            if finger == 'any' and not self.device_mock.HasIdentification():
+                expected_finger = self.enrolled_fingers[0]
             self.assertEqual(self.device_mock.GetSelectedFinger(), expected_finger)
 
     def assertVerifyMatch(self, match):
@@ -226,6 +228,13 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
             self.device_mock.EmitVerifyStatus('verify-match', True)
             time.sleep(self.sleep_time)
             self.assertVerifyMatch(True)
+
+    def test_fprintd_verify_any_finger_no_identification(self):
+        self.start_verify_process(finger='any')
+
+        self.device_mock.EmitVerifyStatus('verify-match', True)
+        time.sleep(self.sleep_time)
+        self.assertVerifyMatch(True)
 
     def test_fprintd_verify_not_enrolled_fingers(self):
         for finger in [f for f in VALID_FINGER_NAMES if f not in self.enrolled_fingers]:
