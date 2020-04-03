@@ -186,6 +186,7 @@ def Release(device):
             'Device was not claimed before use',
             name='net.reactivated.Fprint.Error.ClaimDevice')
     device.claimed_user = None
+    device.action = None
 
 def can_verify_finger(device, finger_name):
     # We should already have checked that there are enrolled fingers
