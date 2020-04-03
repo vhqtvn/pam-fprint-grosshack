@@ -137,7 +137,7 @@ class TestFprintdUtilsBase(dbusmock.DBusTestCase):
         ret = proc.wait(timeout=timeout if timeout is not None else self.sleep_time * 4)
         self.assertLessEqual(ret, 128)
 
-        return self.get_process_output(proc)
+        return self.get_process_output(proc), ret
 
 
 class TestFprintdUtils(TestFprintdUtilsBase):
@@ -159,26 +159,31 @@ class TestFprintdUtils(TestFprintdUtilsBase):
 
     def test_fprintd_list(self):
         # Rick has no fingerprints enrolled
-        out = self.run_utility_process('list', ['rick'])
+        out, ret = self.run_utility_process('list', ['rick'])
         self.assertRegex(out, r'has no fingers enrolled for')
+        self.assertEqual(ret, 0)
 
         # Toto does
-        out = self.run_utility_process('list', ['toto'])
+        out, ret = self.run_utility_process('list', ['toto'])
         self.assertRegex(out, r'right-little-finger')
+        self.assertEqual(ret, 0)
 
     def test_fprintd_delete(self):
         # Has fingerprints enrolled
-        out = self.run_utility_process('list', ['toto'])
+        out, ret = self.run_utility_process('list', ['toto'])
         self.assertRegex(out, r'left-little-finger')
+        self.assertEqual(ret, 0)
         self.assertRegex(out, r'right-little-finger')
 
         # Delete fingerprints
-        out = self.run_utility_process('delete', ['toto'])
+        out, ret = self.run_utility_process('delete', ['toto'])
         self.assertRegex(out, r'Fingerprints deleted')
+        self.assertEqual(ret, 0)
 
         # Doesn't have fingerprints
-        out = self.run_utility_process('list', ['toto'])
+        out, ret = self.run_utility_process('list', ['toto'])
         self.assertRegex(out, r'has no fingers enrolled for')
+        self.assertEqual(ret, 0)
 
 
 class TestFprintdUtilsVerify(TestFprintdUtilsBase):
