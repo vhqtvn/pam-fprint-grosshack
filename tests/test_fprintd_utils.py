@@ -234,6 +234,11 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
                 self.start_verify_process(finger=finger)
             self.device_mock.Release()
 
+    def test_fprintd_verify_no_enrolled_fingers(self):
+        self.set_enrolled_fingers([])
+        self.start_verify_process()
+        self.assertEqual(self.process.poll(), 1)
+
     def test_fprintd_verify_script(self):
         script = [
             ( 'verify-match', True, 2 )

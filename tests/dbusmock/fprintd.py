@@ -322,11 +322,6 @@ def SetEnrolledFingers(device, user, fingers):
     Returns nothing.
     '''
 
-    if len(fingers) < 1:
-        raise dbus.exceptions.DBusException(
-            'Fingers array must not be empty',
-            name='org.freedesktop.DBus.Error.InvalidArgs')
-
     for k in fingers:
         if k not in VALID_FINGER_NAMES:
             raise dbus.exceptions.DBusException(
