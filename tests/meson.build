@@ -38,7 +38,7 @@ foreach t: tests
                 fprintd,
                 fprintd_utils,
             ],
-            'suite': ['daemon'],
+            'suite': [t == 'fprintd' ? 'daemon' : ''],
         }
     ]
 endforeach
