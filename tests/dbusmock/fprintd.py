@@ -93,8 +93,9 @@ def GetDefaultDevice(self):
     return devices[0]
 
 @dbus.service.method(MANAGER_MOCK_IFACE,
-                     in_signature='sis', out_signature='s')
-def AddDevice(self, device_name, num_enroll_stages, scan_type):
+                     in_signature='sisb', out_signature='s')
+def AddDevice(self, device_name, num_enroll_stages, scan_type,
+    has_identification=False):
     '''Convenience method to add a fingerprint reader device
 
     You have to specify a device name, the number of enrollment
@@ -139,6 +140,7 @@ def AddDevice(self, device_name, num_enroll_stages, scan_type):
 
     device = mockobject.objects[path]
     device.fingers = {}
+    device.has_identification = has_identification
     device.claimed_user = None
     device.action = None
     device.selected_finger = None
@@ -244,7 +246,7 @@ def VerifyStart(device, finger_name):
             name='net.reactivated.Fprint.Error.AlreadyInUse')
     device.action = 'verify'
 
-    if finger_name == 'any':
+    if finger_name == 'any' and not device.has_identification:
         finger_name = device.fingers[device.claimed_user][0]
     device.selected_finger = finger_name
     device.EmitSignal(DEVICE_IFACE, 'VerifyFingerSelected', 's', [
@@ -356,6 +358,16 @@ def GetSelectedFinger(device):
             name='net.reactivated.Fprint.Error.NoActionInProgress')
 
     return device.selected_finger
+
+@dbus.service.method(DEVICE_MOCK_IFACE,
+                     in_signature='', out_signature='b')
+def HasIdentification(device):
+    '''Convenience method to get if a device supports identification
+
+    Returns whether identification is supported.
+    '''
+
+    return device.has_identification
 
 @dbus.service.method(DEVICE_MOCK_IFACE,
                      in_signature='a(sbi)', out_signature='')
