@@ -88,6 +88,19 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.device_mock = self.dbus_con.get_object('net.reactivated.Fprint', device_path)
         self.device_mock.SetEnrolledFingers('toto', ['left-little-finger', 'right-little-finger'])
 
+    def test_pam_fprintd_identify_error(self):
+        self.setup_device()
+        script = [
+            ( 'verify-unknown-error', True, 2 )
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTHINFO_UNAVAIL)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
+        self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
+        self.assertEqual(len(res.errors), 0)
+
     def test_pam_fprintd_auth(self):
         self.setup_device()
         script = [
