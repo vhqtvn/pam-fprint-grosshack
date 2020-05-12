@@ -650,6 +650,37 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         self.device.Claim('(s)', 'testuser')
         self.device.Release()
 
+    def test_claim_disconnect(self):
+        addr = os.environ['DBUS_SYSTEM_BUS_ADDRESS']
+
+        # Get a separat bus connection
+        dbus = Gio.DBusConnection.new_for_address_sync(addr,
+            Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION |
+            Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT, None, None)
+        assert dbus.is_closed() == False
+
+
+        dev_path = self.device.get_object_path()
+        dev = Gio.DBusProxy.new_sync(dbus,
+                                     Gio.DBusProxyFlags.DO_NOT_AUTO_START,
+                                     None,
+                                     'net.reactivated.Fprint',
+                                     dev_path,
+                                     'net.reactivated.Fprint.Device',
+                                     None)
+
+        def call_done(obj, result, user_data):
+            # Ignore the callback (should be an error)
+            pass
+
+        # Do an async call to claim and immediately close
+        dev.Claim('(s)', 'testuser', result_handler=call_done)
+
+        # Ensure the call is on the wire, then close immediately
+        dbus.flush_sync()
+        dbus.close_sync()
+
+        time.sleep(1)
 
 class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
 
