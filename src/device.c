@@ -78,7 +78,9 @@ typedef enum {
 	ACTION_NONE = 0,
 	ACTION_IDENTIFY,
 	ACTION_VERIFY,
-	ACTION_ENROLL
+	ACTION_ENROLL,
+	ACTION_OPEN,
+	ACTION_CLOSE,
 } FprintDeviceAction;
 
 typedef struct {
@@ -546,12 +548,16 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 	if (priv->session != NULL &&
 	    g_strcmp0 (priv->session->sender, name) == 0) {
 		while (priv->current_action != ACTION_NONE) {
-			g_cancellable_cancel (priv->current_cancellable);
+			/* OPEN/CLOSE are not cancellable, we just need to wait */
+			if (priv->current_cancellable)
+				g_cancellable_cancel (priv->current_cancellable);
 
 			g_main_context_iteration (NULL, TRUE);
 		}
 
-		if (!fp_device_close_sync (priv->dev, NULL, &error))
+		/* The session may have disappeared at this point if the device
+		 * was already closing. */
+		if (priv->session && !fp_device_close_sync (priv->dev, NULL, &error))
 			g_debug ("Error closing device after disconnect: %s", error->message);
 
 		g_clear_pointer(&priv->session, session_data_free);
@@ -590,6 +596,7 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	DBusGMethodInvocation *context = g_steal_pointer(&priv->session->context);
 
+	priv->current_action = ACTION_NONE;
 	if (!fp_device_open_finish (dev, res, &error)) {
 		g_autoptr(GError) dbus_error = NULL;
 
@@ -658,6 +665,7 @@ static void fprint_device_claim(FprintDevice *rdev,
 
 	g_debug ("user '%s' claiming the device: %d", priv->session->username, priv->id);
 
+	priv->current_action = ACTION_OPEN;
 	fp_device_open (priv->dev, NULL, (GAsyncReadyCallback) dev_open_cb, rdev);
 }
 
@@ -669,6 +677,7 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(SessionData) session = g_steal_pointer(&priv->session);
 	DBusGMethodInvocation *context = g_steal_pointer(&session->context);
 
+	priv->current_action = ACTION_NONE;
 	if (!fp_device_close_finish (dev, res, &error)) {
 		g_autoptr(GError) dbus_error = NULL;
 
@@ -720,6 +729,7 @@ static void fprint_device_release(FprintDevice *rdev,
 	}
 
 	priv->session->context = context;
+	priv->current_action = ACTION_CLOSE;
 	fp_device_close (priv->dev, NULL, (GAsyncReadyCallback) dev_close_cb, rdev);
 }
 
