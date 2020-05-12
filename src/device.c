@@ -643,7 +643,7 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 		/* The session may have disappeared at this point if the device
 		 * was already closing. */
 		if (session && !fp_device_close_sync (priv->dev, NULL, &error))
-			g_debug ("Error closing device after disconnect: %s", error->message);
+			g_critical ("Error closing device after disconnect: %s", error->message);
 
 		session_data_set_new (priv, NULL, NULL);
 	}
