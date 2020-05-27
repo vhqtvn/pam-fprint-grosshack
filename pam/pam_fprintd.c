@@ -423,12 +423,10 @@ do_verify (pam_handle_t *pamh,
 				ret = PAM_AUTHINFO_UNAVAIL;
 			} else if (str_equal (data->result, "verify-disconnected")) {
 				ret = PAM_AUTHINFO_UNAVAIL;
-				free (data->result);
 				break;
 			} else {
 				send_info_msg (data->pamh, _("An unknown error occurred"));
 				ret = PAM_AUTH_ERR;
-				free (data->result);
 				break;
 			}
 			free (data->result);
