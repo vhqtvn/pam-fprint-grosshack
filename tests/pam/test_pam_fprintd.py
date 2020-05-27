@@ -101,6 +101,33 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
         self.assertEqual(len(res.errors), 0)
 
+    def test_pam_fprintd_identify_error2(self):
+        self.setup_device()
+        script = [
+            ( 'verify-disconnected', True, 2 )
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTHINFO_UNAVAIL)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
+        self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
+        self.assertEqual(len(res.errors), 0)
+
+    def test_pam_fprintd_identify_error3(self):
+        self.setup_device()
+        script = [
+            ( 'verify-INVALID', True, 2 )
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTH_ERR)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
+        self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
+        self.assertEqual(len(res.errors), 1)
+        self.assertRegex(res.errors[0], r'An unknown error occurred')
+
     def test_pam_fprintd_auth(self):
         self.setup_device()
         script = [
