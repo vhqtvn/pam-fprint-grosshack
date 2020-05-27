@@ -425,7 +425,7 @@ do_verify (pam_handle_t *pamh,
 				ret = PAM_AUTHINFO_UNAVAIL;
 				break;
 			} else {
-				send_info_msg (data->pamh, _("An unknown error occurred"));
+				send_err_msg (data->pamh, _("An unknown error occurred"));
 				ret = PAM_AUTH_ERR;
 				break;
 			}
