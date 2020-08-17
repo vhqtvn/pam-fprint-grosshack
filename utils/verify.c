@@ -24,7 +24,7 @@
 #include <dbus/dbus-glib-bindings.h>
 #include "manager-dbus-glue.h"
 #include "device-dbus-glue.h"
-#include "marshal.h"
+#include "fprintd-marshal.h"
 
 static DBusGProxy *manager = NULL;
 static DBusGConnection *connection = NULL;

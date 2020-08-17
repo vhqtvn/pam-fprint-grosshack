@@ -16,16 +16,6 @@ foreach interface_name: dbus_interfaces
         ])
 endforeach
 
-utils_marshal = custom_target('utils_marshal',
-    depends: fprintd_marshal,
-    input: fprintd_marshal,
-    output: ['marshal.c', 'marshal.h'],
-    command: [bash, '-c',
-        'cp @INPUT0@ @OUTPUT0@;' +
-        'cp @INPUT1@ @OUTPUT1@;' +
-        'sed s/fprintd-//g -i ' + meson.current_build_dir() / 'marshal*.{h,c}']
-)
-
 libfprintd_utils_dep = declare_dependency(
     include_directories: [
         include_directories('../pam'),
@@ -35,13 +25,13 @@ libfprintd_utils_dep = declare_dependency(
         dbus_glib_dep,
     ],
     sources: [
-        utils_marshal,
+        fprintd_marshal,
         dbus_client_glue_sources,
     ],
     link_with: static_library('fprintd_utils',
         sources: [
             dbus_client_glue_sources,
-            utils_marshal,
+            fprintd_marshal,
         ],
         dependencies: [
             glib_dep,
