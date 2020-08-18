@@ -74,12 +74,6 @@ test_dev:
     - .install_libfprint_dev
   stage: test
   script:
-    # Work-around https://github.com/mesonbuild/meson/issues/7437
-    - dnf install -y --nogpgcheck python3-pip
-    - rpm -e meson
-    - pip install git+https://github.com/mesonbuild/meson
-    - hash -d meson
-
     - meson _build -Db_coverage=true
     - meson test -C _build --verbose --no-stdsplit --timeout-multiplier 3
     - ninja -C _build coverage
