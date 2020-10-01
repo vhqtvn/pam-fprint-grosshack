@@ -742,6 +742,23 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.assertEqual(self._last_result, 'verify-no-match')
         self.device.VerifyStop()
 
+    def test_verify_finger_no_match_restart(self):
+        self.enroll_image('whorl', finger='left-thumb')
+        self.device.VerifyStart('(s)', 'left-thumb')
+        self.send_image('tented_arch')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-no-match')
+        self.device.VerifyStop()
+
+        # Immediately starting again after a no-match must work
+        self.device.VerifyStart('(s)', 'left-thumb')
+        self.send_image('whorl')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-match')
+        self.device.VerifyStop()
+
     def test_verify_wrong_finger_match(self):
         self.enroll_image('whorl', finger='left-thumb')
         self.device.VerifyStart('(s)', 'left-toe')
