@@ -427,27 +427,27 @@ class FPrintdManagerPreStartTests(FPrintdTest):
             self.manager.GetDefaultDevice()
 
     def test_manager_get_devices_on_name_appeared(self):
-        self._appeared = False
+        self._appeared_res = []
 
         def on_name_appeared(connection, name, name_owner):
-            self._appeared = True
-            dev_path = connection.call_sync('net.reactivated.Fprint',
+            self._appeared_res.append(connection.call_sync('net.reactivated.Fprint',
                 '/net/reactivated/Fprint/Manager',
                 'net.reactivated.Fprint.Manager',
                 'GetDefaultDevice', None, None,
-                Gio.DBusCallFlags.NO_AUTO_START, 500, None)
-            self.assertIsNotNone(dev_path)
-            self.assertTrue(dev_path.startswith('/net/reactivated/Fprint/Device/'))
+                Gio.DBusCallFlags.NO_AUTO_START, 500, None))
 
         id = Gio.bus_watch_name_on_connection(self.dbus,
             'net.reactivated.Fprint', Gio.BusNameWatcherFlags.NONE,
             on_name_appeared, None)
 
         self.daemon_start()
-        while not self._appeared:
+        while not self._appeared_res:
             ctx.iteration(True)
 
-        self.assertTrue(self._appeared)
+        self.assertIsNotNone(self._appeared_res[0])
+        dev_path = self._appeared_res[0][0]
+        self.assertTrue(dev_path.startswith('/net/reactivated/Fprint/Device/'))
+
         Gio.bus_unwatch_name(id)
 
 
