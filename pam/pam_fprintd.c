@@ -201,7 +201,7 @@ verify_result (sd_bus_message *m,
 		return 0;
 	}
 
-	msg = _(verify_result_str_to_msg (result, data->is_swipe));
+	msg = verify_result_str_to_msg (result, data->is_swipe);
 	send_err_msg (data->pamh, msg);
 
 	return 0;
