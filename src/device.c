@@ -454,7 +454,6 @@ static char *
 _fprint_device_check_for_username (FprintDevice *rdev,
 				   GDBusMethodInvocation *invocation,
 				   const char *username,
-				   char **ret_sender,
 				   GError **error)
 {
 	g_autoptr(GVariant) ret = NULL;
@@ -498,8 +497,6 @@ _fprint_device_check_for_username (FprintDevice *rdev,
 	 * own data, this should be followed by PolicyKit checks
 	 * anyway */
 	if (username == NULL || *username == '\0' || g_str_equal (username, user->pw_name)) {
-		if (ret_sender != NULL)
-			*ret_sender = g_strdup (sender);
 		return g_strdup (user->pw_name);
 	}
 
@@ -510,9 +507,6 @@ _fprint_device_check_for_username (FprintDevice *rdev,
 						     error)) {
 		return NULL;
 	}
-
-	if (ret_sender != NULL)
-		*ret_sender = g_strdup (sender);
 
 	return g_strdup (username);
 }
@@ -616,14 +610,11 @@ static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
 
 	g_assert_null(priv->session);
 
-	sender = NULL;
 	user = _fprint_device_check_for_username (rdev,
 						  invocation,
 						  username,
-						  &sender,
 						  &error);
 	if (user == NULL) {
-		g_free (sender);
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
 		return TRUE;
@@ -633,19 +624,19 @@ static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
 						      FPRINTD_DEVICE_ACTION_VERIFY,
 						      FPRINTD_DEVICE_ACTION_ENROLL,
 						      &error)) {
-		g_free (sender);
 		g_free (user);
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
 		return TRUE;
 	}
 
+	sender = g_strdup (g_dbus_method_invocation_get_sender (invocation));
 	_fprint_device_add_client (rdev, sender);
 
 	priv->session = g_new0(SessionData, 1);
 	priv->session->invocation = g_object_ref (invocation);
 	priv->session->username = user;
-	priv->session->sender = sender;
+	priv->session->sender = g_steal_pointer (&sender);
 
 	g_debug ("user '%s' claiming the device: %d", priv->session->username, priv->id);
 
@@ -1324,7 +1315,6 @@ static gboolean fprint_device_list_enrolled_fingers (FprintDBusDevice *dbus_dev,
 	user = _fprint_device_check_for_username (rdev,
 						  invocation,
 						  username,
-						  NULL,
 						  &error);
 	if (user == NULL) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
@@ -1468,7 +1458,6 @@ static gboolean fprint_device_delete_enrolled_fingers (FprintDBusDevice *dbus_de
 	user = _fprint_device_check_for_username (rdev,
 						  invocation,
 						  username,
-						  NULL,
 						  &error);
 	if (user == NULL) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
