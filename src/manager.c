@@ -36,9 +36,9 @@ static gboolean fprint_manager_get_default_device(FprintManager *manager,
 typedef struct
 {
 	GDBusConnection *connection;
+	GDBusObjectManager *object_manager;
 	FprintDBusManager *dbus_manager;
 	FpContext *context;
-	GSList *dev_registry;
 	gboolean no_timeout;
 	guint timeout_id;
 } FprintManagerPrivate;
@@ -57,12 +57,20 @@ static void fprint_manager_finalize(GObject *object)
 {
 	FprintManagerPrivate *priv = fprint_manager_get_instance_private (FPRINT_MANAGER (object));
 
+	g_clear_object (&priv->object_manager);
 	g_clear_object (&priv->dbus_manager);
 	g_clear_object (&priv->connection);
 	g_clear_object (&priv->context);
-	g_slist_free(priv->dev_registry);
 
 	G_OBJECT_CLASS(fprint_manager_parent_class)->finalize(object);
+}
+
+static FprintDevice *
+fprint_dbus_object_skeleton_get_device (FprintDBusObjectSkeleton *object) {
+	FprintDevice *rdev;
+
+	g_object_get (object, "device", &rdev, NULL);
+	return rdev;
 }
 
 static void fprint_manager_set_property (GObject *object, guint property_id,
@@ -136,7 +144,8 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
 {
 	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
 	guint num_devices_used = 0;
-	GSList *l;
+	g_autolist(GDBusObject) devices = NULL;
+	GList *l;
 	gboolean in_use;
 
 	if (priv->timeout_id > 0) {
@@ -146,9 +155,13 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
 	if (priv->no_timeout)
 		return;
 
-	for (l = priv->dev_registry; l != NULL; l = l->next) {
-		FprintDevice *dev = l->data;
+	devices = g_dbus_object_manager_get_objects (priv->object_manager);
 
+	for (l = devices; l != NULL; l = l->next) {
+		g_autoptr(FprintDevice) dev = NULL;
+		FprintDBusObjectSkeleton *object = l->data;
+
+		dev = fprint_dbus_object_skeleton_get_device (object);
 		g_object_get (G_OBJECT(dev), "in-use", &in_use, NULL);
 		if (in_use != FALSE)
 			num_devices_used++;
@@ -200,42 +213,46 @@ static void
 device_added_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 {
 	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
+	g_autoptr(FprintDBusObjectSkeleton) object = NULL;
 	FprintDevice *rdev = fprint_device_new(device);
 	g_autofree gchar *path = NULL;
 
 	g_signal_connect (G_OBJECT(rdev), "notify::in-use",
 			  G_CALLBACK (fprint_manager_in_use_notified), manager);
 
-	priv->dev_registry = g_slist_prepend (priv->dev_registry, rdev);
 	path = get_device_path (rdev);
-	g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (rdev),
-					  priv->connection,
-					  path, NULL);
+
+	object = fprint_dbus_object_skeleton_new (path);
+	fprint_dbus_object_skeleton_set_device (object,
+						FPRINT_DBUS_DEVICE (rdev));
+	g_dbus_object_manager_server_export (
+		G_DBUS_OBJECT_MANAGER_SERVER (priv->object_manager),
+		G_DBUS_OBJECT_SKELETON (object));
 }
 
 static void
 device_removed_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 {
 	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
-	GSList *item;
+	g_autolist (FprintDBusObjectSkeleton) objects = NULL;
+	GList *item;
 
-	for (item = priv->dev_registry; item; item = item->next) {
-		FprintDevice *rdev;
+	objects = g_dbus_object_manager_get_objects (priv->object_manager);
+
+	for (item = objects; item; item = item->next) {
+		g_autoptr(FprintDevice) rdev = NULL;
 		g_autoptr(FpDevice) dev = NULL;
+		FprintDBusObjectSkeleton *object = item->data;
 
-		rdev = item->data;
-
+		rdev = fprint_dbus_object_skeleton_get_device (object);
 		g_object_get (rdev, "dev", &dev, NULL);
 		if (dev != device)
 			continue;
-
-		priv->dev_registry = g_slist_delete_link (priv->dev_registry, item);
 
 		g_dbus_interface_skeleton_unexport (
 			G_DBUS_INTERFACE_SKELETON (rdev));
 
 		g_signal_handlers_disconnect_by_data (rdev, manager);
-		g_object_unref (rdev);
 
 		/* We cannot continue to iterate at this point, but we don't need to either */
 		break;
@@ -250,7 +267,12 @@ static void fprint_manager_constructed (GObject *object)
 {
 	FprintManager *manager = FPRINT_MANAGER (object);
 	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
+	GDBusObjectManagerServer *object_manager_server;
 
+	object_manager_server =
+		g_dbus_object_manager_server_new (FPRINT_SERVICE_PATH "/Device");
+
+	priv->object_manager = G_DBUS_OBJECT_MANAGER (object_manager_server);
 	priv->dbus_manager = fprint_dbus_manager_skeleton_new ();
 	priv->context = fp_context_new ();
 
@@ -268,6 +290,9 @@ static void fprint_manager_constructed (GObject *object)
 	g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (priv->dbus_manager),
 					  priv->connection,
 					  FPRINT_SERVICE_PATH "/Manager", NULL);
+
+	g_dbus_object_manager_server_set_connection (object_manager_server,
+						     priv->connection);
 
 	/* And register the signals for initial enumeration and hotplug. */
 	g_signal_connect_object (priv->context,
@@ -314,28 +339,30 @@ static gboolean fprint_manager_get_devices(FprintManager *manager,
 	GPtrArray **devices, GError **error)
 {
 	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
-	GSList *elem;
-	GSList *l;
+	g_autolist (FprintDBusObjectSkeleton) objects = NULL;
+	GList *l;
 	int num_open;
 	GPtrArray *devs;
 
-	elem = g_slist_reverse(g_slist_copy(priv->dev_registry));
-	num_open = g_slist_length(elem);
+	objects = g_dbus_object_manager_get_objects (priv->object_manager);
+	objects = g_list_reverse (objects);
+
+	num_open = g_list_length (objects);
 	devs = g_ptr_array_sized_new(num_open);
 
 	if (num_open > 0) {
-		for (l = elem; l != NULL; l = l->next) {
-			GDBusInterfaceSkeleton *dev_skeleton = l->data;
+		for (l = objects; l != NULL; l = l->next) {
+			g_autoptr(FprintDevice) rdev = NULL;
+			FprintDBusObjectSkeleton *object = l->data;
 			const char *path;
 
+			rdev = fprint_dbus_object_skeleton_get_device (object);
 			path = g_dbus_interface_skeleton_get_object_path (
-				dev_skeleton);
+				G_DBUS_INTERFACE_SKELETON (rdev));
 			g_ptr_array_add (devs, (char *) path);
 		}
 	}
 	g_ptr_array_add (devs, NULL);
-
-	g_slist_free(elem);
 
 	*devices = devs;
 	return TRUE;
@@ -345,15 +372,19 @@ static gboolean fprint_manager_get_default_device(FprintManager *manager,
 	const char **device, GError **error)
 {
 	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
-	GSList *elem;;
+	g_autolist (FprintDBusObjectSkeleton) objects = NULL;
 	int num_open;
 
-	elem = priv->dev_registry;
-	num_open = g_slist_length(elem);
+	objects = g_dbus_object_manager_get_objects (priv->object_manager);
+	num_open = g_list_length (objects);
 
 	if (num_open > 0) {
-		GDBusInterfaceSkeleton *dev_skeleton = g_slist_last (elem)->data;
-		*device = g_dbus_interface_skeleton_get_object_path (dev_skeleton);
+		g_autoptr(FprintDevice) rdev = NULL;
+		FprintDBusObjectSkeleton *object = g_list_last (objects)->data;
+
+		rdev = fprint_dbus_object_skeleton_get_device (object);
+		*device = g_dbus_interface_skeleton_get_object_path (
+			G_DBUS_INTERFACE_SKELETON (rdev));
 		return TRUE;
 	} else {
 		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_NO_SUCH_DEVICE,

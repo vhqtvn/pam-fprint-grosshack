@@ -19,6 +19,7 @@ fprintd_dbus_sources = gnome.gdbus_codegen('fprintd-dbus',
     autocleanup: 'all',
     interface_prefix: 'net.reactivated.Fprint.',
     namespace: 'FprintDBus',
+    object_manager: true,
 )
 
 fprintd_deps = declare_dependency(
