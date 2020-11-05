@@ -32,9 +32,9 @@
 #include "fprintd.h"
 #include "storage.h"
 
-#define FPRINTD_DEVICE_ACTION_ENROLL "net.reactivated.fprint.device.enroll"
-#define FPRINTD_DEVICE_ACTION_SETUSERNAME "net.reactivated.fprint.device.setusername"
-#define FPRINTD_DEVICE_ACTION_VERIFY "net.reactivated.fprint.device.verify"
+#define FPRINTD_DEVICE_ACTION_ENROLL (gpointer) "net.reactivated.fprint.device.enroll"
+#define FPRINTD_DEVICE_ACTION_SETUSERNAME (gpointer) "net.reactivated.fprint.device.setusername"
+#define FPRINTD_DEVICE_ACTION_VERIFY (gpointer) "net.reactivated.fprint.device.verify"
 
 static const char *FINGERS_NAMES[] = {
 	[FP_FINGER_UNKNOWN] = "unknown",
@@ -51,6 +51,11 @@ static const char *FINGERS_NAMES[] = {
 };
 
 static void fprint_device_dbus_skeleton_iface_init (FprintDBusDeviceIface *);
+static gboolean action_authorization_handler (GDBusInterfaceSkeleton *,
+					      GDBusMethodInvocation *,
+					      gpointer user_data);
+
+static GQuark quark_auth_user = 0;
 
 typedef enum {
 	ACTION_NONE = 0,
@@ -60,6 +65,12 @@ typedef enum {
 	ACTION_OPEN,
 	ACTION_CLOSE,
 } FprintDeviceAction;
+
+typedef enum {
+	STATE_CLAIMED,
+	STATE_UNCLAIMED,
+	STATE_IGNORED,
+} FprintDeviceClaimState;
 
 typedef struct {
 	/* current method invocation */
@@ -79,6 +90,7 @@ typedef struct {
 	guint32 id;
 	FpDevice *dev;
 	SessionData *session;
+	GMutex lock;
 
 	PolkitAuthority *auth;
 
@@ -135,7 +147,9 @@ static void fprint_device_finalize(GObject *object)
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(self);
 
 	g_hash_table_destroy (priv->clients);
+	g_mutex_lock (&priv->lock);
 	g_clear_pointer(&priv->session, session_data_free);
+	g_mutex_unlock (&priv->lock);
 	/* FIXME close and stuff */
 
 	G_OBJECT_CLASS(fprint_device_parent_class)->finalize(object);
@@ -236,6 +250,8 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 		g_signal_lookup ("enroll-status", FPRINT_TYPE_DEVICE);
 	signals[SIGNAL_VERIFY_FINGER_SELECTED] =
 		g_signal_lookup ("verify-finger-selected", FPRINT_TYPE_DEVICE);
+
+	quark_auth_user = g_quark_from_static_string ("authorized-user");
 }
 
 static void fprint_device_init(FprintDevice *device)
@@ -249,6 +265,12 @@ static void fprint_device_init(FprintDevice *device)
 					       g_str_equal,
 					       g_free,
 					       NULL);
+
+	g_mutex_init (&priv->lock);
+
+	g_signal_connect (device, "g-authorize-method",
+			  G_CALLBACK (action_authorization_handler),
+			  NULL);
 }
 
 FprintDevice *fprint_device_new(FpDevice *dev)
@@ -365,11 +387,31 @@ enroll_result_to_name (gboolean completed, gboolean enrolled, GError *error)
 static gboolean
 _fprint_device_check_claimed (FprintDevice *rdev,
 			      GDBusMethodInvocation *invocation,
+			      FprintDeviceClaimState requested_state,
 			      GError **error)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+	g_autoptr(GMutexLocker) locked = NULL;
 	const char *sender;
 	gboolean retval;
+
+	if (requested_state == STATE_IGNORED)
+		return TRUE;
+
+	locked = g_mutex_locker_new (&priv->lock);
+
+	if (requested_state == STATE_UNCLAIMED) {
+		/* Is it already claimed? */
+		if (!priv->session) {
+			return TRUE;
+		}
+
+		g_set_error(error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+			    "Device was already claimed");
+		return FALSE;
+	}
+
+	g_assert (requested_state == STATE_CLAIMED);
 
 	/* The device wasn't claimed, exit */
 	if (priv->session == NULL) {
@@ -438,16 +480,29 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev,
 static gboolean
 _fprint_device_check_polkit_for_actions (FprintDevice *rdev,
 					 GDBusMethodInvocation *invocation,
-					 const char *action1,
-					 const char *action2,
+					 GPtrArray *actions,
 					 GError **error)
 {
-	if (_fprint_device_check_polkit_for_action (rdev, invocation, action1, error) != FALSE)
+	unsigned i;
+
+	if (!actions || !actions->len)
 		return TRUE;
 
-	g_clear_error (error);
+	for (i = 0; i < actions->len; ++i) {
+		const char *action = g_ptr_array_index (actions, i);
 
-	return _fprint_device_check_polkit_for_action (rdev, invocation, action2, error);
+		g_debug ("Getting authorization to perform Polkit action %s",
+			 action);
+
+		g_clear_error (error);
+		if (_fprint_device_check_polkit_for_action (rdev, invocation,
+							    action, error)) {
+			return TRUE;
+		}
+	}
+
+	g_assert (!error || *error);
+	return FALSE;
 }
 
 static char *
@@ -517,7 +572,10 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 				FprintDevice *rdev)
 {
 	g_autoptr(GError) error = NULL;
+	g_autoptr(GMutexLocker) locked = NULL;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+
+	locked = g_mutex_locker_new (&priv->lock);
 
 	/* Was that the client that claimed the device? */
 	if (priv->session != NULL &&
@@ -527,7 +585,9 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 			if (priv->current_cancellable)
 				g_cancellable_cancel (priv->current_cancellable);
 
+			g_mutex_unlock (&priv->lock);
 			g_main_context_iteration (NULL, TRUE);
+			g_mutex_lock (&priv->lock);
 		}
 
 		/* The session may have disappeared at this point if the device
@@ -569,8 +629,11 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	g_autoptr(GDBusMethodInvocation) invocation =
-		g_steal_pointer (&priv->session->invocation);
+	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(GDBusMethodInvocation) invocation = NULL;
+
+	locked = g_mutex_locker_new (&priv->lock);
+	invocation = g_steal_pointer (&priv->session->invocation);
 
 	priv->current_action = ACTION_NONE;
 	if (!fp_device_open_finish (dev, res, &error)) {
@@ -590,52 +653,61 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 					   invocation);
 }
 
+static gboolean
+fprintd_device_authorize_user (FprintDevice *rdev,
+			       GDBusMethodInvocation *invocation,
+			       GError **error)
+{
+	GVariant *params = NULL;
+	const char *username = NULL;
+	g_autofree char *user = NULL;
+
+	params = g_dbus_method_invocation_get_parameters (invocation);
+	g_assert (g_variant_n_children (params) == 1);
+	g_variant_get (params, "(&s)", &username);
+	g_assert (username);
+
+	user = _fprint_device_check_for_username (rdev,
+						  invocation,
+						  username,
+						  error);
+	if (user == NULL) {
+		return FALSE;
+	}
+
+	/* We keep the user attached to the invocation as it may not be the same
+	 * of the requested one, in case an empty one was passed.
+	 * Given that now we may have multiple cuncurrent requests, it wouldn't
+	 * be safe to add another member to the priv, as it would need even more
+	 * multi-thread checks around, and over-complicate things.
+	 */
+	g_object_set_qdata_full (G_OBJECT (invocation), quark_auth_user,
+				 g_steal_pointer (&user), g_free);
+
+	return TRUE;
+}
+
 static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
 				     GDBusMethodInvocation *invocation,
 				     const char *username)
 {
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	GError *error = NULL;
+	g_autoptr(GMutexLocker) locked = NULL;
 	char *sender, *user;
 
-	/* Is it already claimed? */
-	if (priv->session) {
-		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-			    "Device was already claimed");
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free(error);
-		return TRUE;
-	}
+	locked = g_mutex_locker_new (&priv->lock);
+	g_assert_null (priv->session);
 
-	g_assert_null(priv->session);
-
-	user = _fprint_device_check_for_username (rdev,
-						  invocation,
-						  username,
-						  &error);
-	if (user == NULL) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
-		return TRUE;
-	}
-
-	if (!_fprint_device_check_polkit_for_actions (rdev, invocation,
-						      FPRINTD_DEVICE_ACTION_VERIFY,
-						      FPRINTD_DEVICE_ACTION_ENROLL,
-						      &error)) {
-		g_free (user);
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
-		return TRUE;
-	}
+	user = g_object_steal_qdata (G_OBJECT (invocation), quark_auth_user);
+	g_assert (user);
 
 	sender = g_strdup (g_dbus_method_invocation_get_sender (invocation));
 	_fprint_device_add_client (rdev, sender);
 
 	priv->session = g_new0(SessionData, 1);
 	priv->session->invocation = g_object_ref (invocation);
-	priv->session->username = user;
+	priv->session->username = g_steal_pointer (&user);
 	priv->session->sender = g_steal_pointer (&sender);
 
 	g_debug ("user '%s' claiming the device: %d", priv->session->username, priv->id);
@@ -651,9 +723,13 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	g_autoptr(SessionData) session = g_steal_pointer(&priv->session);
-	g_autoptr(GDBusMethodInvocation) invocation =
-		g_steal_pointer (&session->invocation);
+	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(SessionData) session = NULL;
+	g_autoptr(GDBusMethodInvocation) invocation = NULL;
+
+	locked = g_mutex_locker_new (&priv->lock);
+	session = g_steal_pointer (&priv->session);
+	invocation = g_steal_pointer (&session->invocation);
 
 	priv->current_action = ACTION_NONE;
 	if (!fp_device_close_finish (dev, res, &error)) {
@@ -677,23 +753,6 @@ static gboolean fprint_device_release (FprintDBusDevice *dbus_dev,
 {
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	GError *error = NULL;
-
-	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free(error);
-		return TRUE;
-	}
-
-	/* People that can claim can also release */
-	if (!_fprint_device_check_polkit_for_actions (rdev, invocation,
-						      FPRINTD_DEVICE_ACTION_VERIFY,
-						      FPRINTD_DEVICE_ACTION_ENROLL,
-						      &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free(error);
-		return TRUE;
-	}
 
 	if (priv->current_cancellable) {
 		if (priv->current_action == ACTION_ENROLL) {
@@ -708,7 +767,10 @@ static gboolean fprint_device_release (FprintDBusDevice *dbus_dev,
 			g_main_context_iteration (NULL, TRUE);
 	}
 
+	g_mutex_lock (&priv->lock);
 	priv->session->invocation = g_object_ref (invocation);
+	g_mutex_unlock (&priv->lock);
+
 	priv->current_action = ACTION_CLOSE;
 	fp_device_close (priv->dev, NULL, (GAsyncReadyCallback) dev_close_cb, rdev);
 
@@ -721,9 +783,11 @@ static void report_verify_status (FprintDevice *rdev,
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
 	const char *result = verify_result_to_name (match, error);
+	g_autoptr(GMutexLocker) locked = NULL;
 	gboolean done;
 
 	done = (error == NULL || error->domain != FP_DEVICE_RETRY);
+	locked = g_mutex_locker_new (&priv->lock);
 
 	if (done && priv->session->verify_status_reported) {
 		/* It is completely fine for cancellation to occur after a
@@ -786,6 +850,8 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 				  (GAsyncReadyCallback) verify_cb,
 				  rdev);
 	} else {
+		g_autoptr(GMutexLocker) locked = NULL;
+
 		g_clear_object (&priv->verify_data);
 
 		if (error) {
@@ -796,6 +862,8 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 					   error->message);
 			}
 		}
+
+		locked = g_mutex_locker_new (&priv->lock);
 
 		/* Return the cancellation or reset action right away if vanished. */
 		if (priv->current_cancel_invocation) {
@@ -837,6 +905,8 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 				    (GAsyncReadyCallback) identify_cb,
 				    rdev);
 	} else {
+		g_autoptr(GMutexLocker) locked = NULL;
+
 		g_clear_pointer (&priv->identify_data, g_ptr_array_unref);
 
 		if (error) {
@@ -847,6 +917,8 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 					   error->message);
 			}
 		}
+
+		locked = g_mutex_locker_new (&priv->lock);
 
 		/* Return the cancellation or reset action right away if vanished. */
 		if (priv->current_cancel_invocation) {
@@ -873,18 +945,6 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	g_autoptr(GError) error = NULL;
 	guint finger_num = finger_name_to_num (finger_name);
 
-	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
-	}
-
-	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     FPRINTD_DEVICE_ACTION_VERIFY,
-						     &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
-	}
-
 	if (priv->current_action != ACTION_NONE) {
 		if (priv->current_action == ACTION_ENROLL) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
@@ -898,8 +958,10 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	}
 
 	if (finger_num == -1) {
+		g_autoptr(GMutexLocker) locked = NULL;
 		GSList *prints;
 
+		locked = g_mutex_locker_new (&priv->lock);
 		prints = store.discover_prints(priv->dev, priv->session->username);
 		if (prints == NULL) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
@@ -942,10 +1004,13 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 				    match_cb, rdev, NULL,
 		                    (GAsyncReadyCallback) identify_cb, rdev);
 	} else {
+		g_autoptr(GMutexLocker) locked = NULL;
+
 		priv->current_action = ACTION_VERIFY;
 
 		g_debug("start verification device %d finger %d", priv->id, finger_num);
 
+		locked = g_mutex_locker_new (&priv->lock);
 		store.print_data_load(priv->dev, finger_num,
 				      priv->session->username, &print);
 
@@ -981,20 +1046,6 @@ static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 
-	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free(error);
-		return TRUE;
-	}
-
-	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     FPRINTD_DEVICE_ACTION_VERIFY,
-						     &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free(error);
-		return TRUE;
-	}
-
 	if (priv->current_action == ACTION_NONE) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
 			    "No verification in progress");
@@ -1016,7 +1067,10 @@ static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 	} else {
 		fprint_dbus_device_complete_verify_stop (dbus_dev, invocation);
 		priv->current_action = ACTION_NONE;
+
+		g_mutex_lock (&priv->lock);
 		priv->session->verify_status_reported = FALSE;
+		g_mutex_unlock (&priv->lock);
 	}
 
 	return TRUE;
@@ -1110,10 +1164,13 @@ static FpPrint*
 fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+	g_autoptr(GMutexLocker) locked = NULL;
 	FpPrint *template = NULL;
 	GDateTime *datetime = NULL;
 	GDate *date = NULL;
 	gint year, month, day;
+
+	locked = g_mutex_locker_new (&priv->lock);
 
 	template = fp_print_new (priv->dev);
 	fp_print_set_finger (template, finger_num);
@@ -1205,18 +1262,6 @@ static gboolean fprint_device_enroll_start (FprintDBusDevice *dbus_dev,
 		return TRUE;
 	}
 
-	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
-	}
-
-	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-	 					     FPRINTD_DEVICE_ACTION_ENROLL,
-						     &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
-	}
-
 	if (priv->current_action != ACTION_NONE) {
 		if (priv->current_action == ACTION_ENROLL) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
@@ -1256,20 +1301,6 @@ static gboolean fprint_device_enroll_stop (FprintDBusDevice *dbus_dev,
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
 
-	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
-		return TRUE;
-	}
-
-	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     FPRINTD_DEVICE_ACTION_ENROLL,
-						     &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
-		return TRUE;
-	}
-
 	if (priv->current_action != ACTION_ENROLL) {
 		if (priv->current_action == ACTION_NONE) {
 			g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
@@ -1298,7 +1329,6 @@ static gboolean fprint_device_enroll_stop (FprintDBusDevice *dbus_dev,
 
 	return TRUE;
 }
-
 static gboolean fprint_device_list_enrolled_fingers (FprintDBusDevice *dbus_dev,
 						     GDBusMethodInvocation *invocation,
 						     const char *username)
@@ -1310,32 +1340,15 @@ static gboolean fprint_device_list_enrolled_fingers (FprintDBusDevice *dbus_dev,
 	GSList *prints;
 	GSList *item;
 	const char *sender;
-	char *user;
-
-	user = _fprint_device_check_for_username (rdev,
-						  invocation,
-						  username,
-						  &error);
-	if (user == NULL) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
-		return TRUE;
-	}
-
-	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     FPRINTD_DEVICE_ACTION_VERIFY,
-						     &error)) {
-		g_free (user);
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
-		return TRUE;
-	}
+	const char *user;
 
 	sender = g_dbus_method_invocation_get_sender (invocation);
 	_fprint_device_add_client (rdev, sender);
 
+	user = g_object_get_qdata (G_OBJECT (invocation), quark_auth_user);
+	g_assert (user);
 	prints = store.discover_prints(priv->dev, user);
-	g_free (user);
+
 	if (!prints) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
 			"Failed to discover prints");
@@ -1363,6 +1376,8 @@ static void delete_enrolled_fingers(FprintDevice *rdev, const char *user)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	guint i;
+
+	g_debug ("Deleting enrolled fingers for user %s", user);
 
 	/* First try deleting the print from the device, we don't consider it
 	 * fatal if this does not work. */
@@ -1455,23 +1470,11 @@ static gboolean fprint_device_delete_enrolled_fingers (FprintDBusDevice *dbus_de
 	log_offending_client (invocation);
 #endif
 
-	user = _fprint_device_check_for_username (rdev,
-						  invocation,
-						  username,
-						  &error);
-	if (user == NULL) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
-	}
+	user = g_object_steal_qdata (G_OBJECT (invocation), quark_auth_user);
+	g_assert (user);
 
-	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     FPRINTD_DEVICE_ACTION_ENROLL,
-						     &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
-	}
-
-	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED,
+					   &error)) {
 		/* Return error for anything but FPRINT_ERROR_CLAIM_DEVICE */
 		if (!g_error_matches (error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE)) {
 			g_dbus_method_invocation_return_gerror (invocation,
@@ -1505,23 +1508,129 @@ static gboolean fprint_device_delete_enrolled_fingers2 (FprintDBusDevice *dbus_d
 {
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	g_autoptr(GError) error = NULL;
+	g_autoptr(GMutexLocker) locked = NULL;
 
-	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
-	}
-
-	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     FPRINTD_DEVICE_ACTION_ENROLL,
-						     &error)) {
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
-	}
+	locked = g_mutex_locker_new (&priv->lock);
 
 	delete_enrolled_fingers (rdev, priv->session->username);
 	fprint_dbus_device_complete_delete_enrolled_fingers2 (dbus_dev,
 							      invocation);
+	return TRUE;
+}
+
+static gboolean
+handle_unauthorized_access (FprintDevice *rdev,
+			    GDBusMethodInvocation *invocation,
+			    GError *error)
+{
+	FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+
+	g_assert (error);
+
+	g_warning ("Client %s not authorized for device %s: %s",
+		   g_dbus_method_invocation_get_sender (invocation),
+		   fp_device_get_name (priv->dev),
+		   error->message);
+	g_dbus_method_invocation_return_gerror (invocation, error);
+
+	return FALSE;
+}
+
+static gboolean
+action_authorization_handler (GDBusInterfaceSkeleton *interface,
+			      GDBusMethodInvocation *invocation,
+			      gpointer user_data)
+{
+	FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (interface);
+	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
+	FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+	FprintDeviceClaimState required_state = STATE_IGNORED;
+	gboolean needs_user_auth = FALSE;
+	g_autoptr(GError) error = NULL;
+	g_autoptr(GPtrArray) required_actions = NULL;
+	const gchar *method_name;
+
+	method_name = g_dbus_method_invocation_get_method_name (invocation);
+	required_actions = g_ptr_array_new ();
+
+	g_debug ("Requesting device '%s' authorization for method %s from %s",
+		 fp_device_get_name (priv->dev), method_name,
+		 g_dbus_method_invocation_get_sender (invocation));
+
+	if (g_str_equal (method_name, "Claim")) {
+		needs_user_auth = TRUE;
+		required_state = STATE_UNCLAIMED;
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_VERIFY);
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_ENROLL);
+	} else if (g_str_equal (method_name, "DeleteEnrolledFingers")) {
+		needs_user_auth = TRUE;
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_ENROLL);
+	} else if (g_str_equal (method_name, "DeleteEnrolledFingers2")) {
+		required_state = STATE_CLAIMED;
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_ENROLL);
+	} else if (g_str_equal (method_name, "EnrollStart")) {
+		required_state = STATE_CLAIMED;
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_ENROLL);
+	} else if (g_str_equal (method_name, "EnrollStop")) {
+		required_state = STATE_CLAIMED;
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_ENROLL);
+	} else if (g_str_equal (method_name, "ListEnrolledFingers")) {
+		needs_user_auth = TRUE;
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_VERIFY);
+	} else if (g_str_equal (method_name, "Release")) {
+		required_state = STATE_CLAIMED;
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_VERIFY);
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_ENROLL);
+	} else if (g_str_equal (method_name, "VerifyStart")) {
+		required_state = STATE_CLAIMED;
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_VERIFY);
+	} else if (g_str_equal (method_name, "VerifyStop")) {
+		required_state = STATE_CLAIMED;
+		g_ptr_array_add (required_actions,
+				 FPRINTD_DEVICE_ACTION_VERIFY);
+	} else {
+		g_assert_not_reached ();
+	}
+
+	if (!_fprint_device_check_claimed (rdev, invocation, required_state,
+					   &error)) {
+		return handle_unauthorized_access (rdev, invocation, error);
+	}
+
+	if (needs_user_auth &&
+	    !fprintd_device_authorize_user (rdev, invocation, &error)) {
+		return handle_unauthorized_access (rdev, invocation, error);
+	}
+
+	/* This may possibly block the invocation till the user has not
+	 * provided an authentication method, so other calls could arrive */
+	if (!_fprint_device_check_polkit_for_actions (rdev, invocation,
+						      required_actions,
+						      &error)) {
+		return handle_unauthorized_access (rdev, invocation, error);
+	}
+
+	/* By this time some other invocation might have beaten the one that
+	 * arrived earlier, as an user might slower in authenticating, so
+	 * we need to check again wheter the device is claimed */
+	if (!_fprint_device_check_claimed (rdev, invocation, required_state,
+					   &error)) {
+		return handle_unauthorized_access (rdev, invocation, error);
+	}
+
+	g_debug ("Authorization granted to %s for device %s!",
+		 fp_device_get_name (priv->dev),
+		 g_dbus_method_invocation_get_sender (invocation));
 
 	return TRUE;
 }
