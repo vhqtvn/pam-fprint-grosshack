@@ -32,6 +32,10 @@
 #include "fprintd.h"
 #include "storage.h"
 
+#define FPRINTD_DEVICE_ACTION_ENROLL "net.reactivated.fprint.device.enroll"
+#define FPRINTD_DEVICE_ACTION_SETUSERNAME "net.reactivated.fprint.device.setusername"
+#define FPRINTD_DEVICE_ACTION_VERIFY "net.reactivated.fprint.device.verify"
+
 static const char *FINGERS_NAMES[] = {
 	[FP_FINGER_UNKNOWN] = "unknown",
 	"left-thumb",
@@ -502,7 +506,7 @@ _fprint_device_check_for_username (FprintDevice *rdev,
 	/* If we're not allowed to set a different username,
 	 * then fail */
 	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     "net.reactivated.fprint.device.setusername",
+						     FPRINTD_DEVICE_ACTION_SETUSERNAME,
 						     error)) {
 		return NULL;
 	}
@@ -626,8 +630,8 @@ static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
 	}
 
 	if (!_fprint_device_check_polkit_for_actions (rdev, invocation,
-						      "net.reactivated.fprint.device.verify",
-						      "net.reactivated.fprint.device.enroll",
+						      FPRINTD_DEVICE_ACTION_VERIFY,
+						      FPRINTD_DEVICE_ACTION_ENROLL,
 						      &error)) {
 		g_free (sender);
 		g_free (user);
@@ -692,8 +696,8 @@ static gboolean fprint_device_release (FprintDBusDevice *dbus_dev,
 
 	/* People that can claim can also release */
 	if (!_fprint_device_check_polkit_for_actions (rdev, invocation,
-						      "net.reactivated.fprint.device.verify",
-						      "net.reactivated.fprint.device.enroll",
+						      FPRINTD_DEVICE_ACTION_VERIFY,
+						      FPRINTD_DEVICE_ACTION_ENROLL,
 						      &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free(error);
@@ -884,7 +888,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	}
 
 	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     "net.reactivated.fprint.device.verify",
+						     FPRINTD_DEVICE_ACTION_VERIFY,
 						     &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
@@ -993,7 +997,7 @@ static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 	}
 
 	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     "net.reactivated.fprint.device.verify",
+						     FPRINTD_DEVICE_ACTION_VERIFY,
 						     &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free(error);
@@ -1216,7 +1220,7 @@ static gboolean fprint_device_enroll_start (FprintDBusDevice *dbus_dev,
 	}
 
 	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-	 					     "net.reactivated.fprint.device.enroll",
+	 					     FPRINTD_DEVICE_ACTION_ENROLL,
 						     &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
@@ -1268,7 +1272,7 @@ static gboolean fprint_device_enroll_stop (FprintDBusDevice *dbus_dev,
 	}
 
 	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     "net.reactivated.fprint.device.enroll",
+						     FPRINTD_DEVICE_ACTION_ENROLL,
 						     &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		g_error_free (error);
@@ -1329,7 +1333,7 @@ static gboolean fprint_device_list_enrolled_fingers (FprintDBusDevice *dbus_dev,
 	}
 
 	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     "net.reactivated.fprint.device.verify",
+						     FPRINTD_DEVICE_ACTION_VERIFY,
 						     &error)) {
 		g_free (user);
 		g_dbus_method_invocation_return_gerror (invocation, error);
@@ -1472,7 +1476,7 @@ static gboolean fprint_device_delete_enrolled_fingers (FprintDBusDevice *dbus_de
 	}
 
 	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     "net.reactivated.fprint.device.enroll",
+						     FPRINTD_DEVICE_ACTION_ENROLL,
 						     &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
@@ -1520,7 +1524,7 @@ static gboolean fprint_device_delete_enrolled_fingers2 (FprintDBusDevice *dbus_d
 	}
 
 	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     "net.reactivated.fprint.device.enroll",
+						     FPRINTD_DEVICE_ACTION_ENROLL,
 						     &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
