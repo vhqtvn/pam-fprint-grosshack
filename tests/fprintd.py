@@ -472,9 +472,15 @@ class FPrintdManagerPreStartTests(FPrintdTest):
 
 class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
-    def test_allowed_claim(self):
+    def test_allowed_claim_release_enroll(self):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
                                       'net.reactivated.fprint.device.enroll'])
+        self.device.Claim('(s)', 'testuser')
+        self.device.Release()
+
+    def test_allowed_claim_release_verify(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
+                                      'net.reactivated.fprint.device.verify'])
         self.device.Claim('(s)', 'testuser')
         self.device.Release()
 
@@ -518,6 +524,11 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
             self.device.Claim('(s)', 'testuser')
 
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.Claim('(s)', 'testuser')
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
 
         with self.assertFprintError('PermissionDenied'):
             self.device.Claim('(s)', 'testuser')
