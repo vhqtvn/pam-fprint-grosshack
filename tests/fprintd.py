@@ -314,6 +314,25 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
             con.sendall(encoded_img)
 
+    def call_device_method_async(self, method, *args):
+        """ add cancellable... """
+        self.device.call(method, GLib.Variant(*args),
+            Gio.DBusCallFlags.NONE, -1, None, self._method_call_handler)
+
+    def _method_call_handler(self, proxy, res):
+        try:
+            self._async_call_res = proxy.call_finish(res)
+        except Exception as e:
+            self._async_call_res = e
+
+    def wait_for_device_reply(self):
+        self._async_call_res = None
+        while not self._async_call_res:
+            ctx.iteration(True)
+
+        if isinstance(self._async_call_res, Exception):
+            raise self._async_call_res
+
     def gdbus_device_method_call_process(self, method, args=[]):
         return subprocess.Popen([
             'gdbus',
