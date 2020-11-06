@@ -32,10 +32,6 @@
 #include "fprintd.h"
 #include "storage.h"
 
-#define FPRINTD_DEVICE_ACTION_ENROLL (gpointer) "net.reactivated.fprint.device.enroll"
-#define FPRINTD_DEVICE_ACTION_SETUSERNAME (gpointer) "net.reactivated.fprint.device.setusername"
-#define FPRINTD_DEVICE_ACTION_VERIFY (gpointer) "net.reactivated.fprint.device.verify"
-
 static const char *FINGERS_NAMES[] = {
 	[FP_FINGER_UNKNOWN] = "unknown",
 	"left-thumb",
@@ -71,6 +67,13 @@ typedef enum {
 	STATE_UNCLAIMED,
 	STATE_IGNORED,
 } FprintDeviceClaimState;
+
+typedef enum {
+	FPRINT_DEVICE_PERMISSION_NONE = 0,
+	FPRINT_DEVICE_PERMISSION_ENROLL = (1 << 0),
+	FPRINT_DEVICE_PERMISSION_SETUSERNAME = (1 << 1),
+	FPRINT_DEVICE_PERMISSION_VERIFY = (1 << 2),
+} FprintDevicePermission;
 
 typedef struct {
 	/* current method invocation */
@@ -131,6 +134,39 @@ enum fprint_device_signals {
 
 static guint32 last_id = ~0;
 static guint signals[NUM_SIGNALS] = { 0, };
+
+static GType
+fprint_device_permission_get_type (void)
+{
+	static volatile gsize define_type_id = 0;
+
+	if (g_once_init_enter (&define_type_id)) {
+		static const GFlagsValue values[] = {
+ 			{
+				FPRINT_DEVICE_PERMISSION_ENROLL,
+				"FPRINT_DEVICE_PERMISSION_ENROLL",
+				"net.reactivated.fprint.device.enroll"
+			},
+ 			{
+				FPRINT_DEVICE_PERMISSION_SETUSERNAME,
+				"FPRINT_DEVICE_PERMISSION_SETUSERNAME",
+				"net.reactivated.fprint.device.setusername"
+			},
+ 			{
+				FPRINT_DEVICE_PERMISSION_VERIFY,
+				"FPRINT_DEVICE_PERMISSION_VERIFY",
+				"net.reactivated.fprint.device.verify"
+			},
+			{ 0, NULL, NULL }
+		};
+
+		GType type_id = g_flags_register_static (
+			"FprintDevicePermission", values);
+		g_once_init_leave (&define_type_id, type_id);
+	}
+
+	return define_type_id;
+}
 
 static void session_data_free(SessionData *session)
 {
@@ -478,19 +514,29 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev,
 }
 
 static gboolean
-_fprint_device_check_polkit_for_actions (FprintDevice *rdev,
-					 GDBusMethodInvocation *invocation,
-					 GPtrArray *actions,
-					 GError **error)
+fprint_device_check_polkit_for_permissions (FprintDevice *rdev,
+					    GDBusMethodInvocation *invocation,
+					    FprintDevicePermission permissions,
+					    GError **error)
 {
+	g_autoptr(GFlagsClass) permission_flags = NULL;
 	unsigned i;
 
-	if (!actions || !actions->len)
+	if (permissions == FPRINT_DEVICE_PERMISSION_NONE)
 		return TRUE;
 
-	for (i = 0; i < actions->len; ++i) {
-		const char *action = g_ptr_array_index (actions, i);
+	permission_flags =
+		g_type_class_ref (fprint_device_permission_get_type ());
 
+	for (i = 0; i < permission_flags->n_values; ++i) {
+		GFlagsValue *value = &permission_flags->values[i];
+		const char *action;
+
+		if (!(value->value & permissions)) {
+			continue;
+		}
+
+		action = value->value_nick;
 		g_debug ("Getting authorization to perform Polkit action %s",
 			 action);
 
@@ -557,9 +603,9 @@ _fprint_device_check_for_username (FprintDevice *rdev,
 
 	/* If we're not allowed to set a different username,
 	 * then fail */
-	if (!_fprint_device_check_polkit_for_action (rdev, invocation,
-						     FPRINTD_DEVICE_ACTION_SETUSERNAME,
-						     error)) {
+	if (!fprint_device_check_polkit_for_permissions (rdev, invocation,
+							 FPRINT_DEVICE_PERMISSION_SETUSERNAME,
+							 error)) {
 		return NULL;
 	}
 
@@ -1545,13 +1591,12 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
 	FprintDeviceClaimState required_state = STATE_IGNORED;
+	FprintDevicePermission required_perms = FPRINT_DEVICE_PERMISSION_NONE;
 	gboolean needs_user_auth = FALSE;
 	g_autoptr(GError) error = NULL;
-	g_autoptr(GPtrArray) required_actions = NULL;
 	const gchar *method_name;
 
 	method_name = g_dbus_method_invocation_get_method_name (invocation);
-	required_actions = g_ptr_array_new ();
 
 	g_debug ("Requesting device '%s' authorization for method %s from %s",
 		 fp_device_get_name (priv->dev), method_name,
@@ -1560,44 +1605,33 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
 	if (g_str_equal (method_name, "Claim")) {
 		needs_user_auth = TRUE;
 		required_state = STATE_UNCLAIMED;
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_VERIFY);
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_ENROLL);
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "DeleteEnrolledFingers")) {
 		needs_user_auth = TRUE;
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_ENROLL);
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "DeleteEnrolledFingers2")) {
 		required_state = STATE_CLAIMED;
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_ENROLL);
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "EnrollStart")) {
 		required_state = STATE_CLAIMED;
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_ENROLL);
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "EnrollStop")) {
 		required_state = STATE_CLAIMED;
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_ENROLL);
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "ListEnrolledFingers")) {
 		needs_user_auth = TRUE;
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_VERIFY);
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
 	} else if (g_str_equal (method_name, "Release")) {
 		required_state = STATE_CLAIMED;
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_VERIFY);
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_ENROLL);
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "VerifyStart")) {
 		required_state = STATE_CLAIMED;
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_VERIFY);
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
 	} else if (g_str_equal (method_name, "VerifyStop")) {
 		required_state = STATE_CLAIMED;
-		g_ptr_array_add (required_actions,
-				 FPRINTD_DEVICE_ACTION_VERIFY);
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
 	} else {
 		g_assert_not_reached ();
 	}
@@ -1614,9 +1648,9 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
 
 	/* This may possibly block the invocation till the user has not
 	 * provided an authentication method, so other calls could arrive */
-	if (!_fprint_device_check_polkit_for_actions (rdev, invocation,
-						      required_actions,
-						      &error)) {
+	if (!fprint_device_check_polkit_for_permissions (rdev, invocation,
+							 required_perms,
+							 &error)) {
 		return handle_unauthorized_access (rdev, invocation, error);
 	}
 
