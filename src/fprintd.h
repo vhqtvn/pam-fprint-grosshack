@@ -22,6 +22,7 @@
 #include <glib.h>
 #include <gio/gio.h>
 #include <fprint.h>
+#include "fprintd-enums.h"
 #include "fprintd-dbus.h"
 
 /* General */
@@ -33,16 +34,23 @@
 GQuark fprint_error_quark(void);
 
 #define FPRINT_ERROR fprint_error_quark()
-#define FPRINT_ERROR_DBUS_INTERFACE "net.reactivated.Fprint.Error"
 typedef enum {
-	FPRINT_ERROR_CLAIM_DEVICE, /* developer didn't claim the device */
-	FPRINT_ERROR_ALREADY_IN_USE, /* device is already claimed by somebody else */
-	FPRINT_ERROR_INTERNAL, /* internal error occurred */
-	FPRINT_ERROR_PERMISSION_DENIED, /* PolicyKit refused the action */
-	FPRINT_ERROR_NO_ENROLLED_PRINTS, /* No prints are enrolled */
-	FPRINT_ERROR_NO_ACTION_IN_PROGRESS, /* No actions currently in progress */
-	FPRINT_ERROR_INVALID_FINGERNAME, /* the finger name passed was invalid */
-	FPRINT_ERROR_NO_SUCH_DEVICE, /* device does not exist */
+	/* developer didn't claim the device */
+	FPRINT_ERROR_CLAIM_DEVICE, /*< nick=net.reactivated.Fprint.Error.ClaimDevice >*/
+	/* device is already claimed by somebody else */
+	FPRINT_ERROR_ALREADY_IN_USE, /*< nick=net.reactivated.Fprint.Error.AlreadyInUse >*/
+	/* internal error occurred */
+	FPRINT_ERROR_INTERNAL, /*< nick=net.reactivated.Fprint.Error.Internal >*/
+	/* PolicyKit refused the action */
+	FPRINT_ERROR_PERMISSION_DENIED, /*< nick=net.reactivated.Fprint.Error.PermissionDenied >*/
+	/* No prints are enrolled */
+	FPRINT_ERROR_NO_ENROLLED_PRINTS, /*< nick=net.reactivated.Fprint.Error.NoEnrolledPrints >*/
+	/* No actions currently in progress */
+	FPRINT_ERROR_NO_ACTION_IN_PROGRESS, /*< nick=net.reactivated.Fprint.Error.NoActionInProgress >*/
+	/* the finger name passed was invalid */
+	FPRINT_ERROR_INVALID_FINGERNAME, /*< nick=net.reactivated.Fprint.Error.InvalidFingername >*/
+	/* device does not exist */
+	FPRINT_ERROR_NO_SUCH_DEVICE, /*< nick=net.reactivated.Fprint.Error.NoSuchDevice >*/
 } FprintError;
 
 typedef enum {

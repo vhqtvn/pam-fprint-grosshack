@@ -394,28 +394,25 @@ static gboolean fprint_manager_get_default_device(FprintManager *manager,
 	}
 }
 
-#define ERROR_ENTRY(name, dbus_name) \
-	{ FPRINT_ERROR_ ## name, FPRINT_ERROR_DBUS_INTERFACE "." dbus_name }
-GDBusErrorEntry fprint_error_entries[] =
-{
-	ERROR_ENTRY (CLAIM_DEVICE, "ClaimDevice"),
-	ERROR_ENTRY (ALREADY_IN_USE, "AlreadyInUse"),
-	ERROR_ENTRY (INTERNAL, "Internal"),
-	ERROR_ENTRY (PERMISSION_DENIED, "PermissionDenied"),
-	ERROR_ENTRY (NO_ENROLLED_PRINTS, "NoEnrolledPrints"),
-	ERROR_ENTRY (NO_ACTION_IN_PROGRESS, "NoActionInProgress"),
-	ERROR_ENTRY (INVALID_FINGERNAME, "InvalidFingername"),
-	ERROR_ENTRY (NO_SUCH_DEVICE, "NoSuchDevice"),
-};
-
 GQuark fprint_error_quark (void)
 {
 	static volatile gsize quark = 0;
-	if (!quark) {
-		g_dbus_error_register_error_domain ("fprintd-error-quark",
-						    &quark,
-						    fprint_error_entries,
-						    G_N_ELEMENTS (fprint_error_entries));
+	if (g_once_init_enter (&quark)) {
+		g_autoptr(GEnumClass) errors_enum = NULL;
+		GQuark domain;
+		unsigned i;
+
+		domain = g_quark_from_static_string ("fprintd-error-quark");
+		errors_enum = g_type_class_ref (FPRINT_TYPE_ERROR);
+
+		for (i = 0; i < errors_enum->n_values; ++i) {
+			GEnumValue *value = &errors_enum->values[i];
+
+			g_dbus_error_register_error (domain, value->value,
+						     value->value_nick);
+		}
+
+		g_once_init_leave (&quark, domain);
 	}
 	return (GQuark) quark;
 }

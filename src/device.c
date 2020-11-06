@@ -30,7 +30,6 @@
 #include <errno.h>
 
 #include "fprintd.h"
-#include "fprintd-enums.h"
 #include "storage.h"
 
 static const char *FINGERS_NAMES[] = {
