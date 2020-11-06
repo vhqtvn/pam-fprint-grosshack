@@ -45,6 +45,13 @@ typedef enum {
 	FPRINT_ERROR_NO_SUCH_DEVICE, /* device does not exist */
 } FprintError;
 
+typedef enum {
+	FPRINT_DEVICE_PERMISSION_NONE = 0,
+	FPRINT_DEVICE_PERMISSION_ENROLL = (1 << 0), /*< nick=net.reactivated.fprint.device.enroll >*/
+	FPRINT_DEVICE_PERMISSION_SETUSERNAME = (1 << 1), /*< nick=net.reactivated.fprint.device.setusername >*/
+	FPRINT_DEVICE_PERMISSION_VERIFY = (1 << 2), /*< nick=net.reactivated.fprint.device.verify >*/
+} FprintDevicePermission;
+
 /* Manager */
 #define FPRINT_TYPE_MANAGER            (fprint_manager_get_type())
 G_DECLARE_FINAL_TYPE (FprintManager, fprint_manager, FPRINT, MANAGER, GObject)

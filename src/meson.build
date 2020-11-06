@@ -22,11 +22,16 @@ fprintd_dbus_sources = gnome.gdbus_codegen('fprintd-dbus',
     object_manager: true,
 )
 
+fprintd_enum_files = gnome.mkenums_simple('fprintd-enums',
+  sources: 'fprintd.h',
+)
+
 fprintd_deps = declare_dependency(
     include_directories: [
         include_directories('..'),
     ],
     sources: [
+        fprintd_enum_files,
         fprintd_dbus_sources,
     ],
     dependencies: [

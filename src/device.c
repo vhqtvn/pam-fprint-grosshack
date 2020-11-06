@@ -30,6 +30,7 @@
 #include <errno.h>
 
 #include "fprintd.h"
+#include "fprintd-enums.h"
 #include "storage.h"
 
 static const char *FINGERS_NAMES[] = {
@@ -67,13 +68,6 @@ typedef enum {
 	STATE_UNCLAIMED,
 	STATE_IGNORED,
 } FprintDeviceClaimState;
-
-typedef enum {
-	FPRINT_DEVICE_PERMISSION_NONE = 0,
-	FPRINT_DEVICE_PERMISSION_ENROLL = (1 << 0),
-	FPRINT_DEVICE_PERMISSION_SETUSERNAME = (1 << 1),
-	FPRINT_DEVICE_PERMISSION_VERIFY = (1 << 2),
-} FprintDevicePermission;
 
 typedef struct {
 	/* current method invocation */
@@ -134,39 +128,6 @@ enum fprint_device_signals {
 
 static guint32 last_id = ~0;
 static guint signals[NUM_SIGNALS] = { 0, };
-
-static GType
-fprint_device_permission_get_type (void)
-{
-	static volatile gsize define_type_id = 0;
-
-	if (g_once_init_enter (&define_type_id)) {
-		static const GFlagsValue values[] = {
- 			{
-				FPRINT_DEVICE_PERMISSION_ENROLL,
-				"FPRINT_DEVICE_PERMISSION_ENROLL",
-				"net.reactivated.fprint.device.enroll"
-			},
- 			{
-				FPRINT_DEVICE_PERMISSION_SETUSERNAME,
-				"FPRINT_DEVICE_PERMISSION_SETUSERNAME",
-				"net.reactivated.fprint.device.setusername"
-			},
- 			{
-				FPRINT_DEVICE_PERMISSION_VERIFY,
-				"FPRINT_DEVICE_PERMISSION_VERIFY",
-				"net.reactivated.fprint.device.verify"
-			},
-			{ 0, NULL, NULL }
-		};
-
-		GType type_id = g_flags_register_static (
-			"FprintDevicePermission", values);
-		g_once_init_leave (&define_type_id, type_id);
-	}
-
-	return define_type_id;
-}
 
 static void session_data_free(SessionData *session)
 {
@@ -525,8 +486,7 @@ fprint_device_check_polkit_for_permissions (FprintDevice *rdev,
 	if (permissions == FPRINT_DEVICE_PERMISSION_NONE)
 		return TRUE;
 
-	permission_flags =
-		g_type_class_ref (fprint_device_permission_get_type ());
+	permission_flags = g_type_class_ref (FPRINT_TYPE_DEVICE_PERMISSION);
 
 	for (i = 0; i < permission_flags->n_values; ++i) {
 		GFlagsValue *value = &permission_flags->values[i];
