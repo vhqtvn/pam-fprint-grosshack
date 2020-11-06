@@ -15,8 +15,6 @@ ProtectControlGroups=true
 StateDirectory=fprint
 ProtectHome=true
 PrivateTmp=true
-ProtectKernelLogs=yes
-SystemCallFilter=@system-service
 
 # Network
 PrivateNetwork=true
@@ -33,8 +31,3 @@ RestrictRealtime=true
 
 # Privilege escalation
 NoNewPrivileges=true
-TasksMax=1
-
-# Capabilities
-CapabilityBoundingSet=
-ProtectClock=yes
