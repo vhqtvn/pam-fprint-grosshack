@@ -314,20 +314,27 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
             con.sendall(encoded_img)
 
+    def gdbus_device_method_call_process(self, method, args=[]):
+        return subprocess.Popen([
+            'gdbus',
+            'call',
+            '--system',
+            '--dest',
+            self.device.get_name(),
+            '--object-path',
+            self.device.get_object_path(),
+            '--method',
+            '{}.{}'.format(self.device.get_interface_name(), method),
+        ] + args, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+
     def call_device_method_from_other_client(self, method, args=[]):
         try:
-            return subprocess.check_output([
-                'gdbus',
-                'call',
-                '--system',
-                '--dest',
-                self.device.get_name(),
-                '--object-path',
-                self.device.get_object_path(),
-                '--method',
-                '{}.{}'.format(self.device.get_interface_name(), method),
-            ] + args, stderr=subprocess.STDOUT, timeout=5)
-        except subprocess.CalledProcessError as e:
+            proc = self.gdbus_device_method_call_process(method, args)
+            proc.wait(timeout=5)
+            if proc.returncode != 0:
+                raise GLib.GError(proc.stdout.read())
+            return proc.stdout.read()
+        except subprocess.TimeoutExpired as e:
             raise GLib.GError(e.output)
 
 
