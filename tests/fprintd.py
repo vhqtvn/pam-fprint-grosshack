@@ -136,6 +136,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
     def setUpClass(cls):
         super().setUpClass()
         fprintd = None
+        cls._polkitd = None
 
         if 'FPRINT_BUILD_DIR' in os.environ:
             print('Testing local build')
@@ -256,9 +257,19 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self.daemon = None
 
     def polkitd_start(self):
+        if self._polkitd:
+            return
+
+        if 'POLKITD_MOCK_PATH' in os.environ:
+            polkitd_template = os.path.join(os.getenv('POLKITD_MOCK_PATH'), 'polkitd.py')
+        else:
+            polkitd_template = os.path.join(os.path.dirname(__file__), 'dbusmock/polkitd.py')
+        print ('Using template from %s' % polkitd_template)
+
         self._polkitd, self._polkitd_obj = self.spawn_server_template(
-            'polkitd', {}, stdout=DEVNULL)
-        self.addCleanup(self.polkitd_stop)
+            polkitd_template, {}, stdout=subprocess.PIPE)
+
+        return self._polkitd
 
     def polkitd_stop(self):
         if self._polkitd is None:
@@ -365,6 +376,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         self.g_signal_id = self.device.connect('g-signal', signal_cb)
 
     def tearDown(self):
+        self.polkitd_stop()
         self.device.disconnect(self.g_signal_id)
         self.device = None
         self.manager = None
