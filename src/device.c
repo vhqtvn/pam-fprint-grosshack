@@ -699,7 +699,13 @@ static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(GError) error = NULL;
 	char *sender, *user;
+
+	if (!_fprint_device_check_claimed (rdev, invocation, STATE_UNCLAIMED, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
+	}
 
 	locked = g_mutex_locker_new (&priv->lock);
 	g_assert_null (priv->session);
@@ -756,8 +762,14 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 static gboolean fprint_device_release (FprintDBusDevice *dbus_dev,
 				       GDBusMethodInvocation *invocation)
 {
+	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
+
+	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
+	}
 
 	if (priv->current_cancellable) {
 		if (priv->current_action == ACTION_ENROLL) {
@@ -950,6 +962,11 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	g_autoptr(GError) error = NULL;
 	guint finger_num = finger_name_to_num (finger_name);
 
+	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
+	}
+
 	if (priv->current_action != ACTION_NONE) {
 		if (priv->current_action == ACTION_ENROLL) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
@@ -1050,6 +1067,11 @@ static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
+
+	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
+	}
 
 	if (priv->current_action == ACTION_NONE) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
@@ -1260,6 +1282,11 @@ static gboolean fprint_device_enroll_start (FprintDBusDevice *dbus_dev,
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	int finger_num = finger_name_to_num (finger_name);
 
+	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
+	}
+
 	if (finger_num == -1) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_INVALID_FINGERNAME,
 			    "Invalid finger name");
@@ -1304,7 +1331,12 @@ static gboolean fprint_device_enroll_stop (FprintDBusDevice *dbus_dev,
 {
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
+
+	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
+	}
 
 	if (priv->current_action != ACTION_ENROLL) {
 		if (priv->current_action == ACTION_NONE) {
@@ -1319,7 +1351,6 @@ static gboolean fprint_device_enroll_stop (FprintDBusDevice *dbus_dev,
 		} else
 			g_assert_not_reached ();
 		g_dbus_method_invocation_return_gerror (invocation, error);
-		g_error_free (error);
 		return TRUE;
 	}
 
@@ -1514,6 +1545,12 @@ static gboolean fprint_device_delete_enrolled_fingers2 (FprintDBusDevice *dbus_d
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(GError) error = NULL;
+
+	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
+	}
 
 	locked = g_mutex_locker_new (&priv->lock);
 
@@ -1595,6 +1632,9 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
 		g_assert_not_reached ();
 	}
 
+	/* This is just a quick check in order to avoid authentication if
+	 * the user cannot make the call at this time anyway.
+	 * The method handler itself is required to check again! */
 	if (!_fprint_device_check_claimed (rdev, invocation, required_state,
 					   &error)) {
 		return handle_unauthorized_access (rdev, invocation, error);
@@ -1610,14 +1650,6 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
 	if (!fprint_device_check_polkit_for_permissions (rdev, invocation,
 							 required_perms,
 							 &error)) {
-		return handle_unauthorized_access (rdev, invocation, error);
-	}
-
-	/* By this time some other invocation might have beaten the one that
-	 * arrived earlier, as an user might slower in authenticating, so
-	 * we need to check again wheter the device is claimed */
-	if (!_fprint_device_check_claimed (rdev, invocation, required_state,
-					   &error)) {
 		return handle_unauthorized_access (rdev, invocation, error);
 	}
 
