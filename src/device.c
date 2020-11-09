@@ -69,15 +69,17 @@ typedef enum {
 } FprintDeviceClaimState;
 
 typedef struct {
+	volatile gint _refcount;
+
 	/* current method invocation */
 	GDBusMethodInvocation *invocation;
 
 	/* The current user of the device, if claimed */
-	char *sender;
+	const char * const sender;
 
 	/* The current user of the device, or if allowed,
 	 * what was passed as a username argument */
-	char *username;
+	const char * const username;
 
 	gboolean verify_status_reported;
 } SessionData;
@@ -85,8 +87,7 @@ typedef struct {
 typedef struct {
 	guint32 id;
 	FpDevice *dev;
-	SessionData *session;
-	GMutex lock;
+	SessionData *_session;
 
 	PolkitAuthority *auth;
 
@@ -128,14 +129,70 @@ enum fprint_device_signals {
 static guint32 last_id = ~0;
 static guint signals[NUM_SIGNALS] = { 0, };
 
-static void session_data_free(SessionData *session)
+static void
+session_data_unref(SessionData *session)
 {
-	g_clear_pointer(&session->sender, g_free);
-	g_clear_pointer(&session->username, g_free);
-	g_clear_object (&session->invocation);
-	g_free(session);
+	if (g_atomic_int_dec_and_test (&session->_refcount)) {
+		g_clear_pointer((char**) &session->sender, g_free);
+		g_clear_pointer((char**) &session->username, g_free);
+		g_clear_object (&session->invocation);
+		g_free(session);
+	}
 }
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(SessionData, session_data_free);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(SessionData, session_data_unref);
+
+static SessionData*
+session_data_get (FprintDevicePrivate *priv)
+{
+	SessionData *invalid = (SessionData*) &priv->_session;
+	SessionData *cur;
+
+	/* Get the current pointer and mark the pointer as "busy". */
+	do {
+		cur = priv->_session;
+		/* Swap if cur is valid, otherwise busy loop. */
+	} while (cur == invalid || !g_atomic_pointer_compare_and_exchange (&priv->_session, cur, invalid));
+
+	/* We can safely increase the reference count now. */
+	if (cur)
+		g_atomic_int_inc (&cur->_refcount);
+
+	/* Swap back, this must succeed. */
+	if (!g_atomic_pointer_compare_and_exchange (&priv->_session, invalid, cur))
+		g_assert_not_reached ();
+
+	return cur;
+}
+
+/* Pass NULL sender and username to unset session data. */
+static SessionData*
+session_data_set_new (FprintDevicePrivate *priv, gchar *sender, gchar *username)
+{
+	SessionData *invalid = (SessionData*) &priv->_session;
+	SessionData *new = NULL;
+	SessionData *old;
+
+	g_assert ((!sender && !username) || (sender && username));
+	if (sender) {
+		new = g_new0 (SessionData, 1);
+		/* Internal reference of the pointer and returned reference. */
+		new->_refcount = 2;
+		*(char**) &new->sender = sender;
+		*(char**) &new->username = username;
+	}
+
+	/* Get the current (but not if it is busy) and put the new one in place. */
+	do {
+		old = priv->_session;
+		/* Swap if old is valid, otherwise busy loop as someone is ref'ing it currently. */
+	} while (old == invalid || !g_atomic_pointer_compare_and_exchange (&priv->_session, old, new));
+
+	/* We can safely drop the our internal reference now. */
+	if (old)
+		session_data_unref (old);
+
+	return new;
+}
 
 static void fprint_device_finalize(GObject *object)
 {
@@ -143,9 +200,7 @@ static void fprint_device_finalize(GObject *object)
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(self);
 
 	g_hash_table_destroy (priv->clients);
-	g_mutex_lock (&priv->lock);
-	g_clear_pointer(&priv->session, session_data_free);
-	g_mutex_unlock (&priv->lock);
+	session_data_set_new(priv, NULL, NULL);
 	/* FIXME close and stuff */
 
 	G_OBJECT_CLASS(fprint_device_parent_class)->finalize(object);
@@ -261,8 +316,6 @@ static void fprint_device_init(FprintDevice *device)
 					       g_str_equal,
 					       g_free,
 					       NULL);
-
-	g_mutex_init (&priv->lock);
 
 	g_signal_connect (device, "g-authorize-method",
 			  G_CALLBACK (action_authorization_handler),
@@ -387,18 +440,18 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 			      GError **error)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(SessionData) session = NULL;
 	const char *sender;
 	gboolean retval;
 
 	if (requested_state == STATE_IGNORED)
 		return TRUE;
 
-	locked = g_mutex_locker_new (&priv->lock);
+	session = session_data_get (priv);
 
 	if (requested_state == STATE_UNCLAIMED) {
 		/* Is it already claimed? */
-		if (!priv->session) {
+		if (!session) {
 			return TRUE;
 		}
 
@@ -410,17 +463,17 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 	g_assert (requested_state == STATE_CLAIMED);
 
 	/* The device wasn't claimed, exit */
-	if (priv->session == NULL) {
+	if (session == NULL) {
 		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE,
 			     _("Device was not claimed before use"));
 		return FALSE;
 	}
 
 	sender = g_dbus_method_invocation_get_sender (invocation);
-	retval = g_str_equal (sender, priv->session->sender);
+	retval = g_str_equal (sender, session->sender);
+	g_print("sender: %s, session owner: %s", sender, session->sender);
 
-	if (retval == FALSE ||
-	    priv->session->invocation != NULL) {
+	if (retval == FALSE || session->invocation != NULL) {
 		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
 			     _("Device already in use by another user"));
 	}
@@ -577,30 +630,28 @@ _fprint_device_client_vanished (GDBusConnection *connection,
 				FprintDevice *rdev)
 {
 	g_autoptr(GError) error = NULL;
-	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(SessionData) session = NULL;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 
-	locked = g_mutex_locker_new (&priv->lock);
+	session = session_data_get (priv);
 
 	/* Was that the client that claimed the device? */
-	if (priv->session != NULL &&
-	    g_strcmp0 (priv->session->sender, name) == 0) {
+	if (session != NULL &&
+	    g_strcmp0 (session->sender, name) == 0) {
 		while (priv->current_action != ACTION_NONE) {
 			/* OPEN/CLOSE are not cancellable, we just need to wait */
 			if (priv->current_cancellable)
 				g_cancellable_cancel (priv->current_cancellable);
 
-			g_mutex_unlock (&priv->lock);
 			g_main_context_iteration (NULL, TRUE);
-			g_mutex_lock (&priv->lock);
 		}
 
 		/* The session may have disappeared at this point if the device
 		 * was already closing. */
-		if (priv->session && !fp_device_close_sync (priv->dev, NULL, &error))
+		if (session && !fp_device_close_sync (priv->dev, NULL, &error))
 			g_debug ("Error closing device after disconnect: %s", error->message);
 
-		g_clear_pointer(&priv->session, session_data_free);
+		session_data_set_new (priv, NULL, NULL);
 	}
 	g_hash_table_remove (priv->clients, name);
 
@@ -634,11 +685,11 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(SessionData) session = NULL;
 	g_autoptr(GDBusMethodInvocation) invocation = NULL;
 
-	locked = g_mutex_locker_new (&priv->lock);
-	invocation = g_steal_pointer (&priv->session->invocation);
+	session = session_data_get (priv);
+	invocation = g_steal_pointer (&session->invocation);
 
 	priv->current_action = ACTION_NONE;
 	if (!fp_device_open_finish (dev, res, &error)) {
@@ -648,7 +699,7 @@ static void dev_open_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 		                          FPRINT_ERROR_INTERNAL,
 		                          "Open failed with error: %s", error->message);
 		g_dbus_method_invocation_return_gerror (invocation, dbus_error);
-		g_clear_pointer(&priv->session, session_data_free);
+		session_data_set_new (priv, NULL, NULL);
 		return;
 	}
 
@@ -698,7 +749,7 @@ static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
 {
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(SessionData) session = NULL;
 	g_autoptr(GError) error = NULL;
 	char *sender, *user;
 
@@ -707,21 +758,18 @@ static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
 		return TRUE;
 	}
 
-	locked = g_mutex_locker_new (&priv->lock);
-	g_assert_null (priv->session);
-
 	user = g_object_steal_qdata (G_OBJECT (invocation), quark_auth_user);
 	g_assert (user);
 
 	sender = g_strdup (g_dbus_method_invocation_get_sender (invocation));
 	_fprint_device_add_client (rdev, sender);
 
-	priv->session = g_new0(SessionData, 1);
-	priv->session->invocation = g_object_ref (invocation);
-	priv->session->username = g_steal_pointer (&user);
-	priv->session->sender = g_steal_pointer (&sender);
+	session = session_data_set_new (priv, g_steal_pointer (&sender), g_steal_pointer(&user));
+	session->invocation = g_object_ref (invocation);
+	username = g_steal_pointer (&user);
+	sender = g_steal_pointer (&sender);
 
-	g_debug ("user '%s' claiming the device: %d", priv->session->username, priv->id);
+	g_debug ("user '%s' claiming the device: %d", session->username, priv->id);
 
 	priv->current_action = ACTION_OPEN;
 	fp_device_open (priv->dev, NULL, (GAsyncReadyCallback) dev_open_cb, rdev);
@@ -734,12 +782,11 @@ static void dev_close_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	g_autoptr(GMutexLocker) locked = NULL;
 	g_autoptr(SessionData) session = NULL;
 	g_autoptr(GDBusMethodInvocation) invocation = NULL;
 
-	locked = g_mutex_locker_new (&priv->lock);
-	session = g_steal_pointer (&priv->session);
+	session = session_data_get (priv);
+	session_data_set_new (priv, NULL, NULL);
 	invocation = g_steal_pointer (&session->invocation);
 
 	priv->current_action = ACTION_NONE;
@@ -763,6 +810,7 @@ static gboolean fprint_device_release (FprintDBusDevice *dbus_dev,
 				       GDBusMethodInvocation *invocation)
 {
 	g_autoptr(GError) error = NULL;
+	g_autoptr(SessionData) session = NULL;
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 
@@ -784,9 +832,8 @@ static gboolean fprint_device_release (FprintDBusDevice *dbus_dev,
 			g_main_context_iteration (NULL, TRUE);
 	}
 
-	g_mutex_lock (&priv->lock);
-	priv->session->invocation = g_object_ref (invocation);
-	g_mutex_unlock (&priv->lock);
+	session = session_data_get (priv);
+	session->invocation = g_object_ref (invocation);
 
 	priv->current_action = ACTION_CLOSE;
 	fp_device_close (priv->dev, NULL, (GAsyncReadyCallback) dev_close_cb, rdev);
@@ -800,13 +847,14 @@ static void report_verify_status (FprintDevice *rdev,
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
 	const char *result = verify_result_to_name (match, error);
-	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(SessionData) session = NULL;
 	gboolean done;
 
 	done = (error == NULL || error->domain != FP_DEVICE_RETRY);
-	locked = g_mutex_locker_new (&priv->lock);
 
-	if (done && priv->session->verify_status_reported) {
+	session = session_data_get (priv);
+
+	if (done && session->verify_status_reported) {
 		/* It is completely fine for cancellation to occur after a
 		 * result has been reported. */
 		if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
@@ -818,7 +866,7 @@ static void report_verify_status (FprintDevice *rdev,
 	g_signal_emit (rdev, signals[SIGNAL_VERIFY_STATUS], 0, result, done);
 
 	if (done)
-		priv->session->verify_status_reported = TRUE;
+		session->verify_status_reported = TRUE;
 }
 
 static void match_cb (FpDevice *device,
@@ -845,6 +893,7 @@ static void match_cb (FpDevice *device,
 static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 {
 	g_autoptr(GError) error = NULL;
+	g_autoptr(SessionData) session = NULL;
 	FprintDevice *rdev = user_data;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
@@ -855,6 +904,8 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 	success = fp_device_verify_finish (dev, res, &match, NULL, &error);
 	g_assert (!!success == !error);
 	name = verify_result_to_name (match, error);
+
+	session = session_data_get (priv);
 
 	g_debug("verify_cb: result %s", name);
 
@@ -867,8 +918,6 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 				  (GAsyncReadyCallback) verify_cb,
 				  rdev);
 	} else {
-		g_autoptr(GMutexLocker) locked = NULL;
-
 		g_clear_object (&priv->verify_data);
 
 		if (error) {
@@ -880,17 +929,15 @@ static void verify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 			}
 		}
 
-		locked = g_mutex_locker_new (&priv->lock);
-
 		/* Return the cancellation or reset action right away if vanished. */
 		if (priv->current_cancel_invocation) {
 			fprint_dbus_device_complete_verify_stop (dbus_dev,
 				g_steal_pointer (&priv->current_cancel_invocation));
 			priv->current_action = ACTION_NONE;
-			priv->session->verify_status_reported = FALSE;
+			session->verify_status_reported = FALSE;
 		} else if (g_cancellable_is_cancelled (priv->current_cancellable)) {
 			priv->current_action = ACTION_NONE;
-			priv->session->verify_status_reported = FALSE;
+			session->verify_status_reported = FALSE;
 		}
 
 		g_clear_object (&priv->current_cancellable);
@@ -922,8 +969,6 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 				    (GAsyncReadyCallback) identify_cb,
 				    rdev);
 	} else {
-		g_autoptr(GMutexLocker) locked = NULL;
-
 		g_clear_pointer (&priv->identify_data, g_ptr_array_unref);
 
 		if (error) {
@@ -935,16 +980,16 @@ static void identify_cb(FpDevice *dev, GAsyncResult *res, void *user_data)
 			}
 		}
 
-		locked = g_mutex_locker_new (&priv->lock);
-
 		/* Return the cancellation or reset action right away if vanished. */
 		if (priv->current_cancel_invocation) {
 			fprint_dbus_device_complete_verify_stop (dbus_dev,
 				g_steal_pointer (&priv->current_cancel_invocation));
 			priv->current_action = ACTION_NONE;
 		} else if (g_cancellable_is_cancelled (priv->current_cancellable)) {
+			g_autoptr(SessionData) session = NULL;
+			session = session_data_get (priv);
 			priv->current_action = ACTION_NONE;
-			priv->session->verify_status_reported = FALSE;
+			session->verify_status_reported = FALSE;
 		}
 
 		g_clear_object (&priv->current_cancellable);
@@ -959,6 +1004,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GPtrArray) gallery = NULL;
 	g_autoptr(FpPrint) print = NULL;
+	g_autoptr(SessionData) session = NULL;
 	g_autoptr(GError) error = NULL;
 	guint finger_num = finger_name_to_num (finger_name);
 
@@ -966,6 +1012,8 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
 	}
+
+	session = session_data_get (priv);
 
 	if (priv->current_action != ACTION_NONE) {
 		if (priv->current_action == ACTION_ENROLL) {
@@ -980,11 +1028,9 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	}
 
 	if (finger_num == -1) {
-		g_autoptr(GMutexLocker) locked = NULL;
 		GSList *prints;
 
-		locked = g_mutex_locker_new (&priv->lock);
-		prints = store.discover_prints(priv->dev, priv->session->username);
+		prints = store.discover_prints(priv->dev, session->username);
 		if (prints == NULL) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
 				    "No fingerprints enrolled");
@@ -999,7 +1045,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 			for (l = prints; l != NULL; l = l->next) {
 				g_debug ("adding finger %d to the gallery", GPOINTER_TO_INT (l->data));
 				store.print_data_load(priv->dev, GPOINTER_TO_INT (l->data),
-						      priv->session->username, &print);
+						      session->username, &print);
 
 				if (print)
 					g_ptr_array_add (gallery, g_steal_pointer (&print));
@@ -1026,15 +1072,12 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 				    match_cb, rdev, NULL,
 		                    (GAsyncReadyCallback) identify_cb, rdev);
 	} else {
-		g_autoptr(GMutexLocker) locked = NULL;
-
 		priv->current_action = ACTION_VERIFY;
 
 		g_debug("start verification device %d finger %d", priv->id, finger_num);
 
-		locked = g_mutex_locker_new (&priv->lock);
 		store.print_data_load(priv->dev, finger_num,
-				      priv->session->username, &print);
+				      session->username, &print);
 
 		if (!print) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
@@ -1064,6 +1107,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 					   GDBusMethodInvocation *invocation)
 {
+	g_autoptr(SessionData) session = NULL;
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	GError *error = NULL;
@@ -1095,9 +1139,8 @@ static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 		fprint_dbus_device_complete_verify_stop (dbus_dev, invocation);
 		priv->current_action = ACTION_NONE;
 
-		g_mutex_lock (&priv->lock);
-		priv->session->verify_status_reported = FALSE;
-		g_mutex_unlock (&priv->lock);
+		session = session_data_get (priv);
+		session->verify_status_reported = FALSE;
 	}
 
 	return TRUE;
@@ -1190,18 +1233,18 @@ static gboolean try_delete_print(FprintDevice *rdev)
 static FpPrint*
 fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
 {
+	g_autoptr(SessionData) session = NULL;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	g_autoptr(GMutexLocker) locked = NULL;
 	FpPrint *template = NULL;
 	GDateTime *datetime = NULL;
 	GDate *date = NULL;
 	gint year, month, day;
 
-	locked = g_mutex_locker_new (&priv->lock);
+	session = session_data_get (priv);
 
 	template = fp_print_new (priv->dev);
 	fp_print_set_finger (template, finger_num);
-	fp_print_set_username (template, priv->session->username);
+	fp_print_set_username (template, session->username);
 	datetime = g_date_time_new_now_local ();
 	g_date_time_get_ymd (datetime, &year, &month, &day);
 	date = g_date_new_dmy (day, month, year);
@@ -1544,7 +1587,7 @@ static gboolean fprint_device_delete_enrolled_fingers2 (FprintDBusDevice *dbus_d
 {
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	g_autoptr(GMutexLocker) locked = NULL;
+	g_autoptr(SessionData) session = NULL;
 	g_autoptr(GError) error = NULL;
 
 	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
@@ -1552,9 +1595,9 @@ static gboolean fprint_device_delete_enrolled_fingers2 (FprintDBusDevice *dbus_d
 		return TRUE;
 	}
 
-	locked = g_mutex_locker_new (&priv->lock);
+	session = session_data_get (priv);
 
-	delete_enrolled_fingers (rdev, priv->session->username);
+	delete_enrolled_fingers (rdev, session->username);
 	fprint_dbus_device_complete_delete_enrolled_fingers2 (dbus_dev,
 							      invocation);
 	return TRUE;
