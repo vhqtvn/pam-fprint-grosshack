@@ -305,6 +305,11 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 	quark_auth_user = g_quark_from_static_string ("authorized-user");
 }
 
+static void _unwatch_name (gpointer id)
+{
+	g_bus_unwatch_name (GPOINTER_TO_INT (id));
+}
+
 static void fprint_device_init(FprintDevice *device)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(device);
@@ -315,7 +320,7 @@ static void fprint_device_init(FprintDevice *device)
 	priv->clients = g_hash_table_new_full (g_str_hash,
 					       g_str_equal,
 					       g_free,
-					       NULL);
+					       _unwatch_name);
 
 	g_signal_connect (device, "g-authorize-method",
 			  G_CALLBACK (action_authorization_handler),
