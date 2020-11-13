@@ -194,6 +194,21 @@ session_data_set_new (FprintDevicePrivate *priv, gchar *sender, gchar *username)
 	return new;
 }
 
+static void fprint_device_dispose(GObject *object)
+{
+	FprintDevice *self = (FprintDevice *) object;
+	FprintDevicePrivate *priv = fprint_device_get_instance_private(self);
+
+	g_hash_table_remove_all (priv->clients);
+	g_object_disconnect (object,
+			     "g-authorize-method",
+			     G_CALLBACK (action_authorization_handler),
+			     NULL,
+			     NULL);
+
+	G_OBJECT_CLASS(fprint_device_parent_class)->dispose(object);
+}
+
 static void fprint_device_finalize(GObject *object)
 {
 	FprintDevice *self = (FprintDevice *) object;
@@ -267,6 +282,7 @@ static void fprint_device_class_init(FprintDeviceClass *klass)
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GParamSpec *pspec;
 
+	gobject_class->dispose = fprint_device_dispose;
 	gobject_class->finalize = fprint_device_finalize;
 	gobject_class->set_property = fprint_device_set_property;
 	gobject_class->get_property = fprint_device_get_property;
