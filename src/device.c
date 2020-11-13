@@ -201,6 +201,7 @@ static void fprint_device_finalize(GObject *object)
 
 	g_hash_table_destroy (priv->clients);
 	session_data_set_new(priv, NULL, NULL);
+	g_clear_object (&priv->auth);
 	/* FIXME close and stuff */
 
 	G_OBJECT_CLASS(fprint_device_parent_class)->finalize(object);
