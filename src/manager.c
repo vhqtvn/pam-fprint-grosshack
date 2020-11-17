@@ -249,8 +249,9 @@ device_removed_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 		if (dev != device)
 			continue;
 
-		g_dbus_interface_skeleton_unexport (
-			G_DBUS_INTERFACE_SKELETON (rdev));
+		g_dbus_object_manager_server_unexport (
+			G_DBUS_OBJECT_MANAGER_SERVER (priv->object_manager),
+			g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (rdev)));
 
 		g_signal_handlers_disconnect_by_data (rdev, manager);
 
