@@ -218,7 +218,14 @@ static void fprint_device_finalize(GObject *object)
 	session_data_set_new(priv, NULL, NULL);
 	g_clear_object (&priv->auth);
 	g_clear_object (&priv->dev);
-	/* FIXME close and stuff */
+
+	if (priv->current_action != ACTION_NONE ||
+	    priv->_session ||
+	    priv->verify_data ||
+	    priv->identify_data ||
+	    priv->current_cancellable ||
+	    priv->current_cancel_invocation)
+		g_critical("Device was not cleaned up properly before being finalized.");
 
 	G_OBJECT_CLASS(fprint_device_parent_class)->finalize(object);
 }
