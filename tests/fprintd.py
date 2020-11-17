@@ -304,6 +304,11 @@ class FPrintdTest(dbusmock.DBusTestCase):
             con.sendall(struct.pack('ii', -2, error))
 
     # From libfprint tests
+    def send_remove(self):
+        with Connection(self.sockaddr) as con:
+            con.sendall(struct.pack('ii', -5, 0))
+
+    # From libfprint tests
     def send_image(self, image):
         img = self.prints[image]
         with Connection(self.sockaddr) as con:
@@ -681,6 +686,27 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         dbus.close_sync()
 
         time.sleep(1)
+
+    def test_removal_during_enroll(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
+                                      'net.reactivated.fprint.device.enroll'])
+        self.device.Claim('(s)', 'testuser')
+        self.device.EnrollStart('(s)', 'left-index-finger')
+
+        # Now remove the device while we are enrolling, which will cause an error
+        self.send_remove()
+        self.wait_for_result(expected='enroll-unknown-error')
+
+        # The device will still be there now until it is released
+        devices = self.manager.GetDevices()
+        self.assertIn(self.device.get_object_path(), devices)
+        with self.assertFprintError('Internal'):
+            self.device.Release()
+
+        # And now it will be gone
+        devices = self.manager.GetDevices()
+        self.assertNotIn(self.device.get_object_path(), devices)
+
 
 class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
 
