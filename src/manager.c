@@ -214,8 +214,10 @@ device_added_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 {
 	FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
 	g_autoptr(FprintDBusObjectSkeleton) object = NULL;
-	FprintDevice *rdev = fprint_device_new(device);
+	g_autoptr(FprintDevice) rdev = NULL;
 	g_autofree gchar *path = NULL;
+
+	rdev = fprint_device_new(device);
 
 	g_signal_connect (G_OBJECT(rdev), "notify::in-use",
 			  G_CALLBACK (fprint_manager_in_use_notified), manager);
