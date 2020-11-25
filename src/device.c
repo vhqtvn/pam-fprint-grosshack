@@ -501,7 +501,6 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 
 	sender = g_dbus_method_invocation_get_sender (invocation);
 	retval = g_str_equal (sender, session->sender);
-	g_print("sender: %s, session owner: %s", sender, session->sender);
 
 	if (retval == FALSE || session->invocation != NULL) {
 		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
