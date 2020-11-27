@@ -1,6 +1,18 @@
 This file lists notable changes in each release. For the full history of all
 changes, see ChangeLog.
 
+Version 1.90.4:
+
+This fprintd release contains major core reworkings and improved testing.
+As such, only the most important changes are listed here, focusing on
+changes relevant to distributors.
+
+Highlights:
+ - Authentication is now required to enroll a new print (#5)
+ - Add support for the libfprint early reporting mechanism
+ - Proper hotplug support together with libfprint 1.90.4
+ - Handle STATE_DIRECTORY containing multiple paths
+
 version 1.90.1:
 - Add support for prints saved on the fingerprint device itself
 - Add integration tests using the virtual image driver, and further
