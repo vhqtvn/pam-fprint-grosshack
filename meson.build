@@ -71,7 +71,7 @@ gio_dep = dependency('gio-2.0', version: '>=' + glib_min_version)
 gio_unix_dep = dependency('gio-unix-2.0', version: '>=' + glib_min_version)
 gmodule_dep = dependency('gmodule-2.0', version: '>=' + glib_min_version)
 libfprint_dep = dependency('libfprint-2', version: '>=' + libfprint_min_version)
-polkit_gobject_dep = dependency('polkit-gobject-1', version: '>= 0.91')
+polkit_gobject_dep = dependency('polkit-gobject-1', version: '>= 0.114')
 dbus_dep = dependency('dbus-1', required: false)
 libsystemd_dep = dependency('libsystemd', required: get_option('pam'))
 pam_dep = cc.find_library('pam',
