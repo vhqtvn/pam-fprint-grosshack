@@ -200,11 +200,6 @@ static void fprint_device_dispose(GObject *object)
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(self);
 
 	g_hash_table_remove_all (priv->clients);
-	g_object_disconnect (object,
-			     "g-authorize-method",
-			     G_CALLBACK (action_authorization_handler),
-			     NULL,
-			     NULL);
 
 	G_OBJECT_CLASS(fprint_device_parent_class)->dispose(object);
 }
