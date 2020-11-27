@@ -18,7 +18,9 @@ import subprocess
 import dbus
 import dbusmock
 import fcntl
+import glob
 import os
+import shutil
 import time
 import pypamtest
 
@@ -67,6 +69,9 @@ class TestPamFprintd(dbusmock.DBusTestCase):
     @classmethod
     def tearDownClass(klass):
         klass.stop_monitor()
+
+        # Remove pam wrapper files, as they may break other tests
+        [shutil.rmtree(i) for i in glob.glob('/tmp/pam.[0-9A-z]')]
 
     def setUp(self):
         (self.p_mock, self.obj_fprintd_manager) = self.spawn_server_template(
