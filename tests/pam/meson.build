@@ -39,6 +39,7 @@ foreach t: tests
         {
             'name': t,
             'file': files(meson.current_source_dir() / t + '.py')[0],
+            'is_parallel': false,
             'env': [
                 'TOPBUILDDIR=' + meson.build_root(),
                 'TOPSRCDIR=' + meson.source_root(),
