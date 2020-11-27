@@ -139,6 +139,7 @@ cdata.set_quoted('GETTEXT_PACKAGE', meson.project_name())
 cdata.set_quoted('PACKAGE_VERSION', meson.project_version())
 cdata.set_quoted('VERSION', meson.project_version())
 cdata.set_quoted('SYSCONFDIR', sysconfdir)
+cdata.set('POLKIT_HAS_AUTOPOINTERS', polkit_gobject_dep.version().version_compare('>= 0.114'))
 
 config_h = configure_file(
   input: 'config.h.in',

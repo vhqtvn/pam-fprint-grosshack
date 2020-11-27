@@ -129,6 +129,12 @@ enum fprint_device_signals {
 static guint32 last_id = ~0;
 static guint signals[NUM_SIGNALS] = { 0, };
 
+#ifndef POLKIT_HAS_AUTOPOINTERS
+/* FIXME: Remove this once we're fine to depend on polkit 0.114 */
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (PolkitAuthorizationResult, g_object_unref)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (PolkitSubject, g_object_unref)
+#endif
+
 static void
 session_data_unref(SessionData *session)
 {

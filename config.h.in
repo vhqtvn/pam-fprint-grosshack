@@ -9,3 +9,6 @@
 
 /* Define to the version of this package. */
 #mesondefine VERSION
+
+/* Whether current polkit version supports autopointers */
+#mesondefine POLKIT_HAS_AUTOPOINTERS
