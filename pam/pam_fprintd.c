@@ -217,7 +217,7 @@ verify_finger_selected (sd_bus_message *m,
 	char *msg;
 
 	if (sd_bus_message_read_basic (m, 's', &finger_name) < 0) {
-		pam_syslog (data->pamh, LOG_ERR, "Failed to parse VerifyFingerSelected signal: %m");
+		pam_syslog (data->pamh, LOG_ERR, "Failed to parse VerifyFingerSelected signal: %d", errno);
 		return 0;
 	}
 
@@ -558,7 +558,7 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 	sd_bus *bus = NULL;
 
 	if (sd_bus_open_system (&bus) < 0) {
-		pam_syslog (pamh, LOG_ERR, "Error with getting the bus: %m");
+		pam_syslog (pamh, LOG_ERR, "Error with getting the bus: %d", errno);
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 
