@@ -3,7 +3,7 @@ project('fprintd', 'c',
     license: 'GPLv2+',
     default_options: [
         'buildtype=debugoptimized',
-        'warning_level=1',
+        'warning_level=3',
         'c_std=gnu99',
     ],
     meson_version: '>= 0.50.0')
@@ -14,7 +14,6 @@ i18n = import('i18n')
 cc = meson.get_compiler('c')
 common_cflags = cc.get_supported_arguments([
     '-fno-strict-aliasing',
-    '-Wall',
     '-Wcast-align',
     '-Werror=address',
     '-Werror=array-bounds',
@@ -50,6 +49,15 @@ common_cflags = cc.get_supported_arguments([
     '-Wtype-limits',
     '-Wundef',
     '-Wunused',
+])
+add_project_arguments(common_cflags, language: 'c')
+
+common_cflags = cc.get_supported_arguments([
+    # The stub passes a lot of params that we do not use, maybe a good idea to
+    # mark it appropriately, but this works well for now.
+    '-Wno-unused-parameter',
+    # We use g_signal_handlers_disconnect_* which is not compatible with -Wpedantic
+    '-Wno-pedantic',
 ])
 add_project_arguments(common_cflags, language: 'c')
 
