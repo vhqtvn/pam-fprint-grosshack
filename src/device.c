@@ -792,8 +792,6 @@ static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
 
 	session = session_data_set_new (priv, g_steal_pointer (&sender), g_steal_pointer(&user));
 	session->invocation = g_object_ref (invocation);
-	username = g_steal_pointer (&user);
-	sender = g_steal_pointer (&sender);
 
 	g_debug ("user '%s' claiming the device: %d", session->username, priv->id);
 
