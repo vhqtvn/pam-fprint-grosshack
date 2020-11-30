@@ -1030,7 +1030,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	g_autoptr(FpPrint) print = NULL;
 	g_autoptr(SessionData) session = NULL;
 	g_autoptr(GError) error = NULL;
-	guint finger_num = finger_name_to_num (finger_name);
+	int finger_num = finger_name_to_num (finger_name);
 
 	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
