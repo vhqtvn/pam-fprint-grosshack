@@ -138,6 +138,8 @@ class FPrintdTest(dbusmock.DBusTestCase):
         fprintd = None
         cls._polkitd = None
 
+        cls._has_hotplug = FPrint.Device.find_property("removed") is not None
+
         if 'FPRINT_BUILD_DIR' in os.environ:
             print('Testing local build')
             build_dir = os.environ['FPRINT_BUILD_DIR']
@@ -688,6 +690,9 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         time.sleep(1)
 
     def test_removal_during_enroll(self):
+        if not self._has_hotplug:
+            self.skipTest("libfprint is too old for hotplug")
+
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
                                       'net.reactivated.fprint.device.enroll'])
         self.device.Claim('(s)', 'testuser')
