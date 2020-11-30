@@ -1485,4 +1485,12 @@ if __name__ == '__main__':
             print("%s %s" % (machine, human), end="\n")
         sys.exit(0)
 
-    unittest.main(verbosity=2)
+    prog = unittest.main(verbosity=2, exit=False)
+    if prog.result.errors or prog.result.failures:
+        sys.exit(1)
+
+    # Translate to skip error
+    if prog.result.testsRun == len(prog.result.skipped):
+        sys.exit(77)
+
+    sys.exit(0)
