@@ -1424,6 +1424,10 @@ class FPrintdUtilsTest(FPrintdVirtualDeviceBaseTest):
                 print('Testing JHBuild version')
                 jhbuild_prefix = os.environ['JHBUILD_PREFIX']
                 path = os.path.join(jhbuild_prefix, 'bin', util_bin)
+            else:
+                # Assume it is in path
+                utils[util] = util_bin
+                continue
 
             assert os.path.exists(path), 'failed to find {} in {}'.format(util, path)
             utils[util] = path
