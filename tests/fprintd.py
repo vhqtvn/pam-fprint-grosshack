@@ -737,6 +737,11 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
             self.device.VerifyStart('(s)', 'any')
 
     def test_enroll_verify_list_delete(self):
+        # This test can trigger a race in older libfprint, only run if we have
+        # hotplug support, which coincides with the fixed release.
+        if not self._has_hotplug:
+            self.skipTest("libfprint is too old for hotplug")
+
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
 
