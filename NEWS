@@ -1,6 +1,17 @@
 This file lists notable changes in each release. For the full history of all
 changes, see ChangeLog.
 
+Version 1.90.5:
+
+The 1.90.4 release contained some bad errors, this release addresses those.
+
+Highlights:
+ - Permit building with polkit older than 0.114
+ - Fix possible issues with PAM test
+ - Fix incorrect DBus policy
+ - Fix build so that CFLAGS enviroment is correctly used
+ - Skip hotplug test with older libfprint (which times out otherwise)
+
 Version 1.90.4:
 
 This fprintd release contains major core reworkings and improved testing.
