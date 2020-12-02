@@ -493,28 +493,40 @@ class FPrintdManagerPreStartTests(FPrintdTest):
             self.manager.GetDefaultDevice()
 
     def test_manager_get_devices_on_name_appeared(self):
-        self._appeared_res = []
+        self._appeared_name = None
 
         def on_name_appeared(connection, name, name_owner):
-            self._appeared_res.append(connection.call_sync('net.reactivated.Fprint',
-                '/net/reactivated/Fprint/Manager',
-                'net.reactivated.Fprint.Manager',
-                'GetDefaultDevice', None, None,
-                Gio.DBusCallFlags.NO_AUTO_START, 500, None))
+            self._appeared_name = name
+
+        def on_name_vanished(connection, name):
+            self._appeared_name = 'NAME_VANISHED'
 
         id = Gio.bus_watch_name_on_connection(self.dbus,
             'net.reactivated.Fprint', Gio.BusNameWatcherFlags.NONE,
-            on_name_appeared, None)
+            on_name_appeared, on_name_vanished)
+        self.addCleanup(Gio.bus_unwatch_name, id)
 
         self.daemon_start()
-        while not self._appeared_res:
+        while not self._appeared_name:
             ctx.iteration(True)
 
-        self.assertIsNotNone(self._appeared_res[0])
-        dev_path = self._appeared_res[0][0]
-        self.assertTrue(dev_path.startswith('/net/reactivated/Fprint/Device/'))
+        self.assertEqual(self._appeared_name, 'net.reactivated.Fprint')
 
-        Gio.bus_unwatch_name(id)
+        try:
+            appeared_device = self.dbus.call_sync(
+                'net.reactivated.Fprint',
+                '/net/reactivated/Fprint/Manager',
+                'net.reactivated.Fprint.Manager',
+                'GetDefaultDevice', None, None,
+                Gio.DBusCallFlags.NO_AUTO_START, 500, None)
+        except GLib.GError as e:
+            if 'net.reactivated.Fprint.Error.NoSuchDevice' in e.message:
+                self.skipTest("Need virtual_image device to run the test")
+            raise(e)
+
+        self.assertIsNotNone(appeared_device)
+        [dev_path] = appeared_device
+        self.assertTrue(dev_path.startswith('/net/reactivated/Fprint/Device/'))
 
 
 class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
