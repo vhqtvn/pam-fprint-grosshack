@@ -65,7 +65,8 @@ typedef enum {
 typedef enum {
 	STATE_CLAIMED,
 	STATE_UNCLAIMED,
-	STATE_IGNORED,
+	STATE_AUTO_CLAIM,
+	STATE_ANYTIME,
 } FprintDeviceClaimState;
 
 typedef struct {
@@ -510,11 +511,9 @@ get_claim_state_for_invocation (GDBusMethodInvocation *invocation)
 	if (g_str_equal (method_name, "Claim")) {
 		return STATE_UNCLAIMED;
 	} else if (g_str_equal (method_name, "DeleteEnrolledFingers")) {
-		if (g_object_get_qdata (G_OBJECT (invocation), quark_auth_user))
-			return STATE_CLAIMED;
-		return STATE_IGNORED;
+		return STATE_AUTO_CLAIM;
 	} else if (g_str_equal (method_name, "ListEnrolledFingers")) {
-		return STATE_IGNORED;
+		return STATE_ANYTIME;
 	}
 
 	return STATE_CLAIMED;
@@ -532,10 +531,12 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 
 	requested_state = get_claim_state_for_invocation (invocation);
 
-	if (requested_state == STATE_IGNORED)
+	if (requested_state == STATE_ANYTIME)
 		return TRUE;
 
 	session = session_data_get (priv);
+	if (requested_state == STATE_AUTO_CLAIM)
+		requested_state = session ? STATE_CLAIMED : STATE_UNCLAIMED;
 
 	if (requested_state == STATE_UNCLAIMED) {
 		/* Is it already claimed? */
