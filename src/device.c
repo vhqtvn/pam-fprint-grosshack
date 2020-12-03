@@ -464,15 +464,73 @@ enroll_result_to_name (gboolean completed, gboolean enrolled, GError *error)
 	}
 }
 
+static FprintDevicePermission
+get_permissions_for_invocation (GDBusMethodInvocation *invocation)
+{
+	FprintDevicePermission required_perms;
+	const char *method_name;
+
+	required_perms = FPRINT_DEVICE_PERMISSION_NONE;
+	method_name = g_dbus_method_invocation_get_method_name (invocation);
+
+	if (g_str_equal (method_name, "Claim")) {
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
+	} else if (g_str_equal (method_name, "DeleteEnrolledFingers")) {
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
+	} else if (g_str_equal (method_name, "DeleteEnrolledFingers2")) {
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
+	} else if (g_str_equal (method_name, "EnrollStart")) {
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
+	} else if (g_str_equal (method_name, "EnrollStop")) {
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
+	} else if (g_str_equal (method_name, "ListEnrolledFingers")) {
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
+	} else if (g_str_equal (method_name, "Release")) {
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
+		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
+	} else if (g_str_equal (method_name, "VerifyStart")) {
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
+	} else if (g_str_equal (method_name, "VerifyStop")) {
+		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
+	} else {
+		g_assert_not_reached ();
+	}
+
+	return required_perms;
+}
+
+static FprintDeviceClaimState
+get_claim_state_for_invocation (GDBusMethodInvocation *invocation)
+{
+	const char *method_name;
+
+	method_name = g_dbus_method_invocation_get_method_name (invocation);
+
+	if (g_str_equal (method_name, "Claim")) {
+		return STATE_UNCLAIMED;
+	} else if (g_str_equal (method_name, "DeleteEnrolledFingers")) {
+		if (g_object_get_qdata (G_OBJECT (invocation), quark_auth_user))
+			return STATE_CLAIMED;
+		return STATE_IGNORED;
+	} else if (g_str_equal (method_name, "ListEnrolledFingers")) {
+		return STATE_IGNORED;
+	}
+
+	return STATE_CLAIMED;
+}
+
 static gboolean
 _fprint_device_check_claimed (FprintDevice *rdev,
 			      GDBusMethodInvocation *invocation,
-			      FprintDeviceClaimState requested_state,
 			      GError **error)
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(SessionData) session = NULL;
+	FprintDeviceClaimState requested_state;
 	const char *sender;
+
+	requested_state = get_claim_state_for_invocation (invocation);
 
 	if (requested_state == STATE_IGNORED)
 		return TRUE;
@@ -778,13 +836,14 @@ static gboolean fprint_device_claim (FprintDBusDevice *dbus_dev,
 	g_autoptr(GError) error = NULL;
 	char *sender, *user;
 
-	if (!_fprint_device_check_claimed (rdev, invocation, STATE_UNCLAIMED, &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
 	}
 
 	user = g_object_steal_qdata (G_OBJECT (invocation), quark_auth_user);
 	g_assert (user);
+	g_assert (g_str_equal (username, "") || g_str_equal (user, username));
 
 	sender = g_strdup (g_dbus_method_invocation_get_sender (invocation));
 	_fprint_device_add_client (rdev, sender);
@@ -837,7 +896,7 @@ static gboolean fprint_device_release (FprintDBusDevice *dbus_dev,
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 
-	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
 	}
@@ -1031,7 +1090,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	g_autoptr(GError) error = NULL;
 	int finger_num = finger_name_to_num (finger_name);
 
-	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
 	}
@@ -1134,7 +1193,7 @@ static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GError) error = NULL;
 
-	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
 	}
@@ -1348,7 +1407,7 @@ static gboolean fprint_device_enroll_start (FprintDBusDevice *dbus_dev,
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	int finger_num = finger_name_to_num (finger_name);
 
-	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
 	}
@@ -1399,7 +1458,7 @@ static gboolean fprint_device_enroll_stop (FprintDBusDevice *dbus_dev,
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(GError) error = NULL;
 
-	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
 	}
@@ -1569,11 +1628,7 @@ static gboolean fprint_device_delete_enrolled_fingers (FprintDBusDevice *dbus_de
 	log_offending_client (invocation);
 #endif
 
-	user = g_object_steal_qdata (G_OBJECT (invocation), quark_auth_user);
-	g_assert (user);
-
-	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED,
-					   &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		/* Return error for anything but FPRINT_ERROR_CLAIM_DEVICE */
 		if (!g_error_matches (error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE)) {
 			g_dbus_method_invocation_return_gerror (invocation,
@@ -1591,6 +1646,10 @@ static gboolean fprint_device_delete_enrolled_fingers (FprintDBusDevice *dbus_de
 
 	if (!opened && fp_device_has_storage (priv->dev))
 		fp_device_open_sync (priv->dev, NULL, NULL);
+
+	user = g_object_steal_qdata (G_OBJECT (invocation), quark_auth_user);
+	g_assert (user);
+	g_assert (g_str_equal (username, "") || g_str_equal (user, username));
 
 	delete_enrolled_fingers (rdev, user);
 
@@ -1610,7 +1669,7 @@ static gboolean fprint_device_delete_enrolled_fingers2 (FprintDBusDevice *dbus_d
 	g_autoptr(SessionData) session = NULL;
 	g_autoptr(GError) error = NULL;
 
-	if (!_fprint_device_check_claimed (rdev, invocation, STATE_CLAIMED, &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
 	}
@@ -1649,8 +1708,7 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
 	FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (interface);
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
-	FprintDeviceClaimState required_state = STATE_IGNORED;
-	FprintDevicePermission required_perms = FPRINT_DEVICE_PERMISSION_NONE;
+	FprintDevicePermission required_perms;
 	gboolean needs_user_auth = FALSE;
 	g_autoptr(GError) error = NULL;
 	const gchar *method_name;
@@ -1663,43 +1721,16 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
 
 	if (g_str_equal (method_name, "Claim")) {
 		needs_user_auth = TRUE;
-		required_state = STATE_UNCLAIMED;
-		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
-		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "DeleteEnrolledFingers")) {
 		needs_user_auth = TRUE;
-		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
-	} else if (g_str_equal (method_name, "DeleteEnrolledFingers2")) {
-		required_state = STATE_CLAIMED;
-		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
-	} else if (g_str_equal (method_name, "EnrollStart")) {
-		required_state = STATE_CLAIMED;
-		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
-	} else if (g_str_equal (method_name, "EnrollStop")) {
-		required_state = STATE_CLAIMED;
-		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "ListEnrolledFingers")) {
 		needs_user_auth = TRUE;
-		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
-	} else if (g_str_equal (method_name, "Release")) {
-		required_state = STATE_CLAIMED;
-		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
-		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
-	} else if (g_str_equal (method_name, "VerifyStart")) {
-		required_state = STATE_CLAIMED;
-		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
-	} else if (g_str_equal (method_name, "VerifyStop")) {
-		required_state = STATE_CLAIMED;
-		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
-	} else {
-		g_assert_not_reached ();
 	}
 
 	/* This is just a quick check in order to avoid authentication if
 	 * the user cannot make the call at this time anyway.
 	 * The method handler itself is required to check again! */
-	if (!_fprint_device_check_claimed (rdev, invocation, required_state,
-					   &error)) {
+	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		return handle_unauthorized_access (rdev, invocation, error);
 	}
 
@@ -1707,6 +1738,8 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
 	    !fprintd_device_authorize_user (rdev, invocation, &error)) {
 		return handle_unauthorized_access (rdev, invocation, error);
 	}
+
+	required_perms = get_permissions_for_invocation (invocation);
 
 	/* This may possibly block the invocation till the user has not
 	 * provided an authentication method, so other calls could arrive */
