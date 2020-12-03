@@ -1101,16 +1101,20 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 
 	session = session_data_get (priv);
 
-	if (priv->current_action != ACTION_NONE) {
-		if (priv->current_action == ACTION_ENROLL) {
-			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-				    "Enrollment in progress");
-		} else {
-			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-				    "Verification already in progress");
-		}
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
+	switch (priv->current_action) {
+		case ACTION_NONE:
+			break;
+		case ACTION_VERIFY:
+		case ACTION_IDENTIFY:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				"Verification already in progress");
+			return TRUE;
+		default:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				"Another operation is already in progress");
+			return TRUE;
 	}
 
 	if (finger_num == -1) {
@@ -1202,18 +1206,22 @@ static gboolean fprint_device_verify_stop (FprintDBusDevice *dbus_dev,
 		return TRUE;
 	}
 
-	if (priv->current_action == ACTION_NONE) {
-		g_dbus_method_invocation_return_error_literal (invocation,
-							       FPRINT_ERROR,
-							       FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
-							       "No verification in progress");
-		return TRUE;
-	} else if (priv->current_action == ACTION_ENROLL) {
-		g_dbus_method_invocation_return_error_literal (invocation,
-							       FPRINT_ERROR,
-							       FPRINT_ERROR_ALREADY_IN_USE,
-							       "Enrollment in progress");
-		return TRUE;
+	switch (priv->current_action) {
+		case ACTION_VERIFY:
+		case ACTION_IDENTIFY:
+			break;
+		case ACTION_NONE:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR,
+				FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
+				"No verification in progress");
+			return TRUE;
+		default:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR,
+				FPRINT_ERROR_ALREADY_IN_USE,
+				"Another operation is already in progress");
+			return TRUE;
 	}
 
 	if (priv->current_cancellable) {
@@ -1423,16 +1431,19 @@ static gboolean fprint_device_enroll_start (FprintDBusDevice *dbus_dev,
 		return TRUE;
 	}
 
-	if (priv->current_action != ACTION_NONE) {
-		if (priv->current_action == ACTION_ENROLL) {
-			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-				    "Enrollment already in progress");
-		} else {
-			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-				    "Verification in progress");
-		}
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
+	switch (priv->current_action) {
+		case ACTION_NONE:
+			break;
+		case ACTION_ENROLL:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				"Enrollment already in progress");
+			return TRUE;
+		default:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				"Another operation is already in progress");
+			return TRUE;
 	}
 
 	g_debug("start enrollment device %d finger %d", priv->id, finger_num);
@@ -1467,20 +1478,21 @@ static gboolean fprint_device_enroll_stop (FprintDBusDevice *dbus_dev,
 		return TRUE;
 	}
 
-	if (priv->current_action != ACTION_ENROLL) {
-		if (priv->current_action == ACTION_NONE) {
-			g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
-				     "No enrollment in progress");
-		} else if (priv->current_action == ACTION_VERIFY) {
-			g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-				     "Verification in progress");
-		} else if (priv->current_action == ACTION_IDENTIFY) {
-			g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-				     "Identification in progress");
-		} else
-			g_assert_not_reached ();
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
+	switch (priv->current_action) {
+		case ACTION_ENROLL:
+			break;
+		case ACTION_NONE:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR,
+				FPRINT_ERROR_NO_ACTION_IN_PROGRESS,
+				"No enrollment in progress");
+			return TRUE;
+		default:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR,
+				FPRINT_ERROR_ALREADY_IN_USE,
+				"Another operation is already in progress");
+			return TRUE;
 	}
 
 	if (priv->current_cancellable) {
@@ -1632,12 +1644,19 @@ static gboolean fprint_device_delete_enrolled_fingers (FprintDBusDevice *dbus_de
 	log_offending_client (invocation);
 #endif
 
-	if (priv->current_action != ACTION_NONE) {
-		g_dbus_method_invocation_return_error_literal (invocation,
-							       FPRINT_ERROR,
-							       FPRINT_ERROR_ALREADY_IN_USE,
-							       "Another operation is already in progress");
-		return TRUE;
+	switch (priv->current_action) {
+		case ACTION_NONE:
+			break;
+		case ACTION_DELETE:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				"Deletion already in progress");
+			return TRUE;
+		default:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				"Another operation is already in progress");
+			return TRUE;
 	}
 
 	priv->current_action = ACTION_DELETE;
@@ -1690,13 +1709,19 @@ static gboolean fprint_device_delete_enrolled_fingers2 (FprintDBusDevice *dbus_d
 		return TRUE;
 	}
 
-	if (priv->current_action != ACTION_NONE) {
-		g_dbus_method_invocation_return_error_literal (invocation,
-							       FPRINT_ERROR,
-							       FPRINT_ERROR_ALREADY_IN_USE,
-							       "Another operation is already in progress");
-		g_dbus_method_invocation_return_gerror (invocation, error);
-		return TRUE;
+	switch (priv->current_action) {
+		case ACTION_NONE:
+			break;
+		case ACTION_DELETE:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				"Deletion already in progress");
+			return TRUE;
+		default:
+			g_dbus_method_invocation_return_error_literal (
+				invocation, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
+				"Another operation is already in progress");
+			return TRUE;
 	}
 
 	priv->current_action = ACTION_DELETE;
