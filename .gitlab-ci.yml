@@ -31,6 +31,7 @@ image: "$FEDORA_IMAGE"
 
 stages:
   - check-source
+  - build
   - test
 
 .fprintd_build_preconditions:
@@ -61,6 +62,7 @@ test_indent:
 
 build_stable:
   extends: .fprintd_build_preconditions
+  stage: build
   script:
     - meson _build
     - ninja -C _build -v
@@ -70,6 +72,7 @@ build_dev:
   extends:
     - .fprintd_build_preconditions
     - .install_libfprint_dev
+  stage: build
   script:
     - meson _build --werror -Dgtk_doc=true
     - ninja -C _build -v
