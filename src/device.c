@@ -577,7 +577,7 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev,
 {
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	const char *sender;
-	g_autoptr(GError) _error = NULL;
+	g_autoptr(GError) local_error = NULL;
 	g_autoptr(PolkitAuthorizationResult) result = NULL;
 	g_autoptr(PolkitSubject) subject = NULL;
 
@@ -590,11 +590,11 @@ _fprint_device_check_polkit_for_action (FprintDevice *rdev,
                                                             action,
 							    NULL,
                                                             POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
-					                    NULL, &_error);
+					                    NULL, &local_error);
 	if (result == NULL) {
 		g_set_error (error, FPRINT_ERROR,
 			     FPRINT_ERROR_PERMISSION_DENIED,
-			     "Not Authorized: %s", _error->message);
+			     "Not Authorized: %s", local_error->message);
 		return FALSE;
 	}
 
