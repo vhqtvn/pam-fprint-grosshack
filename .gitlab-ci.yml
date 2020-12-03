@@ -29,6 +29,10 @@ variables:
 
 image: "$FEDORA_IMAGE"
 
+stages:
+  - check-source
+  - test
+
 .fprintd_build_preconditions:
   except:
     variables:
@@ -46,6 +50,14 @@ image: "$FEDORA_IMAGE"
     - cd ..
     # So we don't get error about this libfprint file
     - echo "libfprint/demo/gtk-libfprint-test.ui" >> po/POTFILES.skip
+
+test_indent:
+  stage: check-source
+  extends: .fprintd_build_preconditions
+  script:
+    - scripts/uncrustify.sh
+    - git diff
+    - "! git status -s | grep -q ."
 
 build_stable:
   extends: .fprintd_build_preconditions
