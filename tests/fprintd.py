@@ -820,6 +820,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
+        self.device.VerifyStop()
 
         self.assertEqual(self.device.ListEnrolledFingers('(s)', 'testuser'), ['right-index-finger'])
 
