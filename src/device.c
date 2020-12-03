@@ -60,6 +60,7 @@ typedef enum {
 	ACTION_ENROLL,
 	ACTION_OPEN,
 	ACTION_CLOSE,
+	ACTION_DELETE,
 } FprintDeviceAction;
 
 typedef enum {
@@ -908,6 +909,8 @@ static gboolean fprint_device_release (FprintDBusDevice *dbus_dev,
 		} else if (priv->current_action == ACTION_IDENTIFY ||
 			   priv->current_action == ACTION_VERIFY) {
 			g_warning("Verification was in progress, stopping it");
+		} else if (priv->current_action == ACTION_DELETE) {
+			g_warning("Deletion was in progress, stopping it");
 		}
 
 		g_cancellable_cancel (priv->current_cancellable);
@@ -1629,6 +1632,16 @@ static gboolean fprint_device_delete_enrolled_fingers (FprintDBusDevice *dbus_de
 	log_offending_client (invocation);
 #endif
 
+	if (priv->current_action != ACTION_NONE) {
+		g_dbus_method_invocation_return_error_literal (invocation,
+							       FPRINT_ERROR,
+							       FPRINT_ERROR_ALREADY_IN_USE,
+							       "Another operation is already in progress");
+		return TRUE;
+	}
+
+	priv->current_action = ACTION_DELETE;
+
 	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		/* Return error for anything but FPRINT_ERROR_CLAIM_DEVICE */
 		if (!g_error_matches (error, FPRINT_ERROR, FPRINT_ERROR_CLAIM_DEVICE)) {
@@ -1657,6 +1670,8 @@ static gboolean fprint_device_delete_enrolled_fingers (FprintDBusDevice *dbus_de
 	if (!opened && fp_device_has_storage (priv->dev))
 		fp_device_close_sync (priv->dev, NULL, NULL);
 
+	priv->current_action = ACTION_NONE;
+
 	fprint_dbus_device_complete_delete_enrolled_fingers (dbus_dev,
 							     invocation);
 	return TRUE;
@@ -1675,9 +1690,23 @@ static gboolean fprint_device_delete_enrolled_fingers2 (FprintDBusDevice *dbus_d
 		return TRUE;
 	}
 
+	if (priv->current_action != ACTION_NONE) {
+		g_dbus_method_invocation_return_error_literal (invocation,
+							       FPRINT_ERROR,
+							       FPRINT_ERROR_ALREADY_IN_USE,
+							       "Another operation is already in progress");
+		g_dbus_method_invocation_return_gerror (invocation, error);
+		return TRUE;
+	}
+
+	priv->current_action = ACTION_DELETE;
+
 	session = session_data_get (priv);
 
 	delete_enrolled_fingers (rdev, session->username);
+
+	priv->current_action = ACTION_NONE;
+
 	fprint_dbus_device_complete_delete_enrolled_fingers2 (dbus_dev,
 							      invocation);
 	return TRUE;
