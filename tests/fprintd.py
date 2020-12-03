@@ -592,6 +592,34 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('PermissionDenied'):
             self.device.Claim('(s)', 'testuser')
 
+    def test_unallowed_enroll_with_verify_claim(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self.device.Claim('(s)', '')
+
+        with self.assertFprintError('PermissionDenied'):
+            self.enroll_image('whorl', finger='right-thumb')
+
+    def test_unallowed_delete_with_verify_claim(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self.device.Claim('(s)', '')
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+    def test_unallowed_delete2_with_verify_claim(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self.device.Claim('(s)', '')
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.DeleteEnrolledFingers2()
+
+    def test_unallowed_verify_with_enroll_claim(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self.device.Claim('(s)', '')
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.VerifyStart('(s)', 'any')
+
     def test_unallowed_claim_current_user(self):
         self._polkitd_obj.SetAllowed([''])
 
