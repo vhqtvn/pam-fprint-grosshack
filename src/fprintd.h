@@ -53,11 +53,16 @@ typedef enum {
 	FPRINT_ERROR_NO_SUCH_DEVICE, /*< nick=net.reactivated.Fprint.Error.NoSuchDevice >*/
 } FprintError;
 
+/* Enum of possible permissions, orders and nick matter here:
+   - The order controls the priority of a required permission when various are
+     accepted: the lowest the value, the more priorty it has.
+   - Nick must match the relative polkit rule.
+*/
 typedef enum {
 	FPRINT_DEVICE_PERMISSION_NONE = 0,
-	FPRINT_DEVICE_PERMISSION_ENROLL = (1 << 0), /*< nick=net.reactivated.fprint.device.enroll >*/
-	FPRINT_DEVICE_PERMISSION_SETUSERNAME = (1 << 1), /*< nick=net.reactivated.fprint.device.setusername >*/
-	FPRINT_DEVICE_PERMISSION_VERIFY = (1 << 2), /*< nick=net.reactivated.fprint.device.verify >*/
+	FPRINT_DEVICE_PERMISSION_VERIFY = (1 << 0), /*< nick=net.reactivated.fprint.device.verify >*/
+	FPRINT_DEVICE_PERMISSION_ENROLL = (1 << 1), /*< nick=net.reactivated.fprint.device.enroll >*/
+	FPRINT_DEVICE_PERMISSION_SETUSERNAME = (1 << 2), /*< nick=net.reactivated.fprint.device.setusername >*/
 } FprintDevicePermission;
 
 /* Manager */
