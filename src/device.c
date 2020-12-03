@@ -473,7 +473,6 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
 	g_autoptr(SessionData) session = NULL;
 	const char *sender;
-	gboolean retval;
 
 	if (requested_state == STATE_IGNORED)
 		return TRUE;
@@ -501,14 +500,14 @@ _fprint_device_check_claimed (FprintDevice *rdev,
 	}
 
 	sender = g_dbus_method_invocation_get_sender (invocation);
-	retval = g_str_equal (sender, session->sender);
 
-	if (retval == FALSE || session->invocation != NULL) {
+	if (!g_str_equal (sender, session->sender) || session->invocation != NULL) {
 		g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
 			     _("Device already in use by another user"));
+		return FALSE;
 	}
 
-	return retval;
+	return TRUE;
 }
 
 static gboolean
