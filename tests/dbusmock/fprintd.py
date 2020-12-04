@@ -429,3 +429,11 @@ def SetVerifyScript(device, script):
     '''
 
     device.verify_script = script
+
+@dbus.service.method(DEVICE_MOCK_IFACE,
+                     in_signature='s', out_signature='')
+def SetClaimed(device, user):
+    if user == '':
+        device.claimed_user = None
+    else:
+        device.claimed_user = user

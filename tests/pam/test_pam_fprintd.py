@@ -252,6 +252,20 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.assertRegex(res.errors[1], r'Failed to match fingerprint')
         self.assertRegex(res.errors[2], r'Failed to match fingerprint')
 
+    def test_pam_already_claimed(self):
+        self.setup_device()
+        script = [
+            ( 'verify-match', True, 2 )
+        ]
+        self.device_mock.SetVerifyScript(script)
+        self.device_mock.SetClaimed('toto')
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTHINFO_UNAVAIL)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
+        self.assertEqual(len(res.info), 0)
+        self.assertEqual(len(res.errors), 0)
+
     def test_pam_timeout(self):
         self.setup_device()
 
