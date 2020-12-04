@@ -206,6 +206,7 @@ static void do_verify (FprintDBusDevice *dev)
 		g_clear_error (&verify_state.error);
 		exit (1);
 	}
+	g_print("Verify started!\n");
 
 	/* VerifyStatus signals are processing, wait for completion. */
 	while (!verify_state.completed)
