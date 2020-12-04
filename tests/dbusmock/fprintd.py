@@ -18,6 +18,7 @@ __email__ = 'hadess@hadess.net'
 __copyright__ = '(c) 2020 Red Hat Inc.'
 __license__ = 'LGPL 3+'
 
+import sys
 from gi.repository import GLib
 import dbus
 import asyncio
@@ -214,9 +215,26 @@ def can_verify_finger(device, finger_name):
         return True
     return False
 
-def device_emit_signal(device, *args):
-    print("emitting signal", *args)
-    device.EmitSignal(*args)
+def glib_sleep(timeout):
+    waiting = True
+
+    def done_waiting():
+        nonlocal waiting
+        waiting = False
+
+    GLib.timeout_add(timeout, done_waiting)
+    while (waiting):
+        GLib.main_context_default().iteration(True)
+
+def device_run_script(device, result, done):
+    if result == 'MOCK: quit':
+        sys.exit(0)
+
+    # Emit signal
+    device.EmitSignal(DEVICE_IFACE, 'VerifyStatus', 'sb', [
+                        result,
+                        done
+                      ])
 
 @dbus.service.method(DEVICE_IFACE,
                      in_signature='s', out_signature='')
@@ -252,15 +270,38 @@ def VerifyStart(device, finger_name):
                     device.selected_finger
                   ])
 
-    if device.verify_script is not None and len(device.verify_script) > 0:
+    error = None
+    base_delay = 0
+    while device.verify_script is not None and len(device.verify_script) > 0:
         result, done, timeout = device.verify_script.pop(0)
-        GLib.timeout_add(timeout,
-                         device_emit_signal,
-                         device,
-                         DEVICE_IFACE, 'VerifyStatus', 'sb', [
-                           result,
-                           done
-                         ])
+
+        # We stop when "timeout >= 0 and done"
+        if result == 'MOCK: no-prints':
+            # Special case to change return value of DBus call, ignores timeout
+            error = dbus.exceptions.DBusException(
+                'No enrolled prints for user \'%s\'' % device.claimed_user,
+                name='net.reactivated.Fprint.Error.NoEnrolledPrints')
+
+        elif timeout < 0:
+            # Negative timeouts mean emitting before the DBus call returns
+            device_run_script(device, result, done)
+            glib_sleep(-timeout)
+
+        else:
+            # Positive or zero means emitting afterwards the given timeout
+            base_delay += timeout
+            GLib.timeout_add(base_delay,
+                             device_run_script,
+                             device,
+                             result,
+                             done)
+
+            # Stop processing commands when the done flag is set
+            if done:
+                break
+
+    if error:
+        raise error
 
 @dbus.service.method(DEVICE_MOCK_IFACE,
                      in_signature='sb', out_signature='')
