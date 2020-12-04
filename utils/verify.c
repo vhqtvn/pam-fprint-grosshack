@@ -120,17 +120,33 @@ static void find_finger (FprintDBusDevice *dev, const char *username)
 	}
 }
 
+struct VerifyState {
+	GError *error;
+	gboolean started;
+	gboolean completed;
+};
+
 static void verify_result(GObject *object, const char *result, gboolean done, void *user_data)
 {
-	gboolean *verify_completed = user_data;
+	struct VerifyState *verify_state = user_data;
 	g_print("Verify result: %s (%s)\n", result, done ? "done" : "not done");
 	if (done != FALSE)
-		*verify_completed = TRUE;
+		verify_state->completed = TRUE;
 }
 
 static void verify_finger_selected(GObject *object, const char *name, void *user_data)
 {
 	g_print("Verifying: %s\n", name);
+}
+
+static void verify_started_cb (GObject *obj,
+			       GAsyncResult *res,
+			       gpointer user_data)
+{
+	struct VerifyState *verify_state = user_data;
+
+	if (fprint_dbus_device_call_verify_start_finish (FPRINT_DBUS_DEVICE (obj), res, &verify_state->error))
+		verify_state->started = TRUE;
 }
 
 static void proxy_signal_cb (GDBusProxy *proxy,
@@ -139,6 +155,11 @@ static void proxy_signal_cb (GDBusProxy *proxy,
 			     GVariant *parameters,
 			     gpointer user_data)
 {
+	struct VerifyState *verify_state = user_data;
+
+	if (!verify_state->started)
+		return;
+
 	if (g_str_equal (signal_name, "VerifyStatus")) {
 		const gchar *result;
 		gboolean done;
@@ -156,23 +177,43 @@ static void proxy_signal_cb (GDBusProxy *proxy,
 static void do_verify (FprintDBusDevice *dev)
 {
 	g_autoptr(GError) error = NULL;
-	gboolean verify_completed = FALSE;
+	struct VerifyState verify_state = { 0 };
+
+	/* This one is funny. We connect to the signal immediately to avoid
+	 * race conditions. However, we must ignore any authentication results
+	 * that happen before our start call returns.
+	 * This is because the verify call itself may internally try to verify
+	 * against fprintd (possibly using a separate account).
+	 *
+	 * To do so, we *must* use the async version of the verify call, as the
+	 * sync version would cause the signals to be queued and only processed
+	 * after it returns.
+	 */
 
 	g_signal_connect (dev, "g-signal", G_CALLBACK (proxy_signal_cb),
-			  &verify_completed);
+			  &verify_state);
 
-	if (!fprint_dbus_device_call_verify_start_sync (dev, finger_name, NULL,
-							&error)) {
-		g_print("VerifyStart failed: %s\n", error->message);
+	fprint_dbus_device_call_verify_start (dev, finger_name, NULL,
+					      verify_started_cb,
+					      &verify_state);
+
+	/* Wait for verify start while discarding any VerifyStatus signals */
+	while (!verify_state.started && !verify_state.error)
+		g_main_context_iteration(NULL, TRUE);
+
+	if (verify_state.error) {
+		g_print("VerifyStart failed: %s\n", verify_state.error->message);
+		g_clear_error (&verify_state.error);
 		exit (1);
 	}
 
-	while (!verify_completed)
+	/* VerifyStatus signals are processing, wait for completion. */
+	while (!verify_state.completed)
 		g_main_context_iteration(NULL, TRUE);
 
 
 	g_signal_handlers_disconnect_by_func (dev, proxy_signal_cb,
-					      &verify_completed);
+					      &verify_state);
 
 	if (!fprint_dbus_device_call_verify_stop_sync (dev, NULL, &error)) {
 		g_print("VerifyStop failed: %s\n", error->message);
