@@ -164,6 +164,8 @@ typedef struct {
 	char *result;
 	bool timed_out;
 	bool is_swipe;
+	bool verify_started;
+	int verify_ret;
 	pam_handle_t *pamh;
 
 	char *driver;
@@ -190,6 +192,11 @@ verify_result (sd_bus_message *m,
 
 	if ((r = sd_bus_message_read (m, "sb", &result, &done)) < 0) {
 		pam_syslog (data->pamh, LOG_ERR, "Failed to parse VerifyResult signal: %d", r);
+		return 0;
+	}
+
+	if (!data->verify_started) {
+		pam_syslog (data->pamh, LOG_ERR, "Unexpected VerifyResult '%s', %"PRIu64" signal", result, done);
 		return 0;
 	}
 
@@ -222,6 +229,11 @@ verify_finger_selected (sd_bus_message *m,
 
 	if (sd_bus_message_read_basic (m, 's', &finger_name) < 0) {
 		pam_syslog (data->pamh, LOG_ERR, "Failed to parse VerifyFingerSelected signal: %d", errno);
+		return 0;
+	}
+
+	if (!data->verify_started) {
+		pam_syslog (data->pamh, LOG_ERR, "Unexpected VerifyFingerSelected %s signal", finger_name);
 		return 0;
 	}
 
@@ -276,6 +288,35 @@ fail:
 	if (reply != NULL)
 		sd_bus_message_unref (reply);
 	return sd_bus_error_set_errno(error, r);
+}
+
+
+static int verify_started_cb (sd_bus_message *m,
+			      void           *userdata,
+			      sd_bus_error   *ret_error) {
+	const sd_bus_error *error = sd_bus_message_get_error (m);
+	verify_data *data = userdata;
+
+	if (error) {
+		if (sd_bus_error_has_name (error, "net.reactivated.Fprint.Error.NoEnrolledPrints")) {
+			pam_syslog (data->pamh, LOG_DEBUG, "No prints enrolled");
+			data->verify_ret = PAM_USER_UNKNOWN;
+		} else {
+			data->verify_ret = PAM_AUTH_ERR;
+		}
+
+		if (debug)
+			pam_syslog (data->pamh, LOG_DEBUG, "VerifyStart failed: %s", error->message);
+
+		return 1;
+	}
+
+	if (debug)
+		pam_syslog (data->pamh, LOG_DEBUG, "VerifyStart completed successfully");
+
+	data->verify_started = true;
+
+	return 1;
 }
 
 static int
@@ -348,28 +389,28 @@ do_verify (pam_handle_t *pamh,
 
 	while (ret == PAM_AUTH_ERR && data->max_tries > 0) {
 		uint64_t verification_end = now () + (timeout * USEC_PER_SEC);
-		sd_bus_message *m = NULL;
-		sd_bus_error error = SD_BUS_ERROR_NULL;
 
 		data->timed_out = false;
+		data->verify_started = false;
+		data->verify_ret = PAM_INCOMPLETE;
 
-		r = sd_bus_call_method (bus,
-					"net.reactivated.Fprint",
-					dev,
-					"net.reactivated.Fprint.Device",
-					"VerifyStart",
-					&error,
-					&m,
-					"s",
-					"any");
+		if (debug)
+			pam_syslog (data->pamh, LOG_DEBUG, "About to call VerifyStart");
+
+		r = sd_bus_call_method_async (bus,
+					      NULL,
+					      "net.reactivated.Fprint",
+					      dev,
+					      "net.reactivated.Fprint.Device",
+					      "VerifyStart",
+					      verify_started_cb,
+					      data,
+					      "s",
+					      "any");
 
 		if (r < 0) {
-			if (sd_bus_error_has_name (&error, "net.reactivated.Fprint.Error.NoEnrolledPrints"))
-				ret = PAM_USER_UNKNOWN;
-
 			if (debug)
-				pam_syslog (pamh, LOG_DEBUG, "VerifyStart failed: %s", error.message);
-			sd_bus_error_free (&error);
+				pam_syslog (pamh, LOG_DEBUG, "VerifyStart call failed: %d", r);
 			break;
 		}
 
@@ -383,6 +424,10 @@ do_verify (pam_handle_t *pamh,
 			r = sd_bus_process (bus, NULL);
 			if (r < 0)
 				break;
+			if (data->verify_ret != PAM_INCOMPLETE)
+				break;
+			if (!data->verify_started)
+				continue;
 			if (data->result != NULL)
 				break;
 			if (r == 0) {
@@ -397,12 +442,18 @@ do_verify (pam_handle_t *pamh,
 			}
 		}
 
+		if (data->verify_ret != PAM_INCOMPLETE) {
+			ret = data->verify_ret;
+			break;
+		}
+
 		if (now () >= verification_end) {
 			data->timed_out = true;
 			send_info_msg (data->pamh, _("Verification timed out"));
 		}
 
 		/* Ignore errors from VerifyStop */
+		data->verify_started = false;
 		sd_bus_call_method (bus,
 				    "net.reactivated.Fprint",
 				    dev,
