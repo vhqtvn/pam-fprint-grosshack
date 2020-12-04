@@ -160,6 +160,9 @@ out:
 }
 
 typedef struct {
+	char *dev;
+	bool has_multiple_devices;
+
 	unsigned max_tries;
 	char *result;
 	bool timed_out;
@@ -325,56 +328,49 @@ static int verify_started_cb (sd_bus_message *m,
 }
 
 static int
-do_verify (pam_handle_t *pamh,
-	   sd_bus       *bus,
-	   const char   *dev,
-	   bool          has_multiple_devices)
+do_verify (sd_bus       *bus,
+	   verify_data  *data)
 {
-	verify_data *data;
 	sd_bus_slot *verify_status_slot, *verify_finger_selected_slot;
 	char *scan_type = NULL;
 	int ret;
 	int r;
 
-	data = calloc (1, sizeof(verify_data));
-	data->max_tries = max_tries;
-	data->pamh = pamh;
-
 	/* Get some properties for the device */
 	r = get_property_string (bus,
 				 "net.reactivated.Fprint",
-				 dev,
+				 data->dev,
 				 "net.reactivated.Fprint.Device",
 				 "scan-type",
 				 NULL,
 				 &scan_type);
 	if (r < 0)
-		pam_syslog (data->pamh, LOG_ERR, "Failed to get scan-type for %s: %d", dev, r);
+		pam_syslog (data->pamh, LOG_ERR, "Failed to get scan-type for %s: %d", data->dev, r);
 	if (debug)
-		pam_syslog (data->pamh, LOG_DEBUG, "scan-type for %s: %s", dev, scan_type);
+		pam_syslog (data->pamh, LOG_DEBUG, "scan-type for %s: %s", data->dev, scan_type);
 	if (str_equal (scan_type, "swipe"))
 		data->is_swipe = true;
 	free (scan_type);
 
-	if (has_multiple_devices) {
+	if (data->has_multiple_devices) {
 		get_property_string (bus,
 				     "net.reactivated.Fprint",
-				     dev,
+				     data->dev,
 				     "net.reactivated.Fprint.Device",
 				     "name",
 				     NULL,
 				     &data->driver);
 		if (r < 0)
-			pam_syslog (data->pamh, LOG_ERR, "Failed to get driver name for %s: %d", dev, r);
+			pam_syslog (data->pamh, LOG_ERR, "Failed to get driver name for %s: %d", data->dev, r);
 		if (debug && r == 0)
-			pam_syslog (data->pamh, LOG_DEBUG, "driver name for %s: %s", dev, data->driver);
+			pam_syslog (data->pamh, LOG_DEBUG, "driver name for %s: %s", data->dev, data->driver);
 	}
 
 	verify_status_slot = NULL;
 	sd_bus_match_signal (bus,
 			     &verify_status_slot,
 			     "net.reactivated.Fprint",
-			     dev,
+			     data->dev,
 			     "net.reactivated.Fprint.Device",
 			     "VerifyStatus",
 			     verify_result,
@@ -384,7 +380,7 @@ do_verify (pam_handle_t *pamh,
 	sd_bus_match_signal (bus,
 			     &verify_finger_selected_slot,
 			     "net.reactivated.Fprint",
-			     dev,
+			     data->dev,
 			     "net.reactivated.Fprint.Device",
 			     "VerifyFingerSelected",
 			     verify_finger_selected,
@@ -405,7 +401,7 @@ do_verify (pam_handle_t *pamh,
 		r = sd_bus_call_method_async (bus,
 					      NULL,
 					      "net.reactivated.Fprint",
-					      dev,
+					      data->dev,
 					      "net.reactivated.Fprint.Device",
 					      "VerifyStart",
 					      verify_started_cb,
@@ -415,7 +411,7 @@ do_verify (pam_handle_t *pamh,
 
 		if (r < 0) {
 			if (debug)
-				pam_syslog (pamh, LOG_DEBUG, "VerifyStart call failed: %d", r);
+				pam_syslog (data->pamh, LOG_DEBUG, "VerifyStart call failed: %d", r);
 			break;
 		}
 
@@ -437,7 +433,8 @@ do_verify (pam_handle_t *pamh,
 				break;
 			if (r == 0) {
 				if (debug) {
-					pam_syslog(pamh, LOG_DEBUG, "Waiting for %"PRId64" seconds (%"PRId64" usecs)",
+					pam_syslog(data->pamh, LOG_DEBUG,
+						   "Waiting for %"PRId64" seconds (%"PRId64" usecs)",
 						   wait_time / USEC_PER_SEC,
 						   wait_time);
 				}
@@ -461,7 +458,7 @@ do_verify (pam_handle_t *pamh,
 		data->verify_started = false;
 		sd_bus_call_method (bus,
 				    "net.reactivated.Fprint",
-				    dev,
+				    data->dev,
 				    "net.reactivated.Fprint.Device",
 				    "VerifyStop",
 				    NULL,
@@ -500,11 +497,6 @@ do_verify (pam_handle_t *pamh,
 
 	sd_bus_slot_unref (verify_status_slot);
 	sd_bus_slot_unref (verify_finger_selected_slot);
-
-	if (data->result)
-		free (data->result);
-	free (data->driver);
-	free (data);
 
 	return ret;
 }
@@ -609,39 +601,88 @@ claim_device (pam_handle_t *pamh,
 	return true;
 }
 
+static int
+name_owner_changed (sd_bus_message *m,
+		    void           *userdata,
+		    sd_bus_error   *ret_error)
+{
+	verify_data *data = userdata;
+	const char *name = NULL;
+	const char *old_owner = NULL;
+	const char *new_owner = NULL;
+
+	if (sd_bus_message_read (m, "sss", &name, &old_owner, &new_owner) < 0) {
+		pam_syslog (data->pamh, LOG_ERR, "Failed to parse NameOwnerChanged signal: %d", errno);
+		return 0;
+	}
+
+	if (strcmp (name, "net.reactivated.Fprint") != 0)
+		return 0;
+
+	/* Name owner for fprintd changed, give up as we might start listening
+	 * to events from a new name owner otherwise. */
+	data->verify_ret = PAM_AUTHINFO_UNAVAIL;
+
+	if (debug)
+		pam_syslog (data->pamh, LOG_ERR, "fprintd name owner changed during operation!\n");
+
+	return 0;
+}
+
 static int do_auth(pam_handle_t *pamh, const char *username)
 {
-	char *dev;
 	bool have_prints;
-	bool has_multiple_devices;
 	int ret = PAM_AUTHINFO_UNAVAIL;
+	verify_data *data;
+	sd_bus_slot *name_owner_changed_slot;
 	sd_bus *bus = NULL;
+
+	data = calloc (1, sizeof(verify_data));
+	data->max_tries = max_tries;
+	data->pamh = pamh;
 
 	if (sd_bus_open_system (&bus) < 0) {
 		pam_syslog (pamh, LOG_ERR, "Error with getting the bus: %d", errno);
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 
-	dev = open_device (pamh, bus, &has_multiple_devices);
-	if (dev == NULL) {
+	name_owner_changed_slot = NULL;
+	sd_bus_match_signal (bus,
+			     &name_owner_changed_slot,
+			     "org.freedesktop.DBus",
+			     "/org/freedesktop/DBus",
+			     "org.freedesktop.DBus",
+			     "NameOwnerChanged",
+			     name_owner_changed,
+			     data);
+
+	data->dev = open_device (pamh, bus, &data->has_multiple_devices);
+	if (data->dev == NULL) {
 		sd_bus_unref (bus);
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 
-	have_prints = user_has_prints (pamh, bus, dev, username);
+	have_prints = user_has_prints (pamh, bus, data->dev, username);
 	if (debug)
 		pam_syslog (pamh, LOG_DEBUG, "prints registered: %s\n", have_prints ? "yes" : "no");
 
 	if (!have_prints)
 		goto out;
 
-	if (claim_device (pamh, bus, dev, username)) {
-		ret = do_verify (pamh, bus, dev, has_multiple_devices);
-		release_device (pamh, bus, dev);
+	if (claim_device (pamh, bus, data->dev, username)) {
+		ret = do_verify (bus, data);
+		release_device (pamh, bus, data->dev);
 	}
 
 out:
-	free (dev);
+	sd_bus_slot_unref (name_owner_changed_slot);
+
+	if (data->result)
+		free (data->result);
+	free (data->driver);
+	free (data->dev);
+	free (data);
+
 	sd_bus_unref (bus);
 
 	return ret;
