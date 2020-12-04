@@ -139,6 +139,28 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
         self.assertEqual(len(res.errors), 0)
 
+    def test_pam_fprintd_no_fingers(self):
+        self.setup_device()
+        self.device_mock.SetEnrolledFingers('toto', dbus.Array(set([]), signature='s'))
+        script = [
+            ( 'verify-match', True, 1 )
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTHINFO_UNAVAIL)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
+    def test_pam_fprintd_no_fingers_while_verifying(self):
+        self.setup_device()
+        script = [
+            ( 'MOCK: no-prints', True, 1),
+            ( 'verify-match', True, 1 )
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_USER_UNKNOWN)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
     def test_pam_fprintd_dual_reader_auth(self):
         device_path = self.obj_fprintd_mock.AddDevice('FDO Sandpaper Reader', 3, 'press')
         sandpaper_device_mock = self.dbus_con.get_object('net.reactivated.Fprint', device_path)
