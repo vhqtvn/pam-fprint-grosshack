@@ -161,6 +161,44 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_USER_UNKNOWN)
         res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
 
+    def test_pam_fprintd_blocks_unexpected_auth(self):
+        self.setup_device()
+        script = [
+            ( 'verify-match', True, -500 ), # This one is sent before VerifyStart has completed
+            ( 'verify-no-match', True, 1 ),
+            ( 'verify-no-match', True, 1 ),
+            ( 'verify-no-match', True, 1 ),
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_MAXTRIES)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
+        self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
+        self.assertEqual(len(res.errors), 3)
+        self.assertRegex(res.errors[0], r'Failed to match fingerprint')
+        self.assertRegex(res.errors[0], r'Failed to match fingerprint')
+        self.assertRegex(res.errors[0], r'Failed to match fingerprint')
+
+    def test_pam_fprintd_blocks_unexpected_auth2(self):
+        self.setup_device()
+        script = [
+            ( 'verify-no-match', True, 1 ),
+            ( 'verify-match', True, -500 ), # This one is sent before VerifyStart has completed
+            ( 'verify-no-match', True, 1 ),
+            ( 'verify-no-match', True, 1 ),
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_MAXTRIES)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
+        self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
+        self.assertEqual(len(res.errors), 3)
+        self.assertRegex(res.errors[0], r'Failed to match fingerprint')
+        self.assertRegex(res.errors[0], r'Failed to match fingerprint')
+        self.assertRegex(res.errors[0], r'Failed to match fingerprint')
+
     def test_pam_fprintd_dual_reader_auth(self):
         device_path = self.obj_fprintd_mock.AddDevice('FDO Sandpaper Reader', 3, 'press')
         sandpaper_device_mock = self.dbus_con.get_object('net.reactivated.Fprint', device_path)
