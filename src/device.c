@@ -484,17 +484,17 @@ get_permissions_for_invocation (GDBusMethodInvocation *invocation)
 		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "EnrollStart")) {
 		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
-	} else if (g_str_equal (method_name, "EnrollStop")) {
-		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "ListEnrolledFingers")) {
 		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
-	} else if (g_str_equal (method_name, "Release")) {
-		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
-		required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
 	} else if (g_str_equal (method_name, "VerifyStart")) {
 		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
+	} else if (g_str_equal (method_name, "Release")) {
+	} else if (g_str_equal (method_name, "EnrollStop")) {
 	} else if (g_str_equal (method_name, "VerifyStop")) {
-		required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
+		/* Don't require permissiong for for release/stop operations.
+		 * We are authenticated already if we could start, and we don't
+		 * want to end up authorizing interactively again.
+		 */
 	} else {
 		g_assert_not_reached ();
 	}

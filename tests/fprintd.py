@@ -637,20 +637,11 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
         self.device.Release()
 
-    def test_unallowed_release(self):
+    def test_always_allowed_release(self):
         self.device.Claim('(s)', 'testuser')
 
         self._polkitd_obj.SetAllowed([''])
 
-        with self.assertFprintError('PermissionDenied'):
-            self.device.Release()
-
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
-
-        with self.assertFprintError('PermissionDenied'):
-            self.device.Release()
-
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
         self.device.Release()
 
     def test_unclaimed_release(self):
@@ -1000,15 +991,11 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
         self.enroll_image('whorl')
 
-    def test_unallowed_enroll_stop(self):
+    def test_always_allowed_enroll_stop(self):
         self.device.EnrollStart('(s)', 'right-index-finger')
 
         self._polkitd_obj.SetAllowed([''])
 
-        with self.assertFprintError('PermissionDenied'):
-            self.device.EnrollStop()
-
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
         self.device.EnrollStop()
 
     def test_unallowed_verify_start(self):
@@ -1017,15 +1004,11 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('PermissionDenied'):
             self.device.VerifyStart('(s)', 'any')
 
-    def test_unallowed_verify_stop(self):
+    def test_always_allowed_verify_stop(self):
         self.enroll_image('whorl')
         self.device.VerifyStart('(s)', 'any')
 
         self._polkitd_obj.SetAllowed([''])
-        with self.assertFprintError('PermissionDenied'):
-            self.device.VerifyStop()
-
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
         self.device.VerifyStop()
 
     def test_list_enrolled_fingers_current_user(self):
