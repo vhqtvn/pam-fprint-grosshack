@@ -273,6 +273,19 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
         self.assertRegex(res.info[1], r'Verification timed out')
 
+    def test_pam_notices_fprintd_disappearing(self):
+        self.setup_device()
+
+        script = [
+            ( 'MOCK: quit', True, 0 ),
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTHINFO_UNAVAIL)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+        self.assertEqual(len(res.errors), 0)
+        self.assertEqual(len(res.info), 0)
+
 if __name__ == '__main__':
     if 'PAM_WRAPPER_SERVICE_DIR' not in os.environ:
         print('Cannot run test without environment set correctly, run "meson test" instead')
