@@ -18,9 +18,9 @@ import subprocess
 import dbus
 import dbus.mainloop.glib
 import dbusmock
-import fcntl
 import os
 import time
+from output_checker import OutputChecker
 
 
 VALID_FINGER_NAMES = [
@@ -77,10 +77,8 @@ class TestFprintdUtilsBase(dbusmock.DBusTestCase):
     def setUp(self):
         super().setUp()
         (self.p_mock, self.obj_fprintd_manager) = self.spawn_server_template(
-            self.template_name, {}, stdout=subprocess.PIPE)
+            self.template_name, {})
         # set log to nonblocking
-        flags = fcntl.fcntl(self.p_mock.stdout, fcntl.F_GETFL)
-        fcntl.fcntl(self.p_mock.stdout, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         self.obj_fprintd_mock = dbus.Interface(self.obj_fprintd_manager, 'net.reactivated.Fprint.Manager.Mock')
 
     def tearDown(self):
@@ -102,22 +100,21 @@ class TestFprintdUtilsBase(dbusmock.DBusTestCase):
 
     def start_utility_process(self, utility_name, args=[], sleep=True):
         utility = [ os.path.join(self.tools_prefix, 'fprintd-{}'.format(utility_name)) ]
+        output = OutputChecker()
         process = subprocess.Popen(self.wrapper_args + utility + args,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT,
-                                   universal_newlines=True)
-        flags = fcntl.fcntl(process.stdout, fcntl.F_GETFL)
-        fcntl.fcntl(process.stdout, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+                                   stdout=output.fd,
+                                   stderr=subprocess.STDOUT)
+        output.writer_attached()
 
+        self.addCleanup(output.assert_closed)
         self.addCleanup(self.try_stop_utility_process, process)
 
         if sleep:
             time.sleep(self.sleep_time)
 
-        return process
+        return process, output
 
     def stop_utility_process(self, process):
-        print(process.stdout.read())
         process.terminate()
         process.wait()
 
@@ -127,17 +124,12 @@ class TestFprintdUtilsBase(dbusmock.DBusTestCase):
         except:
             pass
 
-    def get_process_output(self, process):
-        out = process.stdout.read()
-        self.addCleanup(print, out)
-        return out
-
     def run_utility_process(self, utility_name, args=[], sleep=True, timeout=None):
-        proc = self.start_utility_process(utility_name, args=args, sleep=sleep)
+        proc, output = self.start_utility_process(utility_name, args=args, sleep=sleep)
         ret = proc.wait(timeout=timeout if timeout is not None else self.sleep_time * 4)
         self.assertLessEqual(ret, 128)
 
-        return self.get_process_output(proc), ret
+        return b''.join(output.clear()), ret
 
 
 class TestFprintdUtils(TestFprintdUtilsBase):
@@ -146,65 +138,62 @@ class TestFprintdUtils(TestFprintdUtilsBase):
         self.setup_device()
 
     def test_fprintd_enroll(self):
-        process = self.start_utility_process('enroll', ['-f', 'right-index-finger', 'toto'])
+        process, out = self.start_utility_process('enroll', ['-f', 'right-index-finger', 'toto'])
 
-        out = self.get_process_output(process)
-        self.assertRegex(out, r'right-index-finger')
+        out.check_line(rb'right-index-finger', 0)
 
         self.device_mock.EmitEnrollStatus('enroll-completed', True)
-        time.sleep(self.sleep_time)
 
-        out = self.get_process_output(process)
-        self.assertRegex(out, 'Enroll result: enroll-completed')
+        out.check_line(rb'Enroll result: enroll-completed', self.sleep_time)
 
     def test_fprintd_list(self):
         # Rick has no fingerprints enrolled
         out, ret = self.run_utility_process('list', ['rick'])
-        self.assertRegex(out, r'has no fingers enrolled for')
+        self.assertRegex(out, rb'has no fingers enrolled for')
         self.assertEqual(ret, 0)
 
         # Toto does
         out, ret = self.run_utility_process('list', ['toto'])
-        self.assertRegex(out, r'right-little-finger')
+        self.assertRegex(out, rb'right-little-finger')
         self.assertEqual(ret, 0)
 
     def test_fprintd_delete(self):
         # Has fingerprints enrolled
         out, ret = self.run_utility_process('list', ['toto'])
-        self.assertRegex(out, r'left-little-finger')
+        self.assertRegex(out, rb'left-little-finger')
         self.assertEqual(ret, 0)
-        self.assertRegex(out, r'right-little-finger')
+        self.assertRegex(out, rb'right-little-finger')
 
         # Delete fingerprints
         out, ret = self.run_utility_process('delete', ['toto'])
-        self.assertRegex(out, r'Fingerprints deleted')
+        self.assertRegex(out, rb'Fingerprints deleted')
         self.assertEqual(ret, 0)
 
         # Doesn't have fingerprints
         out, ret = self.run_utility_process('list', ['toto'])
-        self.assertRegex(out, r'has no fingers enrolled for')
+        self.assertRegex(out, rb'has no fingers enrolled for')
         self.assertEqual(ret, 0)
 
 
 class TestFprintdUtilsNoDeviceTests(TestFprintdUtilsBase):
     def test_fprintd_enroll(self):
         out, ret = self.run_utility_process('enroll', ['toto'])
-        self.assertIn('No devices available', out)
+        self.assertIn(b'No devices available', out)
         self.assertEqual(ret, 1)
 
     def test_fprintd_list(self):
         out, ret = self.run_utility_process('list', ['toto'])
-        self.assertIn('No devices available', out)
+        self.assertIn(b'No devices available', out)
         self.assertEqual(ret, 1)
 
     def test_fprintd_delete(self):
         out, ret = self.run_utility_process('delete', ['toto'])
-        self.assertIn('No devices available', out)
+        self.assertIn(b'No devices available', out)
         self.assertEqual(ret, 1)
 
     def test_fprintd_verify(self):
         out, ret = self.run_utility_process('verify', ['toto'])
-        self.assertIn('No devices available', out)
+        self.assertIn(b'No devices available', out)
         self.assertEqual(ret, 1)
 
 
@@ -213,24 +202,20 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
         super().setUp()
         self.setup_device()
 
-    def start_verify_process(self, user='toto', finger=None, checkEnrolled=True):
+    def start_verify_process(self, user='toto', finger=None, nowait=False):
         args = [user]
         if finger:
             args += ['-f', finger]
 
-        self.process = self.start_utility_process('verify', args)
-        out = self.get_process_output(self.process)
+        self.process, self.output = self.start_utility_process('verify', args)
+        if nowait:
+            return
 
-        self.assertNotRegex(out, r'Device already in use by [A-z]+')
-        self.assertNotIn('Verify result:', out)
+        preamble = self.output.check_line(b'Verify started!')
 
-        if checkEnrolled and finger:
-            self.assertNotIn('''Finger '{}' not enrolled for user {}'''.format(
-                finger, user), out)
+        out = b''.join(preamble)
 
-        if checkEnrolled:
-            for f in self.enrolled_fingers:
-                self.assertIn(f, out)
+        self.assertNotIn(b'Verify result:', out)
 
         if finger:
             expected_finger = finger
@@ -239,9 +224,8 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
             self.assertEqual(self.device_mock.GetSelectedFinger(), expected_finger)
 
     def assertVerifyMatch(self, match):
-        self.assertIn('Verify result: {} (done)'.format(
-            'verify-match' if match else 'verify-no-match'),
-            self.get_process_output(self.process))
+        self.output.check_line(r'Verify result: {} (done)'.format(
+            'verify-match' if match else 'verify-no-match'))
 
     def test_fprintd_verify(self):
         self.start_verify_process()
@@ -280,14 +264,16 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
 
     def test_fprintd_verify_not_enrolled_fingers(self):
         for finger in [f for f in VALID_FINGER_NAMES if f not in self.enrolled_fingers]:
+            self.start_verify_process(finger=finger, nowait=True)
             regex = r'Finger \'{}\' not enrolled'.format(finger)
-            with self.assertRaisesRegex(AssertionError, regex):
-                self.start_verify_process(finger=finger)
+            self.output.check_line_re(regex, timeout=self.sleep_time)
+
             self.device_mock.Release()
 
     def test_fprintd_verify_no_enrolled_fingers(self):
         self.set_enrolled_fingers([])
-        self.start_verify_process()
+        self.start_verify_process(nowait=True)
+        self.output.check_line(b'No fingers enrolled for this device.', timeout=self.sleep_time)
         self.assertEqual(self.process.poll(), 1)
 
     def test_fprintd_list_all_fingers(self):
@@ -299,16 +285,17 @@ class TestFprintdUtilsVerify(TestFprintdUtilsBase):
             ( 'verify-match', True, 2 )
         ]
         self.device_mock.SetVerifyScript(script)
+        time.sleep(2)
 
         self.start_verify_process()
-        time.sleep(self.sleep_time * 4)
+        time.sleep(2 + self.sleep_time)
         self.assertVerifyMatch(True)
 
     def test_fprintd_multiple_verify_fails(self):
         self.start_verify_process()
 
-        with self.assertRaisesRegex(AssertionError, r'Device already in use'):
-            self.start_verify_process()
+        self.start_verify_process(nowait=True)
+        self.output.check_line_re(rb'Device already in use by [A-z]+', timeout=self.sleep_time)
 
 if __name__ == '__main__':
     # avoid writing to stderr
