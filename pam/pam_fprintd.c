@@ -203,6 +203,11 @@ verify_result (sd_bus_message *m,
 	if (debug)
 		pam_syslog (data->pamh, LOG_DEBUG, "Verify result: %s (done: %d)", result, done ? 1 : 0);
 
+	if (data->result) {
+		free (data->result);
+		data->result = NULL;
+	}
+
 	if (done) {
 		data->result = strdup (result);
 		return 0;
