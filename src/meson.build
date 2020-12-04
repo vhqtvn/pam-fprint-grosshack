@@ -14,13 +14,31 @@ foreach interface_name: dbus_interfaces
     )
 endforeach
 
-fprintd_dbus_sources = gnome.gdbus_codegen('fprintd-dbus',
+# NOTE: We should pass "--glib-min-required 2.64" but cannot
+fprintd_dbus_sources_base = gnome.gdbus_codegen('fprintd-dbus',
     sources: dbus_interfaces_files,
     autocleanup: 'all',
     interface_prefix: 'net.reactivated.Fprint.',
     namespace: 'FprintDBus',
     object_manager: true,
 )
+
+# FIXME: remove this and just use fprintd_dbus_sources when we're on glib 2.64
+fprintd_dbus_sources = [
+    fprintd_dbus_sources_base[1] # header file
+]
+
+fprintd_dbus_sources += custom_target('fprintd-dbus-interactive',
+    input: fprintd_dbus_sources_base[0], # c file,
+    output: 'fprintd-dbus-interactive.c',
+    command: [
+        find_program('patch'),
+        '-p1',
+        '--merge',
+        '@INPUT@',
+        files('dbus-interactive-auth.patch'),
+        '-o', '@OUTPUT@',
+    ])
 
 fprintd_enum_files = gnome.mkenums_simple('fprintd-enums',
   sources: 'fprintd.h',
