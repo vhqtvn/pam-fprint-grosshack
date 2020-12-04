@@ -17,7 +17,6 @@ import sys
 import subprocess
 import dbus
 import dbusmock
-import fcntl
 import glob
 import os
 import shutil
@@ -75,10 +74,7 @@ class TestPamFprintd(dbusmock.DBusTestCase):
 
     def setUp(self):
         (self.p_mock, self.obj_fprintd_manager) = self.spawn_server_template(
-            self.template_name, {}, stdout=subprocess.PIPE)
-        # set log to nonblocking
-        flags = fcntl.fcntl(self.p_mock.stdout, fcntl.F_GETFL)
-        fcntl.fcntl(self.p_mock.stdout, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+            self.template_name, {})
         self.obj_fprintd_mock = dbus.Interface(self.obj_fprintd_manager, 'net.reactivated.Fprint.Manager.Mock')
 
     def tearDown(self):
