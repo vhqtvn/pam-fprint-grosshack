@@ -18,6 +18,7 @@ __email__ = 'hadess@hadess.net'
 __copyright__ = '(c) 2020 Red Hat Inc.'
 __license__ = 'LGPL 3+'
 
+from gi.repository import GLib
 import dbus
 import asyncio
 
@@ -213,13 +214,9 @@ def can_verify_finger(device, finger_name):
         return True
     return False
 
-async def send_verify_script(device, script):
-    for [result, done, timeout] in device.verify_script:
-        await asyncio.sleep(timeout)
-        device.EmitSignal(DEVICE_IFACE, 'VerifyStatus', 'sb', [
-                            result,
-                            done
-                          ])
+def device_emit_signal(device, *args):
+    print("emitting signal", *args)
+    device.EmitSignal(*args)
 
 @dbus.service.method(DEVICE_IFACE,
                      in_signature='s', out_signature='')
@@ -249,13 +246,21 @@ def VerifyStart(device, finger_name):
     if finger_name == 'any' and not device.has_identification:
         finger_name = device.fingers[device.claimed_user][0]
     device.selected_finger = finger_name
-    device.EmitSignal(DEVICE_IFACE, 'VerifyFingerSelected', 's', [
-                          finger_name
-                      ])
+    # Needs to happen after method return
+    GLib.idle_add(device.EmitSignal,
+                  DEVICE_IFACE, 'VerifyFingerSelected', 's', [
+                    device.selected_finger
+                  ])
 
     if device.verify_script is not None and len(device.verify_script) > 0:
-        asyncio.run(send_verify_script(device, device.verify_script))
-
+        result, done, timeout = device.verify_script.pop(0)
+        GLib.timeout_add(timeout,
+                         device_emit_signal,
+                         device,
+                         DEVICE_IFACE, 'VerifyStatus', 'sb', [
+                           result,
+                           done
+                         ])
 
 @dbus.service.method(DEVICE_MOCK_IFACE,
                      in_signature='sb', out_signature='')
