@@ -202,6 +202,10 @@ verify_result (sd_bus_message *m,
 	}
 
 	msg = verify_result_str_to_msg (result, data->is_swipe);
+	if (!msg) {
+		data->result = strdup ("Protocol error with fprintd!");
+		return 0;
+	}
 	send_err_msg (data->pamh, msg);
 
 	return 0;
