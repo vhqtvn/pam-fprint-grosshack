@@ -43,6 +43,7 @@
 #define N_(s) (s)
 
 #include "fingerprint-strings.h"
+#include "pam_fprintd_autoptrs.h"
 
 #define DEFAULT_MAX_TRIES 3
 #define DEFAULT_TIMEOUT 30
@@ -83,10 +84,8 @@ static bool send_msg(pam_handle_t *pamh, const char *msg, int style)
 	const struct pam_message *msgp = &mymsg;
 	const struct pam_conv *pc;
 	struct pam_response *resp;
-	int r;
 
-	r = pam_get_item(pamh, PAM_CONV, (const void **) &pc);
-	if (r != PAM_SUCCESS)
+	if (pam_get_item(pamh, PAM_CONV, (const void **) &pc) != PAM_SUCCESS)
 		return false;
 
 	if (!pc || !pc->conv)
@@ -110,39 +109,35 @@ open_device (pam_handle_t    *pamh,
 	     sd_bus          *bus,
 	     bool            *has_multiple_devices)
 {
-	sd_bus_error error = SD_BUS_ERROR_NULL;
-	sd_bus_message *m = NULL;
+	pf_auto(sd_bus_error) error = SD_BUS_ERROR_NULL;
+	pf_autoptr(sd_bus_message) m = NULL;
 	size_t num_devices;
 	const char *path = NULL;
-	char *ret;
 	const char *s;
 	int r;
 
 	*has_multiple_devices = false;
 
-	r = sd_bus_call_method (bus,
+	if (sd_bus_call_method (bus,
 				"net.reactivated.Fprint",
 				"/net/reactivated/Fprint/Manager",
 				"net.reactivated.Fprint.Manager",
 				"GetDevices",
 				&error,
 				&m,
-				NULL);
-	if (r < 0) {
+				NULL) < 0) {
 		pam_syslog (pamh, LOG_ERR, "GetDevices failed: %s", error.message);
-		sd_bus_error_free (&error);
 		return NULL;
 	}
 
 	r = sd_bus_message_enter_container (m, 'a', "o");
 	if (r < 0) {
 		pam_syslog (pamh, LOG_ERR, "Failed to parse answer from GetDevices(): %d", r);
-		goto out;
+		return NULL;
 	}
 
-	r = sd_bus_message_read_basic (m, 'o', &path);
-	if (r < 0)
-		goto out;
+	if (sd_bus_message_read_basic (m, 'o', &path) < 0)
+		return NULL;
 
 	num_devices = 1;
 	while ((r = sd_bus_message_read_basic(m, 'o', &s)) > 0)
@@ -153,10 +148,7 @@ open_device (pam_handle_t    *pamh,
 
 	sd_bus_message_exit_container (m);
 
-out:
-	ret = path ? strdup (path) : NULL;
-	sd_bus_message_unref (m);
-	return ret;
+	return strdup (path);
 }
 
 typedef struct {
@@ -173,6 +165,17 @@ typedef struct {
 
 	char *driver;
 } verify_data;
+
+static void
+verify_data_free (verify_data *data)
+{
+	free (data->result);
+	free (data->driver);
+	free (data->dev);
+	free (data);
+}
+
+PF_DEFINE_AUTOPTR_CLEANUP_FUNC (verify_data, verify_data_free)
 
 static int
 verify_result (sd_bus_message *m,
@@ -233,7 +236,7 @@ verify_finger_selected (sd_bus_message *m,
 {
 	verify_data *data = userdata;
 	const char *finger_name = NULL;
-	char *msg;
+	pf_autofree char *msg = NULL;
 
 	if (sd_bus_message_read_basic (m, 's', &finger_name) < 0) {
 		pam_syslog (data->pamh, LOG_ERR, "Failed to parse VerifyFingerSelected signal: %d", errno);
@@ -249,7 +252,6 @@ verify_finger_selected (sd_bus_message *m,
 	if (debug)
 		pam_syslog (data->pamh, LOG_DEBUG, "verify_finger_selected %s", msg);
 	send_info_msg (data->pamh, msg);
-	free (msg);
 
 	return 0;
 }
@@ -264,7 +266,7 @@ get_property_string (sd_bus *bus,
 		     sd_bus_error *error,
 		     char **ret) {
 
-	sd_bus_message *reply = NULL;
+	pf_autoptr(sd_bus_message) reply = NULL;
 	const char *s;
 	char *n;
 	int r;
@@ -275,27 +277,19 @@ get_property_string (sd_bus *bus,
 
 	r = sd_bus_message_enter_container(reply, 'v', "s");
 	if (r < 0)
-		goto fail;
+		return sd_bus_error_set_errno(error, r);
 
 	r = sd_bus_message_read_basic(reply, 's', &s);
 	if (r < 0)
-		goto fail;
+		return sd_bus_error_set_errno(error, r);
 
 	n = strdup(s);
 	if (!n) {
-		r = -ENOMEM;
-		goto fail;
+		return sd_bus_error_set_errno(error, -ENOMEM);
 	}
-
-	sd_bus_message_unref (reply);
 
 	*ret = n;
 	return 0;
-
-fail:
-	if (reply != NULL)
-		sd_bus_message_unref (reply);
-	return sd_bus_error_set_errno(error, r);
 }
 
 
@@ -331,9 +325,9 @@ static int
 do_verify (sd_bus       *bus,
 	   verify_data  *data)
 {
-	sd_bus_slot *verify_status_slot, *verify_finger_selected_slot;
-	char *scan_type = NULL;
-	int ret;
+	pf_autoptr(sd_bus_slot) verify_status_slot = NULL;
+	pf_autoptr(sd_bus_slot) verify_finger_selected_slot = NULL;
+	pf_autofree char *scan_type = NULL;
 	int r;
 
 	/* Get some properties for the device */
@@ -350,7 +344,6 @@ do_verify (sd_bus       *bus,
 		pam_syslog (data->pamh, LOG_DEBUG, "scan-type for %s: %s", data->dev, scan_type);
 	if (str_equal (scan_type, "swipe"))
 		data->is_swipe = true;
-	free (scan_type);
 
 	if (data->has_multiple_devices) {
 		get_property_string (bus,
@@ -366,7 +359,6 @@ do_verify (sd_bus       *bus,
 			pam_syslog (data->pamh, LOG_DEBUG, "driver name for %s: %s", data->dev, data->driver);
 	}
 
-	verify_status_slot = NULL;
 	sd_bus_match_signal (bus,
 			     &verify_status_slot,
 			     "net.reactivated.Fprint",
@@ -376,7 +368,6 @@ do_verify (sd_bus       *bus,
 			     verify_result,
 			     data);
 
-	verify_finger_selected_slot = NULL;
 	sd_bus_match_signal (bus,
 			     &verify_finger_selected_slot,
 			     "net.reactivated.Fprint",
@@ -386,14 +377,15 @@ do_verify (sd_bus       *bus,
 			     verify_finger_selected,
 			     data);
 
-	ret = PAM_AUTH_ERR;
-
-	while (ret == PAM_AUTH_ERR && data->max_tries > 0) {
+	while (data->max_tries > 0) {
 		uint64_t verification_end = now () + (timeout * USEC_PER_SEC);
 
 		data->timed_out = false;
 		data->verify_started = false;
 		data->verify_ret = PAM_INCOMPLETE;
+
+		free (data->result);
+		data->result = NULL;
 
 		if (debug)
 			pam_syslog (data->pamh, LOG_DEBUG, "About to call VerifyStart");
@@ -438,15 +430,13 @@ do_verify (sd_bus       *bus,
 						   wait_time / USEC_PER_SEC,
 						   wait_time);
 				}
-				r = sd_bus_wait (bus, wait_time);
-				if (r < 0)
+				if (sd_bus_wait (bus, wait_time) < 0)
 					break;
 			}
 		}
 
 		if (data->verify_ret != PAM_INCOMPLETE) {
-			ret = data->verify_ret;
-			break;
+			return data->verify_ret;
 		}
 
 		if (now () >= verification_end) {
@@ -467,38 +457,28 @@ do_verify (sd_bus       *bus,
 				    NULL);
 
 		if (data->timed_out) {
-			ret = PAM_AUTHINFO_UNAVAIL;
-			break;
+			return PAM_AUTHINFO_UNAVAIL;
 		} else {
 			if (str_equal (data->result, "verify-no-match")) {
 				send_err_msg (data->pamh, "Failed to match fingerprint");
-				ret = PAM_AUTH_ERR;
 			} else if (str_equal (data->result, "verify-match")) {
-				ret = PAM_SUCCESS;
-				break;
+				return PAM_SUCCESS;
 			} else if (str_equal (data->result, "verify-unknown-error")) {
-				ret = PAM_AUTHINFO_UNAVAIL;
+				return PAM_AUTHINFO_UNAVAIL;
 			} else if (str_equal (data->result, "verify-disconnected")) {
-				ret = PAM_AUTHINFO_UNAVAIL;
-				break;
+				return PAM_AUTHINFO_UNAVAIL;
 			} else {
 				send_err_msg (data->pamh, _("An unknown error occurred"));
-				ret = PAM_AUTH_ERR;
-				break;
+				return PAM_AUTH_ERR;
 			}
-			free (data->result);
-			data->result = NULL;
 		}
 		data->max_tries--;
 	}
 
 	if (data->max_tries == 0)
-		ret = PAM_MAXTRIES;
+		return PAM_MAXTRIES;
 
-	sd_bus_slot_unref (verify_status_slot);
-	sd_bus_slot_unref (verify_finger_selected_slot);
-
-	return ret;
+	return PAM_AUTH_ERR;
 }
 
 static bool
@@ -507,8 +487,8 @@ user_has_prints (pam_handle_t *pamh,
 		 const char   *dev,
 		 const char   *username)
 {
-	sd_bus_error error = SD_BUS_ERROR_NULL;
-	sd_bus_message *m = NULL;
+	pf_auto(sd_bus_error) error = SD_BUS_ERROR_NULL;
+	pf_autoptr(sd_bus_message) m = NULL;
 	size_t num_fingers = 0;
 	const char *s;
 	int r;
@@ -530,23 +510,19 @@ user_has_prints (pam_handle_t *pamh,
 			pam_syslog (pamh, LOG_DEBUG, "ListEnrolledFingers failed for %s: %s",
 				    username, error.message);
 		}
-		sd_bus_error_free (&error);
 		return false;
 	}
 
 	r = sd_bus_message_enter_container (m, 'a', "s");
 	if (r < 0) {
 		pam_syslog (pamh, LOG_ERR, "Failed to parse answer from ListEnrolledFingers(): %d", r);
-		goto out;
+		return false;
 	}
 
-	num_fingers = 0;
 	while ((r = sd_bus_message_read_basic(m, 's', &s)) > 0)
 		num_fingers++;
 	sd_bus_message_exit_container (m);
 
-out:
-	sd_bus_message_unref (m);
 	return (num_fingers > 0);
 }
 
@@ -555,10 +531,9 @@ release_device (pam_handle_t *pamh,
 		 sd_bus       *bus,
 		 const char   *dev)
 {
-	sd_bus_error error = SD_BUS_ERROR_NULL;
-	int r;
+	pf_auto(sd_bus_error) error = SD_BUS_ERROR_NULL;
 
-	r = sd_bus_call_method (bus,
+	if (sd_bus_call_method (bus,
 				"net.reactivated.Fprint",
 				dev,
 				"net.reactivated.Fprint.Device",
@@ -566,10 +541,8 @@ release_device (pam_handle_t *pamh,
 				&error,
 				NULL,
 				NULL,
-				NULL);
-	if (r < 0) {
+				NULL) < 0) {
 		pam_syslog (pamh, LOG_ERR, "ReleaseDevice failed: %s", error.message);
-		sd_bus_error_free (&error);
 	}
 }
 
@@ -579,10 +552,9 @@ claim_device (pam_handle_t *pamh,
 	      const char   *dev,
 	      const char   *username)
 {
-	sd_bus_error error = SD_BUS_ERROR_NULL;
-	int r;
+	pf_auto(sd_bus_error) error = SD_BUS_ERROR_NULL;
 
-	r = sd_bus_call_method (bus,
+	if (sd_bus_call_method (bus,
 				"net.reactivated.Fprint",
 				dev,
 				"net.reactivated.Fprint.Device",
@@ -590,11 +562,9 @@ claim_device (pam_handle_t *pamh,
 				&error,
 				NULL,
 				"s",
-				username);
-	if (r < 0) {
+				username) < 0) {
 		if (debug)
 			pam_syslog (pamh, LOG_DEBUG, "failed to claim device %s", error.message);
-		sd_bus_error_free (&error);
 		return false;
 	}
 
@@ -632,10 +602,9 @@ name_owner_changed (sd_bus_message *m,
 static int do_auth(pam_handle_t *pamh, const char *username)
 {
 	bool have_prints;
-	int ret = PAM_AUTHINFO_UNAVAIL;
-	verify_data *data;
-	sd_bus_slot *name_owner_changed_slot;
-	sd_bus *bus = NULL;
+	pf_autoptr(verify_data) data = NULL;
+	pf_autoptr(sd_bus) bus = NULL;
+	pf_autoptr(sd_bus_slot) name_owner_changed_slot = NULL;
 
 	data = calloc (1, sizeof(verify_data));
 	data->max_tries = max_tries;
@@ -658,7 +627,6 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 
 	data->dev = open_device (pamh, bus, &data->has_multiple_devices);
 	if (data->dev == NULL) {
-		sd_bus_unref (bus);
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 
@@ -667,25 +635,15 @@ static int do_auth(pam_handle_t *pamh, const char *username)
 		pam_syslog (pamh, LOG_DEBUG, "prints registered: %s\n", have_prints ? "yes" : "no");
 
 	if (!have_prints)
-		goto out;
+		return PAM_AUTHINFO_UNAVAIL;
 
 	if (claim_device (pamh, bus, data->dev, username)) {
-		ret = do_verify (bus, data);
+		int ret = do_verify (bus, data);
 		release_device (pamh, bus, data->dev);
+		return ret;
 	}
 
-out:
-	sd_bus_slot_unref (name_owner_changed_slot);
-
-	if (data->result)
-		free (data->result);
-	free (data->driver);
-	free (data->dev);
-	free (data);
-
-	sd_bus_unref (bus);
-
-	return ret;
+	return PAM_AUTHINFO_UNAVAIL;
 }
 
 static bool
@@ -715,7 +673,6 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 {
 	const char *username;
 	int i;
-	int r;
 
 	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
@@ -723,8 +680,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 	if (is_remote (pamh))
 		return PAM_AUTHINFO_UNAVAIL;
 
-	r = pam_get_user(pamh, &username, NULL);
-	if (r != PAM_SUCCESS)
+	if (pam_get_user(pamh, &username, NULL) != PAM_SUCCESS)
 		return PAM_AUTHINFO_UNAVAIL;
 
 	for (i = 0; i < argc; i++) {
@@ -775,9 +731,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
 		}
 	}
 
-	r = do_auth(pamh, username);
-
-	return r;
+	return do_auth(pamh, username);
 }
 
 PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc,
