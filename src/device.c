@@ -29,6 +29,7 @@
 #include <pwd.h>
 #include <errno.h>
 
+#include "fprintd-dbus.h"
 #include "fprintd.h"
 #include "storage.h"
 
@@ -118,9 +119,6 @@ G_DEFINE_TYPE_WITH_CODE (FprintDevice, fprint_device,
 enum fprint_device_properties {
   FPRINT_DEVICE_CONSTRUCT_DEV = 1,
   FPRINT_DEVICE_IN_USE,
-  FPRINT_DEVICE_NAME,
-  FPRINT_DEVICE_NUM_ENROLL,
-  FPRINT_DEVICE_SCAN_TYPE
 };
 
 enum fprint_device_signals {
@@ -289,33 +287,66 @@ fprint_device_get_property (GObject *object, guint property_id,
       g_value_set_boolean (value, g_hash_table_size (priv->clients) != 0);
       break;
 
-    case FPRINT_DEVICE_NAME:
-      g_value_set_static_string (value, fp_device_get_name (priv->dev));
-      break;
-
-    case FPRINT_DEVICE_NUM_ENROLL:
-      if (priv->dev)
-        g_value_set_int (value, fp_device_get_nr_enroll_stages (priv->dev));
-      else
-        g_value_set_int (value, -1);
-      break;
-
-    case FPRINT_DEVICE_SCAN_TYPE: {
-        const char *type;
-
-        if (fp_device_get_scan_type (priv->dev) == FP_SCAN_TYPE_PRESS)
-          type = "press";
-        else
-          type = "swipe";
-
-        g_value_set_static_string (value, type);
-        break;
-      }
-
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
     }
+}
+
+static void
+on_nr_enroll_stages_changed (FprintDevice *rdev,
+                             GParamSpec   *spec,
+                             FpDevice     *device)
+{
+  FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
+  gint nr_enroll_stages;
+
+  nr_enroll_stages = fp_device_get_nr_enroll_stages (device);
+
+  g_debug ("Device %s enroll stages changed to %d",
+           fp_device_get_name (device),
+           nr_enroll_stages);
+
+  fprint_dbus_device_set_num_enroll_stages (dbus_dev, nr_enroll_stages);
+}
+
+static void
+on_scan_type_changed (FprintDevice *rdev,
+                      GParamSpec   *spec,
+                      FpDevice     *device)
+{
+  FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
+
+  if (fp_device_get_scan_type (device) == FP_SCAN_TYPE_PRESS)
+    fprint_dbus_device_set_scan_type (dbus_dev, "press");
+  else if (fp_device_get_scan_type (device) == FP_SCAN_TYPE_SWIPE)
+    fprint_dbus_device_set_scan_type (dbus_dev, "swipe");
+
+  g_debug ("Device %s scan type changed to '%s'",
+           fp_device_get_name (device),
+           fprint_dbus_device_get_scan_type (dbus_dev));
+}
+
+static void
+fprint_device_constructed (GObject *object)
+{
+  FprintDevice *rdev = FPRINT_DEVICE (object);
+  FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+
+  fprint_dbus_device_set_name (dbus_dev, fp_device_get_name (priv->dev));
+
+  g_signal_connect_object (priv->dev, "notify::scan-type",
+                           G_CALLBACK (on_scan_type_changed),
+                           rdev, G_CONNECT_SWAPPED);
+  on_scan_type_changed (rdev, NULL, priv->dev);
+
+  g_signal_connect_object (priv->dev, "notify::nr-enroll-stages",
+                           G_CALLBACK (on_nr_enroll_stages_changed),
+                           rdev, G_CONNECT_SWAPPED);
+  on_nr_enroll_stages_changed (rdev, NULL, priv->dev);
+
+  G_OBJECT_CLASS (fprint_device_parent_class)->constructed (object);
 }
 
 static void
@@ -324,6 +355,7 @@ fprint_device_class_init (FprintDeviceClass *klass)
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GParamSpec *pspec;
 
+  gobject_class->constructed = fprint_device_constructed;
   gobject_class->dispose = fprint_device_dispose;
   gobject_class->finalize = fprint_device_finalize;
   gobject_class->set_property = fprint_device_set_property;
@@ -341,18 +373,6 @@ fprint_device_class_init (FprintDeviceClass *klass)
                                 G_PARAM_READABLE);
   g_object_class_install_property (gobject_class,
                                    FPRINT_DEVICE_IN_USE, pspec);
-
-  g_object_class_override_property (gobject_class,
-                                    FPRINT_DEVICE_NAME,
-                                    "name");
-
-  g_object_class_override_property (gobject_class,
-                                    FPRINT_DEVICE_SCAN_TYPE,
-                                    "scan-type");
-
-  g_object_class_override_property (gobject_class,
-                                    FPRINT_DEVICE_NUM_ENROLL,
-                                    "num-enroll-stages");
 
   signals[SIGNAL_VERIFY_STATUS] =
     g_signal_lookup ("verify-status", FPRINT_TYPE_DEVICE);
