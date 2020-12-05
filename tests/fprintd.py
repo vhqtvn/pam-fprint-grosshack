@@ -297,6 +297,14 @@ class FPrintdTest(dbusmock.DBusTestCase):
         return self.assertRaisesRegex(GLib.Error,
             '.*net\.reactivated\.Fprint\.Error\.{}.*'.format(fprint_error))
 
+    @property
+    def finger_needed(self):
+        return self.device.get_cached_property('finger-needed').unpack()
+
+    @property
+    def finger_present(self):
+        return self.device.get_cached_property('finger-present').unpack()
+
     # From libfprint tests
     def send_retry(self, retry_error=FPrint.DeviceRetry.TOO_SHORT, con=None):
         if con:
@@ -350,7 +358,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
         with Connection(self.sockaddr) as con:
             self.send_finger_automatic(automatic, con=con)
 
-    def send_finger_report(self, has_finger, con=None):
+    def send_finger_report(self, has_finger, con=None, iterate=True):
         # Send finger on/off
         if con:
             con.sendall(struct.pack('ii', -4, 1 if has_finger else 0))
@@ -358,6 +366,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
         with Connection(self.sockaddr) as con:
             self.send_finger_report(has_finger, con=con)
+
+        while iterate and self.finger_present != has_finger:
+            ctx.iteration(False)
 
     def call_device_method_async(self, method, *args):
         """ add cancellable... """
@@ -444,11 +455,19 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
                 self._abort = True
                 self._last_result = 'Unexpected signal'
 
-        self.g_signal_id = self.device.connect('g-signal', signal_cb)
+        def property_cb(proxy, changed, invalidated):
+            print('Changed properties', changed, 'invalidated', invalidated)
+            self._changed_properties.append(changed.unpack())
+
+        signal_id = self.device.connect('g-signal', signal_cb)
+        self.addCleanup(self.device.disconnect, signal_id)
+
+        signal_id = self.device.connect('g-properties-changed', property_cb)
+        self.addCleanup(self.device.disconnect, signal_id)
+        self._changed_properties = []
 
     def tearDown(self):
         self.polkitd_stop()
-        self.device.disconnect(self.g_signal_id)
         self.device = None
         self.manager = None
 
@@ -470,6 +489,10 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
             device = self.device
         device.EnrollStart('(s)', finger)
 
+        while not self.finger_needed:
+            ctx.iteration(False)
+        self.assertTrue(self.finger_needed)
+
         stages = device.get_cached_property('num-enroll-stages').unpack()
         for stage in range(stages):
             self.send_image(img)
@@ -477,9 +500,11 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
                 self.wait_for_result('enroll-stage-passed')
             else:
                 self.wait_for_result(expected_result)
+                self.assertFalse(self.finger_needed)
 
         device.EnrollStop()
         self.assertEqual(self._last_result, expected_result)
+        self.assertFalse(self.finger_needed)
 
     def enroll_multiple_images(self, images_override={}, return_index=-1):
         enroll_map = {
@@ -780,6 +805,12 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
     def test_scan_type(self):
         self.assertEqual(self.device.get_cached_property('scan-type').unpack(),
             'swipe')
+
+    def test_initial_finger_needed(self):
+        self.assertFalse(self.finger_needed)
+
+    def test_initial_finger_needed(self):
+        self.assertFalse(self.finger_present)
 
     def test_allowed_claim_release_enroll(self):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
@@ -1108,6 +1139,12 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         # Finger is enrolled, try to verify it
         self.device.VerifyStart('(s)', 'any')
 
+        while not self.finger_needed:
+            ctx.iteration(True)
+
+        self.assertTrue(self.finger_needed)
+        self.assertFalse(self.finger_present)
+
         # Try a wrong print; will stop verification
         self.send_image('tented_arch')
         self.wait_for_result()
@@ -1405,6 +1442,90 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
     def test_verify_start_finger_from_other_client(self):
         with self.assertFprintError('AlreadyInUse'):
             self.call_device_method_from_other_client('VerifyStart', ['left-thumb'])
+
+    def test_enroll_finger_status(self):
+        self.assertFalse(self.finger_present)
+        self.assertFalse(self.finger_needed)
+        self.device.EnrollStart('(s)', 'right-middle-finger')
+
+        self.assertEqual(self._changed_properties, [])
+
+        while not self.finger_needed:
+            ctx.iteration(False)
+
+        self.assertIn({'finger-needed': True}, self._changed_properties)
+
+        self.assertTrue(self.finger_needed)
+        self.assertFalse(self.finger_present)
+
+        self._changed_properties = []
+        self.send_finger_report(True)
+        self.assertEqual([{'finger-present': True}], self._changed_properties)
+        self.assertTrue(self.finger_needed)
+        self.assertTrue(self.finger_present)
+
+        self._changed_properties = []
+        self.send_finger_report(False)
+        self.assertFalse(self.finger_present)
+        self.assertTrue(self.finger_needed)
+        self.assertEqual([{'finger-present': False}], self._changed_properties)
+
+        self._changed_properties = []
+        self.device.EnrollStop()
+
+        while self.finger_needed:
+            ctx.iteration(False)
+
+        self.assertFalse(self.finger_present)
+        self.assertFalse(self.finger_needed)
+        self.assertEqual([{'finger-needed': False}], self._changed_properties)
+
+    def test_verify_finger_status(self):
+        self.assertFalse(self.finger_present)
+        self.assertFalse(self.finger_needed)
+        self.assertEqual(self._changed_properties, [])
+
+        self.enroll_image('whorl')
+
+        self.assertIn({'finger-needed': True}, self._changed_properties)
+        self.assertIn({'finger-needed': False}, self._changed_properties)
+
+        self.assertFalse(self.finger_present)
+        self.assertFalse(self.finger_needed)
+
+        self._changed_properties = []
+        self.device.VerifyStart('(s)', 'any')
+        self.assertEqual(self._changed_properties, [])
+
+        while not self.finger_needed:
+            ctx.iteration(False)
+
+        self.assertIn({'finger-needed': True}, self._changed_properties)
+
+        self.assertTrue(self.finger_needed)
+        self.assertFalse(self.finger_present)
+
+        self._changed_properties = []
+        self.send_finger_report(True)
+        self.assertEqual([{'finger-present': True}], self._changed_properties)
+        self.assertTrue(self.finger_needed)
+        self.assertTrue(self.finger_present)
+
+        self._changed_properties = []
+        self.send_finger_report(False)
+        self.assertFalse(self.finger_present)
+        self.assertTrue(self.finger_needed)
+        self.assertEqual([{'finger-present': False}], self._changed_properties)
+
+        self._changed_properties = []
+        self.device.VerifyStop()
+
+        while self.finger_needed:
+            ctx.iteration(False)
+
+        self.assertFalse(self.finger_present)
+        self.assertFalse(self.finger_needed)
+        self.assertEqual([{'finger-needed': False}], self._changed_properties)
 
 
 class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):

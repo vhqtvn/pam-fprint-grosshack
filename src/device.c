@@ -328,6 +328,24 @@ on_scan_type_changed (FprintDevice *rdev,
 }
 
 static void
+on_finger_status_changed (FprintDevice *rdev,
+                          GParamSpec   *spec,
+                          FpDevice     *device)
+{
+  FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
+  FpFingerStatusFlags finger_status = fp_device_get_finger_status (device);
+  gboolean present, needed;
+
+  present = !!(finger_status & FP_FINGER_STATUS_PRESENT);
+  fprint_dbus_device_set_finger_present (dbus_dev, present);
+  g_debug ("Finger present %d", present);
+
+  needed = !!(finger_status & FP_FINGER_STATUS_NEEDED);
+  fprint_dbus_device_set_finger_needed (dbus_dev, needed);
+  g_debug ("Finger needed %d", needed);
+}
+
+static void
 fprint_device_constructed (GObject *object)
 {
   FprintDevice *rdev = FPRINT_DEVICE (object);
@@ -345,6 +363,11 @@ fprint_device_constructed (GObject *object)
                            G_CALLBACK (on_nr_enroll_stages_changed),
                            rdev, G_CONNECT_SWAPPED);
   on_nr_enroll_stages_changed (rdev, NULL, priv->dev);
+
+  g_signal_connect_object (priv->dev, "notify::finger-status",
+                           G_CALLBACK (on_finger_status_changed),
+                           rdev, G_CONNECT_SWAPPED);
+  on_finger_status_changed (rdev, NULL, priv->dev);
 
   G_OBJECT_CLASS (fprint_device_parent_class)->constructed (object);
 }

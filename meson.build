@@ -64,7 +64,7 @@ add_project_arguments(common_cflags, language: 'c')
 host_system = host_machine.system()
 # NOTE: Bump gdbus-codegen min version once we can depend on 2.64!
 glib_min_version = '2.56'
-libfprint_min_version = '1.90.1'
+libfprint_min_version = '1.90.4'
 
 fprintd_installdir = get_option('prefix') / get_option('libexecdir')
 fprintd_plugindir = get_option('prefix') / get_option('libdir') / meson.project_name() / 'modules'

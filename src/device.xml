@@ -573,6 +573,30 @@
 			</doc:doc>
 		</property>
 
+		<!-- ************************************************************ -->
+
+		<property name="finger-present" type="b" access="read">
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Whether the finger is on sensor.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
+		</property>
+
+		<!-- ************************************************************ -->
+
+		<property name="finger-needed" type="b" access="read">
+			<doc:doc>
+				<doc:description>
+					<doc:para>
+						Whether the sensor is waiting for the finger.
+					</doc:para>
+				</doc:description>
+			</doc:doc>
+		</property>
+
 	</interface>
 </node>
 
