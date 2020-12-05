@@ -251,7 +251,7 @@ static GSList *scan_dev_storedir(char *devpath,
 			continue;
 		}
 
-		list = g_slist_prepend(list, GINT_TO_POINTER(val));
+		list = g_slist_prepend (list, GUINT_TO_POINTER (val));
 	}
 
 	g_dir_close(dir);

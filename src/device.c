@@ -33,17 +33,17 @@
 #include "storage.h"
 
 static const char *FINGERS_NAMES[] = {
-	[FP_FINGER_UNKNOWN] = "unknown",
-	"left-thumb",
-	"left-index-finger",
-	"left-middle-finger",
-	"left-ring-finger",
-	"left-little-finger",
-	"right-thumb",
-	"right-index-finger",
-	"right-middle-finger",
-	"right-ring-finger",
-	"right-little-finger"
+	[FP_FINGER_UNKNOWN]      = "unknown",
+	[FP_FINGER_LEFT_THUMB]   = "left-thumb",
+	[FP_FINGER_LEFT_INDEX]   = "left-index-finger",
+	[FP_FINGER_LEFT_MIDDLE]  = "left-middle-finger",
+	[FP_FINGER_LEFT_RING]    = "left-ring-finger",
+	[FP_FINGER_LEFT_LITTLE]  = "left-little-finger",
+	[FP_FINGER_RIGHT_THUMB]  = "right-thumb",
+	[FP_FINGER_RIGHT_INDEX]  = "right-index-finger",
+	[FP_FINGER_RIGHT_MIDDLE] = "right-middle-finger",
+	[FP_FINGER_RIGHT_RING]   = "right-ring-finger",
+	[FP_FINGER_RIGHT_LITTLE] = "right-little-finger"
 };
 
 static void fprint_device_dbus_skeleton_iface_init (FprintDBusDeviceIface *);
@@ -368,22 +368,22 @@ guint32 _fprint_device_get_id(FprintDevice *rdev)
 }
 
 static const char *
-finger_num_to_name (int finger_num)
+fp_finger_to_name (FpFinger finger)
 {
-	if (finger_num == -1)
+	if (finger == FP_FINGER_UNKNOWN)
 		return "any";
-	if (!FP_FINGER_IS_VALID (finger_num))
+	if (!FP_FINGER_IS_VALID (finger))
 		return NULL;
-	return FINGERS_NAMES[finger_num];
+	return FINGERS_NAMES[finger];
 }
 
-static int
-finger_name_to_num (const char *finger_name)
+static FpFinger
+finger_name_to_fp_finger (const char *finger_name)
 {
-	guint i;
+	FpFinger i;
 
 	if (finger_name == NULL || *finger_name == '\0' || g_str_equal (finger_name, "any"))
-		return -1;
+		return FP_FINGER_UNKNOWN;
 
 	for (i = FP_FINGER_FIRST; i <= FP_FINGER_LAST; i++) {
 		if (g_str_equal (finger_name, FINGERS_NAMES[i]))
@@ -391,7 +391,7 @@ finger_name_to_num (const char *finger_name)
 	}
 
 	/* Invalid, let's try that */
-	return -1;
+	return FP_FINGER_UNKNOWN;
 }
 
 static const char *
@@ -1134,7 +1134,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	g_autoptr(FpPrint) print = NULL;
 	g_autoptr(SessionData) session = NULL;
 	g_autoptr(GError) error = NULL;
-	int finger_num = finger_name_to_num (finger_name);
+	FpFinger finger = finger_name_to_fp_finger (finger_name);
 
 	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
@@ -1148,7 +1148,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 		return TRUE;
 	}
 
-	if (finger_num == -1) {
+	if (finger == FP_FINGER_UNKNOWN) {
 		g_autoptr(GSList) prints = NULL;
 
 		prints = store.discover_prints(priv->dev, session->username);
@@ -1164,19 +1164,19 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 			gallery = g_ptr_array_new_with_free_func (g_object_unref);
 
 			for (l = prints; l != NULL; l = l->next) {
-				g_debug ("adding finger %d to the gallery", GPOINTER_TO_INT (l->data));
-				store.print_data_load(priv->dev, GPOINTER_TO_INT (l->data),
+				g_debug ("adding finger %u to the gallery", GPOINTER_TO_UINT (l->data));
+				store.print_data_load(priv->dev, GPOINTER_TO_UINT (l->data),
 						      session->username, &print);
 
 				if (print)
 					g_ptr_array_add (gallery, g_steal_pointer (&print));
 			}
 		} else {
-			finger_num = GPOINTER_TO_INT (prints->data);
+			finger = GPOINTER_TO_UINT (prints->data);
 		}
 	}
 
-	if (fp_device_supports_identify (priv->dev) && finger_num == -1) {
+	if (fp_device_supports_identify (priv->dev) && finger == FP_FINGER_UNKNOWN) {
 		if (gallery->len == 0) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
 				    "No fingerprints on that device");
@@ -1194,14 +1194,14 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	} else {
 		priv->current_action = ACTION_VERIFY;
 
-		g_debug("start verification device %d finger %d", priv->id, finger_num);
+		g_debug("start verification device %d finger %d", priv->id, finger);
 
-		store.print_data_load(priv->dev, finger_num,
+		store.print_data_load(priv->dev, finger,
 				      session->username, &print);
 
 		if (!print) {
 			g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
-				    "No such print %d", finger_num);
+				    "No such print %d", finger);
 			g_dbus_method_invocation_return_gerror (invocation,
 								error);
 			return TRUE;
@@ -1219,7 +1219,7 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 	/* Emit VerifyFingerSelected telling the front-end which finger
 	 * we selected for auth */
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_FINGER_SELECTED],
-		      0, finger_num_to_name (finger_num));
+		      0, fp_finger_to_name (finger));
 
 	return TRUE;
 }
@@ -1314,7 +1314,7 @@ static gboolean try_delete_print(FprintDevice *rdev)
 			guint index;
 
 			store.print_data_load (priv->dev,
-			                       GPOINTER_TO_INT (fingers->data),
+			                       GPOINTER_TO_UINT (fingers->data),
 			                       username,
 			                       &print);
 
@@ -1358,7 +1358,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (GDate, g_date_free);
 #endif
 
 static FpPrint*
-fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
+fprint_device_create_enroll_template(FprintDevice *rdev, FpFinger finger)
 {
 	g_autoptr(SessionData) session = NULL;
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
@@ -1370,7 +1370,7 @@ fprint_device_create_enroll_template(FprintDevice *rdev, gint finger_num)
 	session = session_data_get (priv);
 
 	template = fp_print_new (priv->dev);
-	fp_print_set_finger (template, finger_num);
+	fp_print_set_finger (template, finger);
 	fp_print_set_username (template, session->username);
 	datetime = g_date_time_new_now_local ();
 	g_date_time_get_ymd (datetime, &year, &month, &day);
@@ -1448,14 +1448,14 @@ static gboolean fprint_device_enroll_start (FprintDBusDevice *dbus_dev,
 	g_autoptr(GError) error = NULL;
 	FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
 	FprintDevicePrivate *priv = fprint_device_get_instance_private(rdev);
-	int finger_num = finger_name_to_num (finger_name);
+	FpFinger finger = finger_name_to_fp_finger (finger_name);
 
 	if (!_fprint_device_check_claimed (rdev, invocation, &error)) {
 		g_dbus_method_invocation_return_gerror (invocation, error);
 		return TRUE;
 	}
 
-	if (finger_num == -1) {
+	if (finger == FP_FINGER_UNKNOWN) {
 		g_set_error(&error, FPRINT_ERROR, FPRINT_ERROR_INVALID_FINGERNAME,
 			    "Invalid finger name");
 		g_dbus_method_invocation_return_gerror (invocation, error);
@@ -1467,10 +1467,10 @@ static gboolean fprint_device_enroll_start (FprintDBusDevice *dbus_dev,
 		return TRUE;
 	}
 
-	g_debug("start enrollment device %d finger %d", priv->id, finger_num);
+	g_debug("start enrollment device %d finger %d", priv->id, finger);
 
 	priv->current_cancellable = g_cancellable_new ();
-	priv->enroll_data = finger_num;
+	priv->enroll_data = finger;
 	fp_device_enroll (priv->dev,
 	                  fprint_device_create_enroll_template (rdev, priv->enroll_data),
 	                  priv->current_cancellable,
@@ -1556,8 +1556,8 @@ static gboolean fprint_device_list_enrolled_fingers (FprintDBusDevice *dbus_dev,
 
 	ret = g_ptr_array_new ();
 	for (item = prints; item; item = item->next) {
-		int finger_num = GPOINTER_TO_INT (item->data);
-		g_ptr_array_add (ret, (char *) finger_num_to_name (finger_num));
+		FpFinger finger = GPOINTER_TO_UINT (item->data);
+		g_ptr_array_add (ret, (char *) fp_finger_to_name (finger));
 	}
 	g_ptr_array_add (ret, NULL);
 
@@ -1586,7 +1586,7 @@ static void delete_enrolled_fingers(FprintDevice *rdev, const char *user)
 			g_autoptr(FpPrint) print = NULL;
 
 			store.print_data_load(priv->dev,
-			                      GPOINTER_TO_INT (l->data),
+			                      GPOINTER_TO_UINT (l->data),
 			                      user,
 			                      &print);
 
