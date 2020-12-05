@@ -249,6 +249,10 @@ verify_finger_selected (sd_bus_message *m,
 	}
 
 	msg = finger_str_to_msg(finger_name, data->driver, data->is_swipe);
+	if (!msg) {
+		data->result = strdup ("Protocol error with fprintd!");
+		return 0;
+	}
 	if (debug)
 		pam_syslog (data->pamh, LOG_DEBUG, "verify_finger_selected %s", msg);
 	send_info_msg (data->pamh, msg);
