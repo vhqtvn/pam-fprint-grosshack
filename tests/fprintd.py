@@ -531,6 +531,17 @@ class FPrintdManagerPreStartTests(FPrintdTest):
 
 class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
+    def test_name_property(self):
+        self.assertEqual(self.device.get_cached_property('name').unpack(),
+            'Virtual image device for debugging')
+
+    def test_enroll_stages_property(self):
+        self.assertEqual(self.device.get_cached_property('num-enroll-stages').unpack(), 5)
+
+    def test_scan_type(self):
+        self.assertEqual(self.device.get_cached_property('scan-type').unpack(),
+            'swipe')
+
     def test_allowed_claim_release_enroll(self):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
                                       'net.reactivated.fprint.device.enroll'])
