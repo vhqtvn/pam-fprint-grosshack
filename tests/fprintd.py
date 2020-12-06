@@ -894,6 +894,13 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('PermissionDenied'):
             self.device.DeleteEnrolledFingers2()
 
+    def test_unallowed_delete_single_with_verify_claim(self):
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self.device.Claim('(s)', '')
+
+        with self.assertFprintError('PermissionDenied'):
+            self.device.DeleteEnrolledFingers('(s)', 'right-thumb')
+
     def test_unallowed_verify_with_enroll_claim(self):
         self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
         self.device.Claim('(s)', '')
@@ -947,6 +954,10 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
     def test_unclaimed_delete_enrolled_fingers(self):
         self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+    def test_unclaimed_delete_enrolled_finger(self):
+        with self.assertFprintError('ClaimDevice'):
+            self.device.DeleteEnrolledFinger('(s)', 'left-index-finger')
 
     def test_unclaimed_delete_enrolled_fingers2(self):
         with self.assertFprintError('ClaimDevice'):
@@ -1107,9 +1118,21 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
                 raise(e)
         super().tearDown()
 
-    def test_wrong_finger_enroll_start(self):
+    def test_any_finger_enroll_start(self):
         with self.assertFprintError('InvalidFingername'):
             self.device.EnrollStart('(s)', 'any')
+
+    def test_wrong_finger_enroll_start(self):
+        with self.assertFprintError('InvalidFingername'):
+            self.device.EnrollStart('(s)', 'sixth-right-finger')
+
+    def test_any_finger_delete_print(self):
+        with self.assertFprintError('InvalidFingername'):
+            self.device.DeleteEnrolledFinger('(s)', 'any')
+
+    def test_wrong_finger_delete_print(self):
+        with self.assertFprintError('InvalidFingername'):
+            self.device.DeleteEnrolledFinger('(s)', 'sixth-left-finger')
 
     def test_verify_with_no_enrolled_prints(self):
         with self.assertFprintError('NoEnrolledPrints'):
@@ -1188,6 +1211,21 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser')))
         self.assertTrue(os.path.exists(self.state_dir))
+
+    def test_enroll_delete_single(self):
+        self.enroll_image('whorl', finger='right-index-finger')
+        self.enroll_image('tented_arch', finger='left-index-finger')
+
+        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/2')))
+
+        self.device.DeleteEnrolledFinger('(s)', 'right-index-finger')
+        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/2')))
+        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+
+        self.device.DeleteEnrolledFinger('(s)', 'left-index-finger')
+        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/2')))
+        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
     def test_enroll_invalid_storage_dir(self):
         # Directory will not exist yet
@@ -1422,6 +1460,13 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self._polkitd_obj.SetAllowed([''])
         with self.assertFprintError('PermissionDenied'):
             self.device.DeleteEnrolledFingers2()
+
+    def test_unallowed_delete_enrolled_finger(self):
+        self.enroll_image('whorl')
+
+        self._polkitd_obj.SetAllowed([''])
+        with self.assertFprintError('PermissionDenied'):
+            self.device.DeleteEnrolledFinger('(s)', 'left-little-finger')
 
     def test_delete_enrolled_fingers_from_other_client(self):
         with self.assertFprintError('AlreadyInUse'):

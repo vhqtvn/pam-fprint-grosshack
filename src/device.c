@@ -574,6 +574,10 @@ get_permissions_for_invocation (GDBusMethodInvocation *invocation)
       required_perms |= FPRINT_DEVICE_PERMISSION_VERIFY;
       required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
     }
+  else if (g_str_equal (method_name, "DeleteEnrolledFinger"))
+    {
+      required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
+    }
   else if (g_str_equal (method_name, "DeleteEnrolledFingers"))
     {
       required_perms |= FPRINT_DEVICE_PERMISSION_ENROLL;
@@ -1838,12 +1842,18 @@ fprint_device_list_enrolled_fingers (FprintDBusDevice      *dbus_dev,
 }
 
 static void
-delete_enrolled_fingers (FprintDevice *rdev, const char *user)
+delete_enrolled_fingers (FprintDevice *rdev,
+                         const char   *user,
+                         FpFinger      finger)
 {
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
   guint i;
 
-  g_debug ("Deleting enrolled fingers for user %s", user);
+  if (finger != FP_FINGER_UNKNOWN)
+    g_debug ("Deleting enrolled finger %s for user %s",
+             fp_finger_to_name (finger), user);
+  else
+    g_debug ("Deleting enrolled fingers for user %s", user);
 
   /* First try deleting the print from the device, we don't consider it
    * fatal if this does not work. */
@@ -1867,6 +1877,9 @@ delete_enrolled_fingers (FprintDevice *rdev, const char *user)
             {
               g_autoptr(GError) error = NULL;
 
+              if (finger != FP_FINGER_UNKNOWN && fp_print_get_finger (print) != finger)
+                continue;
+
               if (!fp_device_delete_print_sync (priv->dev, print, NULL, &error))
                 {
                   g_warning ("Error deleting print from device: %s", error->message);
@@ -1876,8 +1889,15 @@ delete_enrolled_fingers (FprintDevice *rdev, const char *user)
         }
     }
 
-  for (i = FP_FINGER_FIRST; i <= FP_FINGER_LAST; i++)
-    store.print_data_delete (priv->dev, i, user);
+  if (finger != FP_FINGER_UNKNOWN)
+    {
+      store.print_data_delete (priv->dev, finger, user);
+    }
+  else
+    {
+      for (i = FP_FINGER_FIRST; i <= FP_FINGER_LAST; i++)
+        store.print_data_delete (priv->dev, i, user);
+    }
 }
 
 #ifdef __linux__
@@ -1982,7 +2002,7 @@ fprint_device_delete_enrolled_fingers (FprintDBusDevice      *dbus_dev,
   g_assert (user);
   g_assert (g_str_equal (username, "") || g_str_equal (user, username));
 
-  delete_enrolled_fingers (rdev, user);
+  delete_enrolled_fingers (rdev, user, FP_FINGER_UNKNOWN);
 
   if (!opened && fp_device_has_storage (priv->dev))
     fp_device_close_sync (priv->dev, NULL, NULL);
@@ -2020,10 +2040,56 @@ fprint_device_delete_enrolled_fingers2 (FprintDBusDevice      *dbus_dev,
 
   session = session_data_get (priv);
 
-  delete_enrolled_fingers (rdev, session->username);
+  delete_enrolled_fingers (rdev, session->username, FP_FINGER_UNKNOWN);
 
   fprint_dbus_device_complete_delete_enrolled_fingers2 (dbus_dev,
                                                         invocation);
+  return TRUE;
+}
+
+static gboolean
+fprint_device_delete_enrolled_finger (FprintDBusDevice      *dbus_dev,
+                                      GDBusMethodInvocation *invocation,
+                                      const gchar           *finger_name)
+{
+  FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+  FpFinger finger = finger_name_to_fp_finger (finger_name);
+
+  g_autoptr(SessionData) session = NULL;
+  g_autoptr(GError) error = NULL;
+
+  if (!_fprint_device_check_claimed (rdev, invocation, &error))
+    {
+      g_dbus_method_invocation_return_gerror (invocation, error);
+      return TRUE;
+    }
+
+  if (finger == FP_FINGER_UNKNOWN)
+    {
+      g_dbus_method_invocation_return_error_literal (invocation,
+                                                     FPRINT_ERROR,
+                                                     FPRINT_ERROR_INVALID_FINGERNAME,
+                                                     "Invalid finger name");
+      return TRUE;
+    }
+
+  if (!can_start_action (rdev, &error))
+    {
+      g_dbus_method_invocation_return_gerror (invocation, error);
+      return TRUE;
+    }
+
+  priv->current_action = ACTION_DELETE;
+
+  session = session_data_get (priv);
+
+  /* FIXME: Should we return an error if the requested finger is not enrolled?! */
+  delete_enrolled_fingers (rdev, session->username, finger);
+
+  priv->current_action = ACTION_NONE;
+
+  fprint_dbus_device_complete_delete_enrolled_finger (dbus_dev, invocation);
   return TRUE;
 }
 
@@ -2104,6 +2170,7 @@ static void
 fprint_device_dbus_skeleton_iface_init (FprintDBusDeviceIface *iface)
 {
   iface->handle_claim = fprint_device_claim;
+  iface->handle_delete_enrolled_finger = fprint_device_delete_enrolled_finger;
   iface->handle_delete_enrolled_fingers = fprint_device_delete_enrolled_fingers;
   iface->handle_delete_enrolled_fingers2 = fprint_device_delete_enrolled_fingers2;
   iface->handle_enroll_start = fprint_device_enroll_start;
