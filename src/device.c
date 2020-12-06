@@ -1841,10 +1841,27 @@ fprint_device_list_enrolled_fingers (FprintDBusDevice      *dbus_dev,
   return TRUE;
 }
 
-static void
-delete_enrolled_fingers (FprintDevice *rdev,
+static gboolean
+user_has_print_enrolled (FprintDevice *rdev,
                          const char   *user,
                          FpFinger      finger)
+{
+  g_autoptr(GSList) prints = NULL;
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+
+  prints = store.discover_prints (priv->dev, user);
+
+  if (finger == FP_FINGER_UNKNOWN)
+    return prints != NULL;
+
+  return g_slist_find (prints, GUINT_TO_POINTER (finger)) != NULL;
+}
+
+static gboolean
+delete_enrolled_fingers (FprintDevice *rdev,
+                         const char   *user,
+                         FpFinger      finger,
+                         GError      **error)
 {
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
   guint i;
@@ -1854,6 +1871,14 @@ delete_enrolled_fingers (FprintDevice *rdev,
              fp_finger_to_name (finger), user);
   else
     g_debug ("Deleting enrolled fingers for user %s", user);
+
+  if (!user_has_print_enrolled (rdev, user, finger))
+    {
+      g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
+                   "Fingerprint for finger %s is not enrolled",
+                   fp_finger_to_name (finger));
+      return FALSE;
+    }
 
   /* First try deleting the print from the device, we don't consider it
    * fatal if this does not work. */
@@ -1875,14 +1900,14 @@ delete_enrolled_fingers (FprintDevice *rdev,
 
           if (print)
             {
-              g_autoptr(GError) error = NULL;
+              g_autoptr(GError) local_error = NULL;
 
               if (finger != FP_FINGER_UNKNOWN && fp_print_get_finger (print) != finger)
                 continue;
 
-              if (!fp_device_delete_print_sync (priv->dev, print, NULL, &error))
+              if (!fp_device_delete_print_sync (priv->dev, print, NULL, &local_error))
                 {
-                  g_warning ("Error deleting print from device: %s", error->message);
+                  g_warning ("Error deleting print from device: %s", local_error->message);
                   g_warning ("This might indicate an issue in the libfprint driver or in the fingerprint device.");
                 }
             }
@@ -1890,14 +1915,12 @@ delete_enrolled_fingers (FprintDevice *rdev,
     }
 
   if (finger != FP_FINGER_UNKNOWN)
-    {
-      store.print_data_delete (priv->dev, finger, user);
-    }
+    store.print_data_delete (priv->dev, finger, user);
   else
-    {
-      for (i = FP_FINGER_FIRST; i <= FP_FINGER_LAST; i++)
-        store.print_data_delete (priv->dev, i, user);
-    }
+    for (i = FP_FINGER_FIRST; i <= FP_FINGER_LAST; i++)
+      store.print_data_delete (priv->dev, i, user);
+
+  return TRUE;
 }
 
 #ifdef __linux__
@@ -2002,7 +2025,7 @@ fprint_device_delete_enrolled_fingers (FprintDBusDevice      *dbus_dev,
   g_assert (user);
   g_assert (g_str_equal (username, "") || g_str_equal (user, username));
 
-  delete_enrolled_fingers (rdev, user, FP_FINGER_UNKNOWN);
+  delete_enrolled_fingers (rdev, user, FP_FINGER_UNKNOWN, NULL);
 
   if (!opened && fp_device_has_storage (priv->dev))
     fp_device_close_sync (priv->dev, NULL, NULL);
@@ -2040,7 +2063,7 @@ fprint_device_delete_enrolled_fingers2 (FprintDBusDevice      *dbus_dev,
 
   session = session_data_get (priv);
 
-  delete_enrolled_fingers (rdev, session->username, FP_FINGER_UNKNOWN);
+  delete_enrolled_fingers (rdev, session->username, FP_FINGER_UNKNOWN, NULL);
 
   fprint_dbus_device_complete_delete_enrolled_fingers2 (dbus_dev,
                                                         invocation);
@@ -2084,8 +2107,12 @@ fprint_device_delete_enrolled_finger (FprintDBusDevice      *dbus_dev,
 
   session = session_data_get (priv);
 
-  /* FIXME: Should we return an error if the requested finger is not enrolled?! */
-  delete_enrolled_fingers (rdev, session->username, finger);
+  if (!delete_enrolled_fingers (rdev, session->username, finger, &error))
+    {
+      priv->current_action = ACTION_NONE;
+      g_dbus_method_invocation_return_gerror (invocation, error);
+      return TRUE;
+    }
 
   priv->current_action = ACTION_NONE;
 

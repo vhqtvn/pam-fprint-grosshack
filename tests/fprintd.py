@@ -1134,6 +1134,10 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('InvalidFingername'):
             self.device.DeleteEnrolledFinger('(s)', 'sixth-left-finger')
 
+    def test_delete_with_no_enrolled_prints(self):
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.DeleteEnrolledFinger('(s)', 'left-index-finger')
+
     def test_verify_with_no_enrolled_prints(self):
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.VerifyStart('(s)', 'any')

@@ -355,6 +355,8 @@
 					<doc:error name="&ERROR_PERMISSION_DENIED;">if the caller lacks the appropriate PolicyKit authorization</doc:error>
 					<doc:error name="&ERROR_CLAIM_DEVICE;">if the device was not claimed</doc:error>
 					<doc:error name="&ERROR_INVALID_FINGERNAME;">if the finger name passed is invalid</doc:error>
+					<doc:error name="&ERROR_NO_ENROLLED_PRINTS;">if the chosen user doesn't have the requsted fingerprint enrolled</doc:error>
+					<doc:error name="&ERROR_INTERNAL;">if there was an internal error</doc:error>
 				</doc:errors>
 			</doc:doc>
 		</method>
