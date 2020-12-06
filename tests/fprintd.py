@@ -1476,6 +1476,14 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('AlreadyInUse'):
             self.call_device_method_from_other_client('DeleteEnrolledFingers', ['testuser'])
 
+    def test_delete_enrolled_fingers2_from_other_client(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.call_device_method_from_other_client('DeleteEnrolledFingers2')
+
+    def test_delete_enrolled_finger_from_other_client(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.call_device_method_from_other_client('DeleteEnrolledFinger', ['left-index-finger'])
+
     def test_release_from_other_client(self):
         with self.assertFprintError('AlreadyInUse'):
             self.call_device_method_from_other_client('Release')
@@ -1657,6 +1665,18 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('AlreadyInUse'):
             self.call_device_method_from_other_client('EnrollStop')
 
+    def test_delete_fingers_during_enroll(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.DeleteEnrolledFingers('(s)', '')
+
+    def test_delete_fingers2_during_enroll(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.DeleteEnrolledFingers2()
+
+    def test_delete_finger_during_enroll(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.DeleteEnrolledFinger('(s)', 'left-thumb')
+
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
@@ -1781,6 +1801,18 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
     def test_verify_stop_from_other_client(self):
         with self.assertFprintError('AlreadyInUse'):
             self.call_device_method_from_other_client('VerifyStop')
+
+    def test_delete_fingers_during_verify(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.DeleteEnrolledFingers('(s)', '')
+
+    def test_delete_fingers2_during_verify(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.DeleteEnrolledFingers2()
+
+    def test_delete_finger_during_verify(self):
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.DeleteEnrolledFinger('(s)', 'left-thumb')
 
 
 class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTests):
