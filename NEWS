@@ -1,6 +1,24 @@
 This file lists notable changes in each release. For the full history of all
 changes, see ChangeLog.
 
+Version 1.90.6:
+
+The 1.90.5 release was unusable due to a number of inter-related issues
+with the DBus interface and authorization. We also found a number of
+problems with possible security implications.
+
+Currently fprintd will do interactive authorization even if this was not
+requested using the correct DBus method call flag. All API users MUST be
+updated to set the flag as it will be enabled in the future!
+
+Highlights:
+ - Fix fprintd DBus configuration
+ - Change details of what requires authorization
+ - Fix various race conditions in pam_fprintd
+ - Permit interactive authorization from fprintd utilities
+ - Do not allow deletion while another operation is ongoing
+
+
 Version 1.90.5:
 
 The 1.90.4 release contained some bad errors, this release addresses those.
