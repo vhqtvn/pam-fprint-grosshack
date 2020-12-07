@@ -113,25 +113,25 @@ GNUC_UNUSED static char *finger_str_to_msg(const char *finger_name, const char *
 		return NULL;
 
 	for (i = 0; fingers[i].dbus_name != NULL; i++) {
-		if (str_equal (fingers[i].dbus_name, finger_name)) {
-			if (is_swipe == false) {
-				if (driver_name) {
-					char *s;
-					int ret;
-					ret = asprintf (&s, TR (fingers[i].place_str_specific), driver_name);
-					return ret >= 0 ? s : NULL;
-				} else {
-					return strdup (TR (fingers[i].place_str_generic));
-				}
+		if (!str_equal (fingers[i].dbus_name, finger_name))
+			continue;
+		if (is_swipe == false) {
+			if (driver_name) {
+				char *s;
+				int ret;
+				ret = asprintf (&s, TR (fingers[i].place_str_specific), driver_name);
+				return ret >= 0 ? s : NULL;
 			} else {
-				if (driver_name) {
-					char *s;
-					int ret;
-					ret = asprintf (&s, TR (fingers[i].swipe_str_specific), driver_name);
-					return ret >= 0 ? s : NULL;
-				} else {
-					return strdup (TR (fingers[i].swipe_str_generic));
-				}
+				return strdup (TR (fingers[i].place_str_generic));
+			}
+		} else {
+			if (driver_name) {
+				char *s;
+				int ret;
+				ret = asprintf (&s, TR (fingers[i].swipe_str_specific), driver_name);
+				return ret >= 0 ? s : NULL;
+			} else {
+				return strdup (TR (fingers[i].swipe_str_generic));
 			}
 		}
 	}
