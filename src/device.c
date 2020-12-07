@@ -1214,12 +1214,12 @@ static gboolean fprint_device_verify_start (FprintDBusDevice *dbus_dev,
 		                  (GAsyncReadyCallback) verify_cb, rdev);
 	}
 
+	fprint_dbus_device_complete_verify_start  (dbus_dev, invocation);
+
 	/* Emit VerifyFingerSelected telling the front-end which finger
 	 * we selected for auth */
 	g_signal_emit(rdev, signals[SIGNAL_VERIFY_FINGER_SELECTED],
 		      0, finger_num_to_name (finger_num));
-
-	fprint_dbus_device_complete_verify_start  (dbus_dev, invocation);
 
 	return TRUE;
 }
