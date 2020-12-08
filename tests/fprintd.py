@@ -2700,7 +2700,7 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         self.assertVerifyError(FPrint.DeviceError.DATA_INVALID, 'verify-unknown-error')
 
     def test_verify_error_data_not_found(self):
-        self.assertVerifyError(FPrint.DeviceError.DATA_NOT_FOUND, 'verify-unknown-error')
+        self.assertVerifyError(FPrint.DeviceError.DATA_NOT_FOUND, 'verify-no-match')
 
     def test_verify_error_data_full(self):
         self.assertVerifyError(FPrint.DeviceError.DATA_FULL, 'verify-unknown-error')
