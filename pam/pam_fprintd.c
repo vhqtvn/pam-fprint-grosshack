@@ -155,7 +155,7 @@ open_device (pam_handle_t *pamh,
 
   sd_bus_message_exit_container (m);
 
-  return strdup (path);
+  return path ? strdup (path) : NULL;
 }
 
 typedef struct
@@ -226,7 +226,7 @@ verify_result (sd_bus_message *m,
       data->result = NULL;
     }
 
-  if (done)
+  if (done && result)
     {
       data->result = strdup (result);
       return 0;
