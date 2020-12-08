@@ -86,6 +86,10 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.device_mock = self.dbus_con.get_object('net.reactivated.Fprint', device_path)
         self.device_mock.SetEnrolledFingers('toto', ['left-little-finger', 'right-little-finger'])
 
+    def test_pam_no_device(self):
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTHINFO_UNAVAIL)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
     def test_pam_fprintd_identify_error(self):
         self.setup_device()
         script = [
