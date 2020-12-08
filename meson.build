@@ -94,11 +94,15 @@ pod2man = find_program('pod2man', required: get_option('man'))
 xsltproc = find_program('xsltproc', required: get_option('gtk_doc'))
 
 # StateDirectory was introduced in systemd 235
-systemd_dep = dependency('systemd', version: '>= 235')
+systemd_dep = dependency('systemd', version: '>= 235', required: false)
 systemd_unit_dir = get_option('systemd_system_unit_dir')
 
-if systemd_unit_dir == ''
+if systemd_unit_dir == '' and systemd_dep.found()
     systemd_unit_dir = systemd_dep.get_pkgconfig_variable('systemdsystemunitdir')
+endif
+
+if get_option('systemd') and systemd_unit_dir == ''
+    error('systemd development files or systemd_system_unit_dir is needed for systemd support.')
 endif
 
 dbus_service_dir = get_option('dbus_service_dir')

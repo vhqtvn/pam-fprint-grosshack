@@ -11,15 +11,17 @@ configure_file(
     install_dir: dbus_service_dir,
 )
 
-configure_file(
-    configuration: configuration_data({
-        'libexecdir': fprintd_installdir,
-    }),
-    input: 'fprintd.service.in',
-    output: 'fprintd.service',
-    install: true,
-    install_dir: systemd_unit_dir,
-)
+if get_option('systemd')
+    configure_file(
+        configuration: configuration_data({
+            'libexecdir': fprintd_installdir,
+        }),
+        input: 'fprintd.service.in',
+        output: 'fprintd.service',
+        install: true,
+        install_dir: systemd_unit_dir,
+    )
+endif
 
 polkit_policy = 'net.reactivated.fprint.device.policy'
 polkit_policy_target = i18n.merge_file(polkit_policy,

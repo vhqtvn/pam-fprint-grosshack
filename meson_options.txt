@@ -6,6 +6,10 @@ option('man',
     description: 'Generate the man files',
     type: 'boolean',
     value: true)
+option('systemd',
+    description: 'Install system service files',
+    type: 'boolean',
+    value: true)
 option('systemd_system_unit_dir',
     description: 'Directory for systemd service files',
     type: 'string')
