@@ -1,6 +1,16 @@
 This file lists notable changes in each release. For the full history of all
 changes, see ChangeLog.
 
+Version 1.90.7:
+
+While 1.90.6 fixed a number of issues, we did have a bad regression due
+causing pam_fprintd to crash when there are no fingerprint devices
+installed.
+
+Highlights:
+ - pam: Guard strdup calls against NULL pointers
+
+
 Version 1.90.6:
 
 The 1.90.5 release was unusable due to a number of inter-related issues
