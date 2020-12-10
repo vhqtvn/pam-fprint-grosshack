@@ -33,6 +33,9 @@
 #include <libintl.h>
 #include <systemd/sd-bus.h>
 #include <systemd/sd-login.h>
+#include <signal.h>
+#include <sys/signalfd.h>
+#include <poll.h>
 
 #define PAM_SM_AUTH
 #include <security/pam_modules.h>
@@ -59,6 +62,7 @@ static unsigned timeout = DEFAULT_TIMEOUT;
 
 #define USEC_PER_SEC ((uint64_t) 1000000ULL)
 #define NSEC_PER_USEC ((uint64_t) 1000ULL)
+#define USEC_PER_MSEC ((uint64_t) 1000ULL)
 
 static size_t user_enrolled_prints_num (pam_handle_t *pamh,
                                         sd_bus       *bus,
@@ -368,6 +372,16 @@ verify_started_cb (sd_bus_message *m,
   return 1;
 }
 
+static void
+fd_cleanup (int *fd)
+{
+  if (*fd >= 0)
+    close (*fd);
+}
+
+typedef int fd_int;
+PF_DEFINE_AUTO_CLEAN_FUNC (fd_int, fd_cleanup);
+
 static int
 do_verify (sd_bus      *bus,
            verify_data *data)
@@ -375,6 +389,8 @@ do_verify (sd_bus      *bus,
   pf_autoptr (sd_bus_slot) verify_status_slot = NULL;
   pf_autoptr (sd_bus_slot) verify_finger_selected_slot = NULL;
   pf_autofree char *scan_type = NULL;
+  sigset_t signals;
+  fd_int signal_fd = -1;
   int r;
 
   /* Get some properties for the device */
@@ -425,6 +441,10 @@ do_verify (sd_bus      *bus,
                        verify_finger_selected,
                        data);
 
+  sigemptyset (&signals);
+  sigaddset (&signals, SIGINT);
+  signal_fd = signalfd (signal_fd, &signals, SFD_NONBLOCK);
+
   while (data->max_tries > 0)
     {
       uint64_t verification_end = now () + (timeout * USEC_PER_SEC);
@@ -459,11 +479,21 @@ do_verify (sd_bus      *bus,
 
       for (;;)
         {
+          struct signalfd_siginfo siginfo;
           int64_t wait_time;
 
           wait_time = verification_end - now ();
           if (wait_time <= 0)
             break;
+
+          if (read (signal_fd, &siginfo, sizeof (siginfo)) > 0)
+            {
+              if (debug)
+                pam_syslog (data->pamh, LOG_DEBUG, "Received signal %d during verify", siginfo.ssi_signo);
+
+              /* The only way for this to happen is if we received SIGINT. */
+              return PAM_AUTHINFO_UNAVAIL;
+            }
 
           r = sd_bus_process (bus, NULL);
           if (r < 0)
@@ -476,6 +506,11 @@ do_verify (sd_bus      *bus,
             break;
           if (r == 0)
             {
+              struct pollfd fds[2] = {
+                { sd_bus_get_fd (bus), sd_bus_get_events (bus), 0 },
+                { signal_fd, POLLIN, 0 },
+              };
+
               if (debug)
                 {
                   pam_syslog (data->pamh, LOG_DEBUG,
@@ -483,8 +518,13 @@ do_verify (sd_bus      *bus,
                               wait_time / USEC_PER_SEC,
                               wait_time);
                 }
-              if (sd_bus_wait (bus, wait_time) < 0)
-                break;
+
+              r = poll (fds, 2, wait_time / USEC_PER_MSEC);
+              if (r < 0 && errno != EINTR)
+                {
+                  pam_syslog (data->pamh, LOG_ERR, "Error waiting for events: %d", errno);
+                  return PAM_AUTHINFO_UNAVAIL;
+                }
             }
         }
 
