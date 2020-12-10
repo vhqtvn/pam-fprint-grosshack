@@ -717,7 +717,7 @@ _fprint_device_check_for_username (FprintDevice          *rdev,
                                    GError               **error)
 {
   g_autoptr(GVariant) ret = NULL;
-  g_autoptr(GError) err = NULL;
+  g_autoptr(GError) local_error = NULL;
   GDBusConnection *connection;
   const char *sender;
   struct passwd *user;
@@ -734,15 +734,13 @@ _fprint_device_check_for_username (FprintDevice          *rdev,
                                      "GetConnectionUnixUser",
                                      g_variant_new ("(s)", sender),
                                      NULL, G_DBUS_CALL_FLAGS_NONE, -1,
-                                     NULL, &err);
+                                     NULL, &local_error);
 
   if (!ret)
     {
-      g_autoptr(GError) e = NULL;
-
       g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
                    "Could not get conection unix user ID: %s",
-                   err->message);
+                   local_error->message);
       return NULL;
     }
 
