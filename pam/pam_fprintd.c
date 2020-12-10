@@ -640,8 +640,7 @@ name_owner_changed (sd_bus_message *m,
    * to events from a new name owner otherwise. */
   data->verify_ret = PAM_AUTHINFO_UNAVAIL;
 
-  if (debug)
-    pam_syslog (data->pamh, LOG_ERR, "fprintd name owner changed during operation!\n");
+  pam_syslog (data->pamh, LOG_WARNING, "fprintd name owner changed during operation!");
 
   return 0;
 }
@@ -665,16 +664,6 @@ do_auth (pam_handle_t *pamh, const char *username)
       return PAM_AUTHINFO_UNAVAIL;
     }
 
-  name_owner_changed_slot = NULL;
-  sd_bus_match_signal (bus,
-                       &name_owner_changed_slot,
-                       "org.freedesktop.DBus",
-                       "/org/freedesktop/DBus",
-                       "org.freedesktop.DBus",
-                       "NameOwnerChanged",
-                       name_owner_changed,
-                       data);
-
   data->dev = open_device (pamh, bus, &data->has_multiple_devices);
   if (data->dev == NULL)
     return PAM_AUTHINFO_UNAVAIL;
@@ -685,6 +674,19 @@ do_auth (pam_handle_t *pamh, const char *username)
 
   if (!have_prints)
     return PAM_AUTHINFO_UNAVAIL;
+
+  /* Only connect to NameOwnerChanged when needed. In case of automatic startup
+   * we rely on the fact that we never see those signals.
+   */
+  name_owner_changed_slot = NULL;
+  sd_bus_match_signal (bus,
+                       &name_owner_changed_slot,
+                       "org.freedesktop.DBus",
+                       "/org/freedesktop/DBus",
+                       "org.freedesktop.DBus",
+                       "NameOwnerChanged",
+                       name_owner_changed,
+                       data);
 
   if (claim_device (pamh, bus, data->dev, username))
     {
