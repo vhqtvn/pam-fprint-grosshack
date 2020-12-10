@@ -208,6 +208,7 @@ verify_result (sd_bus_message *m,
   if ((r = sd_bus_message_read (m, "sb", &result, &done)) < 0)
     {
       pam_syslog (data->pamh, LOG_ERR, "Failed to parse VerifyResult signal: %d", r);
+      data->verify_ret = PAM_AUTHINFO_UNAVAIL;
       return 0;
     }
 
@@ -255,6 +256,7 @@ verify_finger_selected (sd_bus_message *m,
   if (sd_bus_message_read_basic (m, 's', &finger_name) < 0)
     {
       pam_syslog (data->pamh, LOG_ERR, "Failed to parse VerifyFingerSelected signal: %d", errno);
+      data->verify_ret = PAM_AUTHINFO_UNAVAIL;
       return 0;
     }
 
@@ -630,6 +632,7 @@ name_owner_changed (sd_bus_message *m,
   if (sd_bus_message_read (m, "sss", &name, &old_owner, &new_owner) < 0)
     {
       pam_syslog (data->pamh, LOG_ERR, "Failed to parse NameOwnerChanged signal: %d", errno);
+      data->verify_ret = PAM_AUTHINFO_UNAVAIL;
       return 0;
     }
 
