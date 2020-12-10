@@ -1923,8 +1923,9 @@ handle_unauthorized_access (FprintDevice          *rdev,
 
   g_assert (error);
 
-  g_warning ("Client %s not authorized for device %s: %s",
+  g_warning ("Client %s not authorized to call method '%s' for device %s: %s",
              g_dbus_method_invocation_get_sender (invocation),
+             g_dbus_method_invocation_get_method_name (invocation),
              fp_device_get_name (priv->dev),
              error->message);
   g_dbus_method_invocation_return_gerror (invocation, error);
@@ -1978,8 +1979,9 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
                                                    &error))
     return handle_unauthorized_access (rdev, invocation, error);
 
-  g_debug ("Authorization granted to %s for device %s!",
+  g_debug ("Authorization granted to %s to call method '%s' for device %s!",
            fp_device_get_name (priv->dev),
+           g_dbus_method_invocation_get_method_name (invocation),
            g_dbus_method_invocation_get_sender (invocation));
 
   return TRUE;
