@@ -295,7 +295,7 @@ fprint_manager_constructed (GObject *object)
   GDBusObjectManagerServer *object_manager_server;
 
   object_manager_server =
-    g_dbus_object_manager_server_new (FPRINT_SERVICE_PATH "/Device");
+    g_dbus_object_manager_server_new (FPRINT_SERVICE_PATH);
 
   priv->object_manager = G_DBUS_OBJECT_MANAGER (object_manager_server);
   priv->dbus_manager = fprint_dbus_manager_skeleton_new ();
