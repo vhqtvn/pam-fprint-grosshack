@@ -236,6 +236,31 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.assertRegex(res.info[0], r'Place your left middle finger on FDO Sandpaper Reader')
         self.assertEqual(len(res.errors), 0)
 
+    def test_pam_fprintd_multi_reader_not_all_enrolled(self):
+        # Add a 1st device with actual enrolled prints
+        device_path = self.obj_fprintd_mock.AddDevice('FDO Empty reader', 3, 'press')
+        empty_reader = self.dbus_con.get_object('net.reactivated.Fprint', device_path)
+        empty_reader.SetEnrolledFingers('toto', dbus.Array(set([]), signature='s')) 
+
+        # Add a 2nd device with actual enrolled prints
+        device_path = self.obj_fprintd_mock.AddDevice('FDO Most Used Reader', 3, 'press')
+        sandpaper_device_mock = self.dbus_con.get_object('net.reactivated.Fprint', device_path)
+        sandpaper_device_mock.SetEnrolledFingers('toto', ['left-middle-finger', 'right-middle-finger'])
+        script = [
+            ( 'verify-match', True, 2 )
+        ]
+        sandpaper_device_mock.SetVerifyScript(script)
+
+        # Add a 3rd device, with only one enrolled finger
+        self.setup_device()
+        self.device_mock.SetEnrolledFingers('toto', ['left-middle-finger'])
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_SUCCESS)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+
+        self.assertRegex(res.info[0], r'Place your left middle finger on FDO Most Used Reader')
+        self.assertEqual(len(res.errors), 0)
+
     def test_pam_fprintd_last_try_auth(self):
         self.setup_device()
         script = [

@@ -60,6 +60,11 @@ static unsigned timeout = DEFAULT_TIMEOUT;
 #define USEC_PER_SEC ((uint64_t) 1000000ULL)
 #define NSEC_PER_USEC ((uint64_t) 1000ULL)
 
+static size_t user_enrolled_prints_num (pam_handle_t *pamh,
+                                        sd_bus       *bus,
+                                        const char   *dev,
+                                        const char   *username);
+
 static uint64_t
 now (void)
 {
@@ -112,11 +117,13 @@ send_err_msg (pam_handle_t *pamh, const char *msg)
 static char *
 open_device (pam_handle_t *pamh,
              sd_bus       *bus,
+             const char   *username,
              bool         *has_multiple_devices)
 {
   pf_auto (sd_bus_error) error = SD_BUS_ERROR_NULL;
   pf_autoptr (sd_bus_message) m = NULL;
   size_t num_devices;
+  size_t max_prints;
   const char *path = NULL;
   const char *s;
   int r;
@@ -143,12 +150,23 @@ open_device (pam_handle_t *pamh,
       return NULL;
     }
 
-  if (sd_bus_message_read_basic (m, 'o', &path) < 0)
-    return NULL;
-
-  num_devices = 1;
+  num_devices = 0;
+  max_prints = 0;
   while ((r = sd_bus_message_read_basic (m, 'o', &s)) > 0)
-    num_devices++;
+    {
+      size_t enrolled_prints = user_enrolled_prints_num (pamh, bus, s, username);
+
+      if (debug)
+        pam_syslog (pamh, LOG_DEBUG, "%s prints registered: %" PRIu64, s, enrolled_prints);
+
+      if (enrolled_prints > max_prints)
+        {
+          max_prints = enrolled_prints;
+          path = s;
+        }
+
+      num_devices++;
+    }
   *has_multiple_devices = (num_devices > 1);
   if (debug)
     pam_syslog (pamh, LOG_DEBUG, "Using device %s (out of %ld devices)", path, num_devices);
@@ -528,11 +546,11 @@ do_verify (sd_bus      *bus,
   return PAM_AUTH_ERR;
 }
 
-static bool
-user_has_prints (pam_handle_t *pamh,
-                 sd_bus       *bus,
-                 const char   *dev,
-                 const char   *username)
+static size_t
+user_enrolled_prints_num (pam_handle_t *pamh,
+                          sd_bus       *bus,
+                          const char   *dev,
+                          const char   *username)
 {
   pf_auto (sd_bus_error) error = SD_BUS_ERROR_NULL;
   pf_autoptr (sd_bus_message) m = NULL;
@@ -557,21 +575,21 @@ user_has_prints (pam_handle_t *pamh,
       if (debug)
         pam_syslog (pamh, LOG_DEBUG, "ListEnrolledFingers failed for %s: %s",
                     username, error.message);
-      return false;
+      return 0;
     }
 
   r = sd_bus_message_enter_container (m, 'a', "s");
   if (r < 0)
     {
       pam_syslog (pamh, LOG_ERR, "Failed to parse answer from ListEnrolledFingers(): %d", r);
-      return false;
+      return 0;
     }
 
   while ((r = sd_bus_message_read_basic (m, 's', &s)) > 0)
     num_fingers++;
   sd_bus_message_exit_container (m);
 
-  return num_fingers > 0;
+  return num_fingers;
 }
 
 static void
@@ -651,8 +669,6 @@ name_owner_changed (sd_bus_message *m,
 static int
 do_auth (pam_handle_t *pamh, const char *username)
 {
-  bool have_prints;
-
   pf_autoptr (verify_data) data = NULL;
   pf_autoptr (sd_bus) bus = NULL;
   pf_autoptr (sd_bus_slot) name_owner_changed_slot = NULL;
@@ -667,15 +683,8 @@ do_auth (pam_handle_t *pamh, const char *username)
       return PAM_AUTHINFO_UNAVAIL;
     }
 
-  data->dev = open_device (pamh, bus, &data->has_multiple_devices);
+  data->dev = open_device (pamh, bus, username, &data->has_multiple_devices);
   if (data->dev == NULL)
-    return PAM_AUTHINFO_UNAVAIL;
-
-  have_prints = user_has_prints (pamh, bus, data->dev, username);
-  if (debug)
-    pam_syslog (pamh, LOG_DEBUG, "prints registered: %s\n", have_prints ? "yes" : "no");
-
-  if (!have_prints)
     return PAM_AUTHINFO_UNAVAIL;
 
   /* Only connect to NameOwnerChanged when needed. In case of automatic startup
