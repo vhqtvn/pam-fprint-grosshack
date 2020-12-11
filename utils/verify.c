@@ -160,7 +160,10 @@ verify_started_cb (GObject      *obj,
   struct VerifyState *verify_state = user_data;
 
   if (fprint_dbus_device_call_verify_start_finish (FPRINT_DBUS_DEVICE (obj), res, &verify_state->error))
-    verify_state->started = TRUE;
+    {
+      g_print ("Verify started!\n");
+      verify_state->started = TRUE;
+    }
 }
 
 static void
@@ -226,7 +229,6 @@ do_verify (FprintDBusDevice *dev)
       g_clear_error (&verify_state.error);
       exit (1);
     }
-  g_print ("Verify started!\n");
 
   /* VerifyStatus signals are processing, wait for completion. */
   while (!verify_state.completed)
