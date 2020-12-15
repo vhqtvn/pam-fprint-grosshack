@@ -882,9 +882,10 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
     def _maybe_reduce_enroll_stages(self, stages=-1):
         # Reduce the number of default enroll stages, we can go a bit faster
         stages = stages if stages > 0 else self.enroll_stages
+        stages += 1 # Adding the extra stage for duplicates-check
         if self.num_enroll_stages == stages:
             return
-        self.send_command('SET_ENROLL_STAGES', stages)
+        self.send_command('SET_ENROLL_STAGES', stages - 1)
         while self.num_enroll_stages != stages:
             ctx.iteration(True)
         self.assertIn({'num-enroll-stages': stages}, self._changed_properties)
@@ -918,6 +919,7 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
         self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
 
         def trigger_garbagecollect():
+            self.send_image('some-other-print')
             self.send_command('ERROR', int(FPrint.DeviceError.DATA_FULL))
             self.device.EnrollStart('(s)', 'right-thumb')
             self.device.EnrollStop()
@@ -1002,6 +1004,10 @@ class FPrintdVirtualNoStorageDeviceBaseTest(FPrintdVirtualStorageDeviceBaseTest)
     socket_env = 'FP_VIRTUAL_DEVICE'
     device_driver = 'virtual_device'
     driver_name = 'Virtual device for debugging'
+
+    def enroll_image(self, img, device=None, finger='right-index-finger',
+                     expected_result='enroll-completed', claim_user=None):
+        self.skipTest('Identification not supported, thus is the enrolling')
 
 class FPrintdVirtualNoStorageDeviceTest(FPrintdVirtualNoStorageDeviceBaseTest):
 
@@ -1107,7 +1113,7 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
             self.driver_name)
 
     def test_enroll_stages_property(self):
-        self.assertEqual(self.device.get_cached_property('num-enroll-stages').unpack(), 5)
+        self.assertEqual(self.device.get_cached_property('num-enroll-stages').unpack(), 6)
 
     def test_scan_type(self):
         self.assertEqual(self.device.get_cached_property('scan-type').unpack(),
@@ -2206,6 +2212,8 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
         self.assertEnrollError(FPrint.DeviceError.DATA_INVALID, 'enroll-unknown-error')
 
     def test_enroll_error_data_not_found(self):
+        self.assertEnrollError(
+            FPrint.DeviceError.DATA_NOT_FOUND, 'enroll-stage-passed')
         self.assertEnrollError(FPrint.DeviceError.DATA_NOT_FOUND, 'enroll-unknown-error')
 
     def test_enroll_error_data_full(self):
@@ -3002,6 +3010,9 @@ class FPrintdUtilsTest(FPrintdVirtualStorageDeviceBaseTest):
 
         self.send_retry(FPrint.DeviceRetry.TOO_SHORT)
         out.check_line('Enroll result: enroll-swipe-too-short', get_timeout())
+
+        self.send_image('print-id')
+        out.check_line('Enroll result: enroll-stage-passed', get_timeout())
 
         self.send_image('print-id')
         out.check_line('Enroll result: enroll-stage-passed', get_timeout())

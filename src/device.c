@@ -306,7 +306,8 @@ on_nr_enroll_stages_changed (FprintDevice *rdev,
   FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
   gint nr_enroll_stages;
 
-  nr_enroll_stages = fp_device_get_nr_enroll_stages (device);
+  /* One extra step for our internal identification. */
+  nr_enroll_stages = fp_device_get_nr_enroll_stages (device) + 1;
 
   g_debug ("Device %s enroll stages changed to %d",
            fp_device_get_name (device),
@@ -1637,6 +1638,7 @@ enroll_progress_cb (FpDevice *dev,
 
   g_debug ("enroll_stage_cb: result %s", name);
 
+  /* NOTE: We add one more step internally, but we can ignore that here. */
   if (completed_stages < fp_device_get_nr_enroll_stages (dev))
     g_signal_emit (rdev, signals[SIGNAL_ENROLL_STATUS], 0, name, FALSE);
 }
@@ -1827,6 +1829,103 @@ enroll_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
   stoppable_action_completed (rdev);
 }
 
+static void
+enroll_identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(FpPrint) matched_print = NULL;
+  g_autoptr(FpPrint) found_print = NULL;
+  FprintDevice *rdev = user_data;
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+  const char *name;
+
+  fp_device_identify_finish (dev, res, &matched_print, &found_print, &error);
+
+  if (g_error_matches (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_DATA_NOT_FOUND))
+    {
+      g_clear_object (&found_print);
+      g_clear_error (&error);
+    }
+
+  /* We may need to retry or error out. */
+  if (error)
+    {
+      gboolean retry = error->domain == FP_DEVICE_RETRY;
+
+      name = enroll_result_to_name (!retry, FALSE, error);
+      g_signal_emit (rdev, signals[SIGNAL_ENROLL_STATUS], 0, name, !retry);
+
+      /* Retry or clean up. */
+      if (retry)
+        {
+          g_autoptr(GPtrArray) all_prints = NULL;
+
+          all_prints = load_all_prints (rdev);
+          fp_device_identify (priv->dev,
+                              all_prints,
+                              priv->current_cancellable,
+                              NULL,
+                              NULL,
+                              NULL,
+                              (GAsyncReadyCallback) enroll_identify_cb,
+                              rdev);
+        }
+      else
+        {
+          if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+            g_warning ("Device reported an error during identify for enroll: %s", error->message);
+
+          stoppable_action_completed (rdev);
+        }
+
+      return;
+    }
+
+  /* Identify has finished (successfully), there are three possible cases:
+   *  1. Match found in the gallery, in this case, we error out.
+   *  2. No match found, but on-device print returned, we should delete it
+   *  3. None of the above, we can just continue.
+   */
+
+  if (matched_print)
+    {
+      g_signal_emit (rdev, signals[SIGNAL_ENROLL_STATUS], 0, "enroll-duplicate", TRUE);
+
+      stoppable_action_completed (rdev);
+      return;
+    }
+
+  if (found_print && fp_device_has_storage (priv->dev))
+    {
+      if (!fp_print_get_device_stored (found_print))
+        g_critical ("libfprint driver bug: Returned device print not marked as stored on device.");
+
+      /* Try to delete the print (synchronously), and continue if it succeeds. */
+      if (!fp_device_delete_print_sync (priv->dev,
+                                        found_print,
+                                        priv->current_cancellable,
+                                        &error))
+        {
+          g_warning ("Failed to garbage collect duplicate print, cannot continue with enroll.");
+          g_signal_emit (rdev, signals[SIGNAL_ENROLL_STATUS], 0, "enroll-duplicate", TRUE);
+
+          stoppable_action_completed (rdev);
+          return;
+        }
+    }
+
+  g_signal_emit (rdev, signals[SIGNAL_ENROLL_STATUS], 0, "enroll-stage-passed", FALSE);
+
+  /* We are good and can start to enroll. */
+  fp_device_enroll (priv->dev,
+                    fprint_device_create_enroll_template (rdev, priv->enroll_data),
+                    priv->current_cancellable,
+                    enroll_progress_cb,
+                    rdev,
+                    NULL,
+                    (GAsyncReadyCallback) enroll_cb,
+                    rdev);
+}
 
 static gboolean
 fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
@@ -1834,6 +1933,7 @@ fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
                             const char            *finger_name)
 {
   g_autoptr(GError) error = NULL;
+  g_autoptr(GPtrArray) all_prints = NULL;
   FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
   FpFinger finger = finger_name_to_fp_finger (finger_name);
@@ -1862,16 +1962,24 @@ fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
 
   priv->current_cancellable = g_cancellable_new ();
   priv->enroll_data = finger;
-  fp_device_enroll (priv->dev,
-                    fprint_device_create_enroll_template (rdev, priv->enroll_data),
-                    priv->current_cancellable,
-                    enroll_progress_cb,
-                    rdev,
-                    NULL,
-                    (GAsyncReadyCallback) enroll_cb,
-                    rdev);
-
   priv->current_action = ACTION_ENROLL;
+
+  /* We (now) have the policy that there must be no duplicate prints.
+   * We need to do this for MoC devices, as their "identify" function
+   * will generally just identify across all device stored prints.
+   * For MoH, we also do it. For consistency and because it allows us
+   * to implement new features in the future (i.e. logging in/unlocking
+   * the correct user without selecting it first).
+   */
+  all_prints = load_all_prints (rdev);
+  fp_device_identify (priv->dev,
+                      all_prints,
+                      priv->current_cancellable,
+                      NULL,
+                      NULL,
+                      NULL,
+                      (GAsyncReadyCallback) enroll_identify_cb,
+                      rdev);
 
   fprint_dbus_device_complete_enroll_start (dbus_dev, invocation);
 
