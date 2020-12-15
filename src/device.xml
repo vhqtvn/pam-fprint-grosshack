@@ -255,6 +255,16 @@
 						</doc:definition>
 					</doc:item>
 					<doc:item>
+						<doc:term>enroll-duplicate</doc:term>
+						<doc:definition>
+							The print has already been enrolled, <doc:ref type="method" to="Device.EnrollStop">Device.EnrollStop</doc:ref> should now be called.
+
+							The user should enroll a different finger, or delete the print that has been enrolled already.
+							This print may be enrolled for a different user.
+							Note that an old duplicate (e.g. from a previous install) will be automatically garbage collected and should not cause any issues.
+						</doc:definition>
+					</doc:item>
+					<doc:item>
 						<doc:term>enroll-disconnected</doc:term>
 						<doc:definition>
 							The device was disconnected during the enrollment, no other actions should be taken, and you shouldn't use the device any more.
