@@ -462,6 +462,26 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
 
         return (enrolled, enroll_map)
 
+    def get_secondary_bus_and_device(self):
+        addr = os.environ['DBUS_SYSTEM_BUS_ADDRESS']
+
+        # Get a separat bus connection
+        bus = Gio.DBusConnection.new_for_address_sync(addr,
+            Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION |
+            Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT, None, None)
+        assert bus.is_closed() == False
+
+        dev_path = self.device.get_object_path()
+        dev = Gio.DBusProxy.new_sync(bus,
+                                     Gio.DBusProxyFlags.DO_NOT_AUTO_START,
+                                     None,
+                                     'net.reactivated.Fprint',
+                                     dev_path,
+                                     'net.reactivated.Fprint.Device',
+                                     None)
+
+        return bus, dev
+
 
 class FPrintdManagerTests(FPrintdVirtualDeviceBaseTest):
 
@@ -700,23 +720,7 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         self.device.Release()
 
     def test_claim_disconnect(self):
-        addr = os.environ['DBUS_SYSTEM_BUS_ADDRESS']
-
-        # Get a separat bus connection
-        dbus = Gio.DBusConnection.new_for_address_sync(addr,
-            Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION |
-            Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT, None, None)
-        assert dbus.is_closed() == False
-
-
-        dev_path = self.device.get_object_path()
-        dev = Gio.DBusProxy.new_sync(dbus,
-                                     Gio.DBusProxyFlags.DO_NOT_AUTO_START,
-                                     None,
-                                     'net.reactivated.Fprint',
-                                     dev_path,
-                                     'net.reactivated.Fprint.Device',
-                                     None)
+        bus, dev = self.get_secondary_bus_and_device()
 
         def call_done(obj, result, user_data):
             # Ignore the callback (should be an error)
@@ -726,8 +730,8 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         dev.Claim('(s)', 'testuser', result_handler=call_done)
 
         # Ensure the call is on the wire, then close immediately
-        dbus.flush_sync()
-        dbus.close_sync()
+        bus.flush_sync()
+        bus.close_sync()
 
         time.sleep(1)
 
