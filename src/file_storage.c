@@ -238,6 +238,9 @@ file_storage_print_data_delete (FpDevice *dev, FpFinger finger, const char *user
 
   path = get_path_to_print_dscv (dev, finger, base_store);
 
+  if (!g_file_test (path, G_FILE_TEST_EXISTS))
+    return 0;
+
   r = g_unlink (path);
   g_debug ("file_storage_print_data_delete(): unlink(\"%s\") %s",
            path, g_strerror (r));
