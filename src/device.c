@@ -1111,6 +1111,47 @@ can_start_action (FprintDevice *rdev, GError **error)
 }
 
 static void
+stoppable_action_completed (FprintDevice *rdev)
+{
+  g_autoptr(SessionData) session = NULL;
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+  FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
+
+  session = session_data_get (priv);
+
+  /* Return the cancellation or reset action right away if vanished. */
+  if (priv->current_cancel_invocation)
+    {
+      switch (priv->current_action)
+        {
+        case ACTION_VERIFY:
+        case ACTION_IDENTIFY:
+          fprint_dbus_device_complete_verify_stop (dbus_dev,
+                                                   g_steal_pointer (&priv->current_cancel_invocation));
+          break;
+
+        case ACTION_ENROLL:
+          fprint_dbus_device_complete_enroll_stop (dbus_dev,
+                                                   g_steal_pointer (&priv->current_cancel_invocation));
+          break;
+
+        default:
+          g_assert_not_reached ();
+        }
+
+      priv->current_action = ACTION_NONE;
+      session->verify_status_reported = FALSE;
+    }
+  else if (g_cancellable_is_cancelled (priv->current_cancellable))
+    {
+      priv->current_action = ACTION_NONE;
+      session->verify_status_reported = FALSE;
+    }
+
+  g_clear_object (&priv->current_cancellable);
+}
+
+static void
 match_cb (FpDevice *device,
           FpPrint  *match,
           FpPrint  *print,
@@ -1136,10 +1177,8 @@ static void
 verify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
 {
   g_autoptr(GError) error = NULL;
-  g_autoptr(SessionData) session = NULL;
   FprintDevice *rdev = user_data;
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
-  FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
   gboolean success;
   const char *name;
   gboolean match;
@@ -1147,8 +1186,6 @@ verify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
   success = fp_device_verify_finish (dev, res, &match, NULL, &error);
   g_assert (!!success == !error);
   name = verify_result_to_name (match, error);
-
-  session = session_data_get (priv);
 
   g_debug ("verify_cb: result %s", name);
 
@@ -1175,21 +1212,7 @@ verify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
                        error->message);
         }
 
-      /* Return the cancellation or reset action right away if vanished. */
-      if (priv->current_cancel_invocation)
-        {
-          fprint_dbus_device_complete_verify_stop (dbus_dev,
-                                                   g_steal_pointer (&priv->current_cancel_invocation));
-          priv->current_action = ACTION_NONE;
-          session->verify_status_reported = FALSE;
-        }
-      else if (g_cancellable_is_cancelled (priv->current_cancellable))
-        {
-          priv->current_action = ACTION_NONE;
-          session->verify_status_reported = FALSE;
-        }
-
-      g_clear_object (&priv->current_cancellable);
+      stoppable_action_completed (rdev);
     }
 }
 
@@ -1200,7 +1223,6 @@ identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
   g_autoptr(FpPrint) match = NULL;
   FprintDevice *rdev = user_data;
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
-  FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
   const char *name;
   gboolean success;
 
@@ -1233,22 +1255,7 @@ identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
                        error->message);
         }
 
-      /* Return the cancellation or reset action right away if vanished. */
-      if (priv->current_cancel_invocation)
-        {
-          fprint_dbus_device_complete_verify_stop (dbus_dev,
-                                                   g_steal_pointer (&priv->current_cancel_invocation));
-          priv->current_action = ACTION_NONE;
-        }
-      else if (g_cancellable_is_cancelled (priv->current_cancellable))
-        {
-          g_autoptr(SessionData) session = NULL;
-          session = session_data_get (priv);
-          priv->current_action = ACTION_NONE;
-          session->verify_status_reported = FALSE;
-        }
-
-      g_clear_object (&priv->current_cancellable);
+      stoppable_action_completed (rdev);
     }
 }
 
@@ -1545,7 +1552,6 @@ enroll_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
   g_autoptr(GError) error = NULL;
   FprintDevice *rdev = user_data;
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
-  FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
 
   g_autoptr(FpPrint) print = NULL;
   const char *name;
@@ -1593,18 +1599,7 @@ enroll_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
   if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
     g_warning ("Device reported an error during enroll: %s", error->message);
 
-  /* Return the cancellation or reset action right away if vanished. */
-  if (priv->current_cancel_invocation)
-    {
-      fprint_dbus_device_complete_enroll_stop (dbus_dev,
-                                               g_steal_pointer (&priv->current_cancel_invocation));
-      priv->current_action = ACTION_NONE;
-    }
-  else if (g_cancellable_is_cancelled (priv->current_cancellable))
-    {
-      priv->current_action = ACTION_NONE;
-    }
-  g_clear_object (&priv->current_cancellable);
+  stoppable_action_completed (rdev);
 }
 
 
