@@ -154,6 +154,21 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_AUTHINFO_UNAVAIL)
         res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
 
+    def test_pam_fprintd_retry(self):
+        self.setup_device()
+        script = [
+            ( 'verify-swipe-too-short', False, 1 ),
+            ( 'verify-finger-not-centered', False, 1 ),
+            ( 'verify-match', True, 1 )
+        ]
+        self.device_mock.SetVerifyScript(script)
+
+        tc = pypamtest.TestCase(pypamtest.PAMTEST_AUTHENTICATE, expected_rv=PAM_SUCCESS)
+        res = pypamtest.run_pamtest("toto", "fprintd-pam-test", [tc], [ 'unused' ])
+        self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
+        self.assertRegex(res.errors[0], r'Swipe was too short, try again')
+        self.assertRegex(res.errors[1], r'Your finger was not centered, try swiping your finger again')
+
     def test_pam_fprintd_no_fingers_while_verifying(self):
         self.setup_device()
         script = [
