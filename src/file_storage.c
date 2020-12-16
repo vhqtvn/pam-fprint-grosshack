@@ -243,7 +243,7 @@ file_storage_print_data_delete (FpDevice *dev, FpFinger finger, const char *user
            path, g_strerror (r));
 
   /* FIXME: cleanup empty directory */
-  return g_unlink (path);
+  return r;
 }
 
 static GSList *
