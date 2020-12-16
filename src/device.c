@@ -2055,10 +2055,21 @@ fprint_device_delete_enrolled_fingers (FprintDBusDevice      *dbus_dev,
   g_assert (user);
   g_assert (g_str_equal (username, "") || g_str_equal (user, username));
 
-  delete_enrolled_fingers (rdev, user, FP_FINGER_UNKNOWN, NULL);
+  g_clear_error (&error);
+  delete_enrolled_fingers (rdev, user, FP_FINGER_UNKNOWN, &error);
 
   if (!opened && fp_device_has_storage (priv->dev))
     fp_device_close_sync (priv->dev, NULL, NULL);
+
+  if (error &&
+      !g_error_matches (error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS))
+    {
+      /* FIXME: We should probably expose NoEnrolledPrints as an actual error,
+       * but not changing the API for now */
+      g_dbus_method_invocation_return_gerror (invocation,
+                                              error);
+      return TRUE;
+    }
 
   fprint_dbus_device_complete_delete_enrolled_fingers (dbus_dev,
                                                        invocation);
@@ -2093,7 +2104,17 @@ fprint_device_delete_enrolled_fingers2 (FprintDBusDevice      *dbus_dev,
 
   session = session_data_get (priv);
 
-  delete_enrolled_fingers (rdev, session->username, FP_FINGER_UNKNOWN, NULL);
+  if (!delete_enrolled_fingers (rdev, session->username, FP_FINGER_UNKNOWN, &error))
+    {
+      if (!g_error_matches (error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS))
+        {
+          /* FIXME: We should probably expose NoEnrolledPrints as an actual error,
+           * but not changing the API for now */
+          g_dbus_method_invocation_return_gerror (invocation,
+                                                  error);
+          return TRUE;
+        }
+    }
 
   fprint_dbus_device_complete_delete_enrolled_fingers2 (dbus_dev,
                                                         invocation);
@@ -2109,6 +2130,7 @@ fprint_device_delete_enrolled_finger (FprintDBusDevice      *dbus_dev,
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
   FpFinger finger = finger_name_to_fp_finger (finger_name);
 
+  g_autoptr(FprintDeviceActionUnset) action_unset = NULL;
   g_autoptr(SessionData) session = NULL;
   g_autoptr(GError) error = NULL;
 
@@ -2136,15 +2158,13 @@ fprint_device_delete_enrolled_finger (FprintDBusDevice      *dbus_dev,
   priv->current_action = ACTION_DELETE;
 
   session = session_data_get (priv);
+  action_unset = rdev;
 
   if (!delete_enrolled_fingers (rdev, session->username, finger, &error))
     {
-      priv->current_action = ACTION_NONE;
       g_dbus_method_invocation_return_gerror (invocation, error);
       return TRUE;
     }
-
-  priv->current_action = ACTION_NONE;
 
   fprint_dbus_device_complete_delete_enrolled_finger (dbus_dev, invocation);
   return TRUE;
