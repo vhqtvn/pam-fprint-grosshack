@@ -464,7 +464,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
 
         return (enrolled, enroll_map)
 
-    def get_secondary_bus_and_device(self):
+    def get_secondary_bus_and_device(self, claim=None):
         addr = os.environ['DBUS_SYSTEM_BUS_ADDRESS']
 
         # Get a separat bus connection
@@ -481,6 +481,9 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
                                      dev_path,
                                      'net.reactivated.Fprint.Device',
                                      None)
+
+        if claim is not None:
+            dev.Claim('(s)', claim)
 
         return bus, dev
 
