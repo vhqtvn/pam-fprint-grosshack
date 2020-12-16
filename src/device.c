@@ -794,14 +794,29 @@ _fprint_device_client_vanished (GDBusConnection *connection,
   if (session != NULL &&
       g_strcmp0 (session->sender, name) == 0)
     {
-      while (priv->current_action != ACTION_NONE)
-        {
-          /* OPEN/CLOSE are not cancellable, we just need to wait */
-          if (priv->current_cancellable)
-            g_cancellable_cancel (priv->current_cancellable);
+      g_cancellable_cancel (priv->current_cancellable);
 
-          g_main_context_iteration (NULL, TRUE);
+      if (!priv->current_cancellable)
+        {
+          /* This isn't optimal, but for verify/identify/enroll we expect the stop
+           * command. And we use current_cancellable as a flag to know that the
+           * underlying operation has finished already.
+           * If it has finished, unset the current_action. */
+          switch (priv->current_action)
+            {
+            case ACTION_VERIFY:
+            case ACTION_IDENTIFY:
+            case ACTION_ENROLL:
+              priv->current_action = ACTION_NONE;
+              break;
+
+            default:
+              break;
+            }
         }
+
+      while (priv->current_action != ACTION_NONE)
+        g_main_context_iteration (NULL, TRUE);
 
       /* The session may have disappeared at this point if the device
        * was already closing. */
