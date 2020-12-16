@@ -740,6 +740,89 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 
         time.sleep(1)
 
+    def test_enroll_running_disconnect(self):
+        bus, dev = self.get_secondary_bus_and_device(claim='testuser')
+
+        # Start an enroll and disconnect, without finishing/cancelling
+        dev.EnrollStart('(s)', 'left-index-finger')
+
+        # Ensure the call is on the wire, then close immediately
+        bus.flush_sync()
+        bus.close_sync()
+
+        time.sleep(1)
+
+    def test_enroll_done_disconnect(self):
+        bus, dev = self.get_secondary_bus_and_device(claim='testuser')
+
+        # Start an enroll and disconnect, without finishing/cancelling
+        dev.EnrollStart('(s)', 'left-index-finger')
+
+        # This works because we also receive the signals on the main connection
+        stages = dev.get_cached_property('num-enroll-stages').unpack()
+        for stage in range(stages):
+            self.send_image('whorl')
+            if stage < stages - 1:
+                self.wait_for_result('enroll-stage-passed')
+            else:
+                self.wait_for_result('enroll-completed')
+
+        bus.close_sync()
+
+        time.sleep(1)
+
+    def test_verify_running_disconnect(self):
+        bus, dev = self.get_secondary_bus_and_device(claim='testuser')
+        self.enroll_image('whorl', device=dev)
+
+        # Start an enroll and disconnect, without finishing/cancelling
+        dev.VerifyStart('(s)', 'right-index-finger')
+
+        bus.close_sync()
+
+        time.sleep(1)
+
+    def test_verify_done_disconnect(self):
+        bus, dev = self.get_secondary_bus_and_device(claim='testuser')
+        self.enroll_image('whorl', device=dev)
+
+        # Start an enroll and disconnect, without finishing/cancelling
+        dev.VerifyStart('(s)', 'right-index-finger')
+        self.send_image('whorl')
+        # Wait for match and sleep a bit to give fprintd time to wrap up
+        self.wait_for_result('verify-match')
+        time.sleep(1)
+
+        bus.close_sync()
+
+        time.sleep(1)
+
+    def test_identify_running_disconnect(self):
+        bus, dev = self.get_secondary_bus_and_device(claim='testuser')
+        self.enroll_image('whorl', device=dev)
+
+        # Start an enroll and disconnect, without finishing/cancelling
+        dev.VerifyStart('(s)', 'any')
+
+        bus.close_sync()
+
+        time.sleep(1)
+
+    def test_identify_done_disconnect(self):
+        bus, dev = self.get_secondary_bus_and_device(claim='testuser')
+        self.enroll_image('whorl', device=dev)
+
+        # Start an enroll and disconnect, without finishing/cancelling
+        dev.VerifyStart('(s)', 'any')
+        self.send_image('whorl')
+        # Wait for match and sleep a bit to give fprintd time to wrap up
+        self.wait_for_result('verify-match')
+        time.sleep(1)
+
+        bus.close_sync()
+
+        time.sleep(1)
+
     def test_removal_during_enroll(self):
         if not self._has_hotplug:
             self.skipTest("libfprint is too old for hotplug")
