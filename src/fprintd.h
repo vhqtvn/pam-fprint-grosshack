@@ -45,6 +45,8 @@ typedef enum {
   FPRINT_ERROR_PERMISSION_DENIED,       /*< nick=net.reactivated.Fprint.Error.PermissionDenied >*/
   /* No prints are enrolled */
   FPRINT_ERROR_NO_ENROLLED_PRINTS,       /*< nick=net.reactivated.Fprint.Error.NoEnrolledPrints >*/
+  /* Prints has already been enrolled */
+  FPRINT_ERROR_FINGER_ALREADY_ENROLLED,  /*< nick=net.reactivated.Fprint.Error.FingerAlreadyEnrolled >*/
   /* No actions currently in progress */
   FPRINT_ERROR_NO_ACTION_IN_PROGRESS,       /*< nick=net.reactivated.Fprint.Error.NoActionInProgress >*/
   /* the finger name passed was invalid */

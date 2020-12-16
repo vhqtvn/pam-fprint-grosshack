@@ -1944,6 +1944,8 @@ fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
                             const char            *finger_name)
 {
   g_autoptr(GError) error = NULL;
+  g_autoptr(FpPrint) existing_print = NULL;
+  g_autoptr(SessionData) session = NULL;
   FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
   FpFinger finger = finger_name_to_fp_finger (finger_name);
@@ -1961,6 +1963,20 @@ fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
       g_dbus_method_invocation_return_gerror (invocation, error);
       return TRUE;
     }
+
+  session = session_data_get (priv);
+  store.print_data_load (priv->dev, finger,
+                         session->username, &existing_print);
+
+  if (existing_print)
+    {
+      g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_FINGER_ALREADY_ENROLLED,
+                   "Finger %d has already been enrolled for user %s", finger, session->username);
+      g_dbus_method_invocation_return_gerror (invocation,
+                                              error);
+      return TRUE;
+    }
+
 
   if (!can_start_action (rdev, &error))
     {

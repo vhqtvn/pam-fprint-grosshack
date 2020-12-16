@@ -525,6 +525,7 @@
 					<doc:error name="&ERROR_CLAIM_DEVICE;">if the device was not claimed</doc:error>
 					<doc:error name="&ERROR_ALREADY_IN_USE;">if the device was already being used</doc:error>
 					<doc:error name="&ERROR_INVALID_FINGERNAME;">if the finger name passed is invalid</doc:error>
+					<doc:error name="&FINGER_ALREADY_ENROLLED;">if the finger has been already enrolled by the user</doc:error>
 					<doc:error name="&ERROR_INTERNAL;">if there was an internal error</doc:error>
 				</doc:errors>
 
