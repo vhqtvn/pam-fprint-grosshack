@@ -429,10 +429,12 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         if expected is not None:
             self.assertEqual(self._last_result, expected)
 
-    def enroll_image(self, img, finger='right-index-finger', expected_result='enroll-completed'):
-        self.device.EnrollStart('(s)', finger)
+    def enroll_image(self, img, device=None, finger='right-index-finger', expected_result='enroll-completed'):
+        if device is None:
+            device = self.device
+        device.EnrollStart('(s)', finger)
 
-        stages = self.device.get_cached_property('num-enroll-stages').unpack()
+        stages = device.get_cached_property('num-enroll-stages').unpack()
         for stage in range(stages):
             self.send_image(img)
             if stage < stages - 1:
@@ -440,7 +442,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
             else:
                 self.wait_for_result(expected_result)
 
-        self.device.EnrollStop()
+        device.EnrollStop()
         self.assertEqual(self._last_result, expected_result)
 
     def enroll_multiple_images(self, images_override={}, return_index=-1):
