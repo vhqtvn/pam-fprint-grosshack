@@ -1214,6 +1214,12 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
     def test_verify_retry_general(self):
         self.assertVerifyRetry(FPrint.DeviceRetry.GENERAL, 'verify-retry-scan')
 
+    def test_verify_retry_general_restarted(self):
+        self.assertVerifyRetry(FPrint.DeviceRetry.GENERAL, 'verify-retry-scan')
+        # Give fprintd time to re-start the request. We can't force the other
+        # case (cancellation before restart happened), but we can force this one.
+        time.sleep(1)
+
     def test_verify_retry_too_short(self):
         self.assertVerifyRetry(FPrint.DeviceRetry.TOO_SHORT, 'verify-swipe-too-short')
 
