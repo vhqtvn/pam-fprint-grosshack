@@ -291,7 +291,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self.addCleanup(shutil.rmtree, self.test_dir)
         self.state_dir = os.path.join(self.test_dir, 'state')
         self.run_dir = os.path.join(self.test_dir, 'run')
-        os.environ['FP_DRIVERS_WHITELIST'] = 'virtual_image'
+        self.device_driver = 'virtual_image'
+        self.device_id = 0
+        os.environ['FP_DRIVERS_WHITELIST'] = self.device_driver
 
     def assertFprintError(self, fprint_error):
         return self.assertRaisesRegex(GLib.Error,
@@ -303,6 +305,16 @@ class FPrintdTest(dbusmock.DBusTestCase):
             self.skipTest('Permissions aren\'t respected (CI environment?)')
         except PermissionError:
             pass
+
+    def get_print_file_path(self, user, finger):
+        return os.path.join(self.state_dir, user, self.device_driver,
+            str(self.device_id), str(int(finger)))
+
+    def assertFingerInStorage(self, user, finger):
+        self.assertTrue(os.path.exists(self.get_print_file_path(user, finger)))
+
+    def assertFingerNotInStorage(self, user, finger):
+        self.assertFalse(os.path.exists(self.get_print_file_path(user, finger)))
 
     @property
     def finger_needed(self):
@@ -1162,8 +1174,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
             self.device.ListEnrolledFingers('(s)', 'nottestuser')
 
         self.enroll_image('whorl')
-
-        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
 
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'nottestuser')
@@ -1206,7 +1217,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         # And delete the print(s) again
         self.device.DeleteEnrolledFingers('(s)', 'testuser')
 
-        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+        self.assertFingerNotInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
 
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
@@ -1214,12 +1225,12 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
     def test_enroll_delete2(self):
         self.enroll_image('whorl')
 
-        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
 
         # And delete the print(s) again using the new API
         self.device.DeleteEnrolledFingers2()
 
-        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+        self.assertFingerNotInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser')))
         self.assertTrue(os.path.exists(self.state_dir))
 
@@ -1227,16 +1238,16 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.enroll_image('whorl', finger='right-index-finger')
         self.enroll_image('tented_arch', finger='left-index-finger')
 
-        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
-        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/2')))
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
 
         self.device.DeleteEnrolledFinger('(s)', 'right-index-finger')
-        self.assertTrue(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/2')))
-        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+        self.assertFingerNotInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
 
         self.device.DeleteEnrolledFinger('(s)', 'left-index-finger')
-        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/2')))
-        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+        self.assertFingerNotInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+        self.assertFingerNotInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
 
     def test_enroll_invalid_storage_dir(self):
         # Directory will not exist yet
