@@ -1222,6 +1222,25 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
 
+    def test_enroll_delete_storage_error(self):
+        self.enroll_image('whorl')
+        self.enroll_image('tented_arch', finger='left-index-finger')
+
+        print_file = self.get_print_file_path('testuser', FPrint.Finger.RIGHT_INDEX)
+        device_dir = os.path.dirname(print_file)
+        os.chmod(device_dir, mode=0o500)
+        self.addCleanup(os.chmod, device_dir, mode=0o750)
+        self.skipTestIfCanWrite(device_dir)
+
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+
+        with self.assertFprintError('PrintsNotDeleted'):
+            self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+
     def test_enroll_delete2(self):
         self.enroll_image('whorl')
 
@@ -1246,6 +1265,25 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.assertFingerNotInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
         self.assertFingerNotInStorage('testuser', FPrint.Finger.LEFT_INDEX)
 
+    def test_enroll_delete2_storage_error(self):
+        self.enroll_image('whorl')
+        self.enroll_image('tented_arch', finger='left-index-finger')
+
+        print_file = self.get_print_file_path('testuser', FPrint.Finger.RIGHT_INDEX)
+        device_dir = os.path.dirname(print_file)
+        os.chmod(device_dir, mode=0o500)
+        self.addCleanup(os.chmod, device_dir, mode=0o750)
+        self.skipTestIfCanWrite(device_dir)
+
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+
+        with self.assertFprintError('PrintsNotDeleted'):
+            self.device.DeleteEnrolledFingers2()
+
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+
     def test_enroll_delete_single(self):
         self.enroll_image('whorl', finger='right-index-finger')
         self.enroll_image('tented_arch', finger='left-index-finger')
@@ -1260,6 +1298,31 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.device.DeleteEnrolledFinger('(s)', 'left-index-finger')
         self.assertFingerNotInStorage('testuser', FPrint.Finger.LEFT_INDEX)
         self.assertFingerNotInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+
+    def test_enroll_delete_single_storage_error(self):
+        self.enroll_image('whorl', finger='right-index-finger')
+        self.enroll_image('tented_arch', finger='left-index-finger')
+
+        print_file = self.get_print_file_path('testuser', FPrint.Finger.RIGHT_INDEX)
+        device_dir = os.path.dirname(print_file)
+        os.chmod(device_dir, mode=0o500)
+        self.addCleanup(os.chmod, device_dir, mode=0o750)
+        self.skipTestIfCanWrite(device_dir)
+
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+
+        with self.assertFprintError('PrintsNotDeleted'):
+            self.device.DeleteEnrolledFinger('(s)', 'right-index-finger')
+
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+
+        with self.assertFprintError('PrintsNotDeleted'):
+            self.device.DeleteEnrolledFinger('(s)', 'left-index-finger')
+
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
 
     def test_enroll_invalid_storage_dir(self):
         # Directory will not exist yet
