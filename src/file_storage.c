@@ -66,6 +66,10 @@ get_storage_path (void)
           elems = g_strsplit (path, ":", -1);
           storage_path = g_strdup (elems[0]);
         }
+      else if (*path)
+        {
+          storage_path = g_strdup (path);
+        }
     }
 
   if (storage_path == NULL)
