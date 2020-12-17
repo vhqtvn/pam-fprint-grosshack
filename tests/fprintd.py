@@ -297,6 +297,13 @@ class FPrintdTest(dbusmock.DBusTestCase):
         return self.assertRaisesRegex(GLib.Error,
             '.*net\.reactivated\.Fprint\.Error\.{}.*'.format(fprint_error))
 
+    def skipTestIfCanWrite(self, path):
+        try:
+            os.open(os.path.join(path, "testfile"), os.O_CREAT | os.O_WRONLY)
+            self.skipTest('Permissions aren\'t respected (CI environment?)')
+        except PermissionError:
+            pass
+
     @property
     def finger_needed(self):
         return self.device.get_cached_property('finger-needed').unpack()
@@ -1236,11 +1243,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         os.makedirs(self.state_dir, mode=0o500)
         self.addCleanup(os.chmod, self.state_dir, mode=0o700)
 
-        try:
-            os.open(os.path.join(self.state_dir, "testfile"), os.O_CREAT | os.O_WRONLY)
-            self.skipTest('Permissions aren\'t respected (CI environment?)')
-        except PermissionError:
-            pass
+        self.skipTestIfCanWrite(self.state_dir)
 
         self.enroll_image('whorl', expected_result='enroll-failed')
 
@@ -1249,11 +1252,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         os.chmod(self.state_dir, mode=0o000)
         self.addCleanup(os.chmod, self.state_dir, mode=0o700)
 
-        try:
-            os.open(os.path.join(self.state_dir, "testfile"), os.O_CREAT | os.O_WRONLY)
-            self.skipTest('Permissions aren\'t respected (CI environment?)')
-        except PermissionError:
-            pass
+        self.skipTestIfCanWrite(self.state_dir)
 
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.VerifyStart('(s)', 'any')
