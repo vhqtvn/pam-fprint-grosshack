@@ -1863,6 +1863,7 @@ delete_enrolled_fingers (FprintDevice *rdev,
                          FpFinger      finger,
                          GError      **error)
 {
+  g_autoptr(GError) device_error = NULL;
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
   guint i;
   int r;
@@ -1910,6 +1911,14 @@ delete_enrolled_fingers (FprintDevice *rdev,
                 {
                   g_warning ("Error deleting print from device: %s", local_error->message);
                   g_warning ("This might indicate an issue in the libfprint driver or in the fingerprint device.");
+
+                  if (!device_error)
+                    {
+                      g_set_error (&device_error, FPRINT_ERROR,
+                                   FPRINT_ERROR_PRINTS_NOT_DELETED_FROM_DEVICE,
+                                   "Failed to delete print from device storage: %s",
+                                   local_error->message);
+                    }
                 }
             }
         }
@@ -1954,6 +1963,13 @@ delete_enrolled_fingers (FprintDevice *rdev,
           g_propagate_error (error, g_steal_pointer (&local_error));
           return FALSE;
         }
+    }
+
+  if (device_error)
+    {
+      /* This is a low priority error, higher priority errors would have returned failure already */
+      g_propagate_error (error, g_steal_pointer (&device_error));
+      return FALSE;
     }
 
   return TRUE;

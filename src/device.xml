@@ -9,6 +9,7 @@
 <!ENTITY ERROR_NO_ACTION_IN_PROGRESS "net.reactivated.Fprint.Error.NoActionInProgress">
 <!ENTITY ERROR_INVALID_FINGERNAME "net.reactivated.Fprint.Error.InvalidFingername">
 <!ENTITY ERROR_PRINTS_NOT_DELETED "net.reactivated.Fprint.Error.PrintsNotDeleted">
+<!ENTITY ERROR_PRINTS_NOT_DELETED_FROM_DEVICE "net.reactivated.Fprint.Error.PrintsNotDeletedFromDevice">
 ]>
 
 <node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">

@@ -53,6 +53,8 @@ typedef enum {
   FPRINT_ERROR_NO_SUCH_DEVICE,       /*< nick=net.reactivated.Fprint.Error.NoSuchDevice >*/
   /* Prints cannot be deleted from the fprintd storage */
   FPRINT_ERROR_PRINTS_NOT_DELETED, /*< nick=net.reactivated.Fprint.Error.PrintsNotDeleted >*/
+  /* Prints cannot be deleted from the device storage */
+  FPRINT_ERROR_PRINTS_NOT_DELETED_FROM_DEVICE, /*< nick=net.reactivated.Fprint.Error.PrintsNotDeletedFromDevice >*/
 } FprintError;
 
 /* Enum of possible permissions, orders and nick matter here:
