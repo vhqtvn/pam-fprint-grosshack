@@ -1234,6 +1234,18 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser')))
         self.assertTrue(os.path.exists(self.state_dir))
 
+    def test_enroll_delete2_multiple(self):
+        self.enroll_image('whorl')
+        self.enroll_image('tented_arch', finger='left-index-finger')
+
+        self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+
+        self.device.DeleteEnrolledFingers2()
+
+        self.assertFingerNotInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+        self.assertFingerNotInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+
     def test_enroll_delete_single(self):
         self.enroll_image('whorl', finger='right-index-finger')
         self.enroll_image('tented_arch', finger='left-index-finger')
