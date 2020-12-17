@@ -155,7 +155,6 @@ file_storage_print_data_save (FpPrint *print)
       return r;
     }
 
-  //fp_dbg("saving to %s", path);
   g_file_set_contents (path, buf, len, &err);
   if (err)
     {
@@ -164,6 +163,8 @@ file_storage_print_data_save (FpPrint *print)
       /* FIXME interpret error codes */
       return err->code;
     }
+
+  g_debug ("file_storage_print_data_save(): print saved to %s", path);
 
   return 0;
 }
@@ -176,7 +177,6 @@ load_from_file (char *path, FpPrint **print)
   g_autofree char *contents = NULL;
   FpPrint *new;
 
-  //fp_dbg("from %s", path);
   g_file_get_contents (path, &contents, &length, &err);
   if (err)
     {
