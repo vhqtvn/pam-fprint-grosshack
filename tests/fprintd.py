@@ -935,6 +935,8 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.device.DeleteEnrolledFingers2()
 
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
+        self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser')))
+        self.assertTrue(os.path.exists(self.state_dir))
 
     def test_enroll_invalid_storage_dir(self):
         # Directory will not exist yet
