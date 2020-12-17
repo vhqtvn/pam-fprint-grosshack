@@ -467,7 +467,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
     def get_secondary_bus_and_device(self, claim=None):
         addr = os.environ['DBUS_SYSTEM_BUS_ADDRESS']
 
-        # Get a separat bus connection
+        # Get a separate bus connection
         bus = Gio.DBusConnection.new_for_address_sync(addr,
             Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION |
             Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT, None, None)
@@ -937,7 +937,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.assertFalse(os.path.exists(os.path.join(self.state_dir, 'testuser/virtual_image/0/7')))
 
     def test_enroll_invalid_storage_dir(self):
-        # Directory wil not exist yet
+        # Directory will not exist yet
         os.makedirs(self.state_dir, mode=0o500)
         self.addCleanup(os.chmod, self.state_dir, mode=0o700)
 

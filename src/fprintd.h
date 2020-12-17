@@ -55,7 +55,7 @@ typedef enum {
 
 /* Enum of possible permissions, orders and nick matter here:
    - The order controls the priority of a required permission when various are
-     accepted: the lowest the value, the more priorty it has.
+     accepted: the lowest the value, the more priority it has.
    - Nick must match the relative polkit rule.
  */
 typedef enum {

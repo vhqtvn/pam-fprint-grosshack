@@ -749,7 +749,7 @@ _fprint_device_check_for_username (FprintDevice          *rdev,
   if (!ret)
     {
       g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
-                   "Could not get conection unix user ID: %s",
+                   "Could not get connection unix user ID: %s",
                    local_error->message);
       return NULL;
     }
