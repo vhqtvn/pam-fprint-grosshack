@@ -230,6 +230,7 @@ file_storage_print_data_load (FpDevice   *dev,
 int
 file_storage_print_data_delete (FpDevice *dev, FpFinger finger, const char *username)
 {
+  g_autoptr(GSList) prints = NULL;
   g_autofree gchar *base_store = NULL;
   g_autofree gchar *path = NULL;
   int r;
@@ -245,7 +246,19 @@ file_storage_print_data_delete (FpDevice *dev, FpFinger finger, const char *user
   g_debug ("file_storage_print_data_delete(): unlink(\"%s\") %s",
            path, g_strerror (r));
 
-  /* FIXME: cleanup empty directory */
+  prints = file_storage_discover_prints (dev, username);
+  if (!prints)
+    {
+      g_autofree char *dir = g_steal_pointer (&path);
+
+      do
+        {
+          g_autofree char *tmp = g_steal_pointer (&dir);
+          dir = g_path_get_dirname (tmp);
+        }
+      while (g_str_has_prefix (dir, base_store) && g_rmdir (dir) == 0);
+    }
+
   return r;
 }
 
