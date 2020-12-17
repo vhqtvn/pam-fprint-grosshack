@@ -210,6 +210,16 @@ session_data_set_new (FprintDevicePrivate *priv, gchar *sender, gchar *username)
   return new;
 }
 
+typedef FprintDevice FprintDeviceActionUnset;
+static void
+auto_device_action_unset (FprintDeviceActionUnset *self)
+{
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (self);
+
+  priv->current_action = ACTION_NONE;
+}
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (FprintDeviceActionUnset, auto_device_action_unset);
+
 static void
 fprint_device_dispose (GObject *object)
 {
@@ -838,11 +848,12 @@ dev_open_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
 
   g_autoptr(SessionData) session = NULL;
   g_autoptr(GDBusMethodInvocation) invocation = NULL;
+  g_autoptr(FprintDeviceActionUnset) action_unset = NULL;
 
+  action_unset = rdev;
   session = session_data_get (priv);
   invocation = g_steal_pointer (&session->invocation);
 
-  priv->current_action = ACTION_NONE;
   if (!fp_device_open_finish (dev, res, &error))
     {
       g_autoptr(GError) dbus_error = NULL;
@@ -939,12 +950,13 @@ dev_close_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
 
   g_autoptr(SessionData) session = NULL;
   g_autoptr(GDBusMethodInvocation) invocation = NULL;
+  g_autoptr(FprintDeviceActionUnset) action_unset = NULL;
 
   session = session_data_get (priv);
   session_data_set_new (priv, NULL, NULL);
   invocation = g_steal_pointer (&session->invocation);
+  action_unset = rdev;
 
-  priv->current_action = ACTION_NONE;
   if (!fp_device_close_finish (dev, res, &error))
     {
       g_autoptr(GError) dbus_error = NULL;
@@ -1822,6 +1834,7 @@ fprint_device_delete_enrolled_fingers (FprintDBusDevice      *dbus_dev,
   FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
 
+  g_autoptr(FprintDeviceActionUnset) action_unset = NULL;
   g_autoptr(GError) error = NULL;
   g_autofree char *user = NULL;
   const char *sender;
@@ -1839,6 +1852,7 @@ fprint_device_delete_enrolled_fingers (FprintDBusDevice      *dbus_dev,
     }
 
   priv->current_action = ACTION_DELETE;
+  action_unset = rdev;
 
   if (!_fprint_device_check_claimed (rdev, invocation, &error))
     {
@@ -1872,8 +1886,6 @@ fprint_device_delete_enrolled_fingers (FprintDBusDevice      *dbus_dev,
   if (!opened && fp_device_has_storage (priv->dev))
     fp_device_close_sync (priv->dev, NULL, NULL);
 
-  priv->current_action = ACTION_NONE;
-
   fprint_dbus_device_complete_delete_enrolled_fingers (dbus_dev,
                                                        invocation);
   return TRUE;
@@ -1888,6 +1900,7 @@ fprint_device_delete_enrolled_fingers2 (FprintDBusDevice      *dbus_dev,
 
   g_autoptr(SessionData) session = NULL;
   g_autoptr(GError) error = NULL;
+  g_autoptr(FprintDeviceActionUnset) action_unset = NULL;
 
   if (!_fprint_device_check_claimed (rdev, invocation, &error))
     {
@@ -1902,12 +1915,11 @@ fprint_device_delete_enrolled_fingers2 (FprintDBusDevice      *dbus_dev,
     }
 
   priv->current_action = ACTION_DELETE;
+  action_unset = rdev;
 
   session = session_data_get (priv);
 
   delete_enrolled_fingers (rdev, session->username);
-
-  priv->current_action = ACTION_NONE;
 
   fprint_dbus_device_complete_delete_enrolled_fingers2 (dbus_dev,
                                                         invocation);
