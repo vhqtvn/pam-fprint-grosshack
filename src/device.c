@@ -1919,10 +1919,13 @@ delete_enrolled_fingers (FprintDevice *rdev,
     {
       if ((r = store.print_data_delete (priv->dev, finger, user)) != 0)
         {
-          g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
-                       "Impossible to delete fingerprint reference "
-                       "got error: %d", r);
-          return FALSE;
+          if (user_has_print_enrolled (rdev, user, finger))
+            {
+              g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_PRINTS_NOT_DELETED,
+                           "Impossible to delete fingerprint reference "
+                           "got error: %d", r);
+              return FALSE;
+            }
         }
     }
   else
@@ -1936,10 +1939,13 @@ delete_enrolled_fingers (FprintDevice *rdev,
               if (local_error)
                 continue;
 
-              g_set_error (&local_error, FPRINT_ERROR, FPRINT_ERROR_INTERNAL,
-                           "Impossible to delete fingerprint reference "
-                           "got error: %d", r);
-              /* Do not return yet, at least try to remove the remaining prints */
+              if (user_has_print_enrolled (rdev, user, i))
+                {
+                  g_set_error (&local_error, FPRINT_ERROR, FPRINT_ERROR_PRINTS_NOT_DELETED,
+                               "Impossible to delete fingerprint reference "
+                               "got error: %d", r);
+                  /* Do not return yet, at least try to remove the remaining prints */
+                }
             }
         }
 

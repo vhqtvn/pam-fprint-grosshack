@@ -51,6 +51,8 @@ typedef enum {
   FPRINT_ERROR_INVALID_FINGERNAME,       /*< nick=net.reactivated.Fprint.Error.InvalidFingername >*/
   /* device does not exist */
   FPRINT_ERROR_NO_SUCH_DEVICE,       /*< nick=net.reactivated.Fprint.Error.NoSuchDevice >*/
+  /* Prints cannot be deleted from the fprintd storage */
+  FPRINT_ERROR_PRINTS_NOT_DELETED, /*< nick=net.reactivated.Fprint.Error.PrintsNotDeleted >*/
 } FprintError;
 
 /* Enum of possible permissions, orders and nick matter here:
