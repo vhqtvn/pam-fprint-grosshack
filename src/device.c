@@ -1471,7 +1471,7 @@ try_delete_print (FprintDevice *rdev)
           guint index;
 
           store.print_data_load (priv->dev,
-                                 GPOINTER_TO_UINT (fingers->data),
+                                 GPOINTER_TO_UINT (finger->data),
                                  username,
                                  &print);
 
