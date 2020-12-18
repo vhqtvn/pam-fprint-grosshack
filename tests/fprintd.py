@@ -578,6 +578,13 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
 
         super().tearDown()
 
+    def try_release(self):
+        try:
+            self.device.Release()
+        except GLib.GError as e:
+            if not 'net.reactivated.Fprint.Error.ClaimDevice' in e.message:
+                raise(e)
+
     def wait_for_result(self, expected=None, max_wait=-1):
         self._last_result = None
         self._verify_stopped = False
@@ -640,6 +647,33 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
             return enroll_map[enrolled[return_index]]
 
         return (enrolled, enroll_map)
+
+    def enroll_users_images(self, images_override={}):
+        enroll_map = {
+            'test-user1': {'left-thumb': 'whorl'},
+            'test-user2': {'right-index-finger': 'arch'},
+            'test-user3': {'left-little-finger': 'loop-right',
+                           'left-thumb': 'tented_arch'},
+        }
+        enroll_map.update(images_override)
+        enrolled_prints = []
+
+        self.try_release()
+
+        for user, print_map in enroll_map.items():
+            self.device.Claim('(s)', user)
+            for finger, p in print_map.items():
+                self.enroll_image(p, finger=finger)
+                enrolled_prints.append(p)
+            self.device.Release()
+
+        self.assertCountEqual(enrolled_prints, set(enrolled_prints))
+
+        for user in enroll_map:
+            enrolled = self.device.ListEnrolledFingers('(s)', user)
+            self.assertCountEqual(enroll_map[user].keys(), enrolled)
+
+        return enroll_map
 
     def get_secondary_bus_and_device(self, claim=None):
         addr = os.environ['DBUS_SYSTEM_BUS_ADDRESS']
@@ -1294,11 +1328,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
 
     def tearDown(self):
         self._polkitd_obj.SetAllowed([FprintDevicePermission.enroll])
-        try:
-            self.device.Release()
-        except GLib.GError as e:
-            if not 'net.reactivated.Fprint.Error.ClaimDevice' in e.message:
-                raise(e)
+        self.try_release()
         super().tearDown()
 
     def test_any_finger_enroll_start(self):
@@ -1617,6 +1647,27 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.send_image(verify_image)
         self.assertVerifyNoMatch(selected_finger)
         self.device.VerifyStop()
+
+    def test_verify_any_finger_multiple_users(self):
+        enroll_map = self.enroll_users_images()
+        enrolled_users = list(enroll_map)
+
+        for verifying_user in enrolled_users:
+            self.device.Claim('(s)', verifying_user)
+
+            for enrolled_user in enrolled_users:
+                should_match = enrolled_user == verifying_user
+
+                for finger, print in enroll_map[enrolled_user].items():
+                    self.device.VerifyStart('(s)', 'any')
+                    self.send_image(print)
+                    if should_match:
+                        self.assertVerifyMatch(selected_finger='any')
+                    else:
+                        self.assertVerifyNoMatch(selected_finger='any')
+                    self.device.VerifyStop()
+
+            self.device.Release()
 
     def test_verify_finger_not_enrolled(self):
         self.enroll_image('whorl', finger='left-thumb')
