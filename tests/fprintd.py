@@ -551,7 +551,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
                     self._last_result = 'Unexpected signal values'
                     print('Unexpected signal values')
             elif signal == 'VerifyFingerSelected':
-                pass
+                self._selected_finger = params[0]
             elif signal == 'VerifyStatus':
                 self._abort = True
                 self._last_result = params[0]
@@ -581,6 +581,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
     def wait_for_result(self, expected=None, max_wait=-1):
         self._last_result = None
         self._verify_stopped = False
+        self._selected_finger = None
         self._abort = False
 
         if max_wait > 0:
@@ -1541,6 +1542,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
+        self.assertEqual(self._selected_finger, 'left-thumb')
         self.device.VerifyStop()
 
     def test_verify_finger_no_match(self):
@@ -1550,6 +1552,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-no-match')
+        self.assertEqual(self._selected_finger, 'left-thumb')
         self.device.VerifyStop()
 
     def test_verify_finger_no_match_restart(self):
@@ -1559,6 +1562,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-no-match')
+        self.assertEqual(self._selected_finger, 'left-thumb')
         self.device.VerifyStop()
 
         # Immediately starting again after a no-match must work
@@ -1567,6 +1571,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
+        self.assertEqual(self._selected_finger, 'left-thumb')
         self.device.VerifyStop()
 
     def test_verify_wrong_finger_match(self):
@@ -1576,6 +1581,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
+        self.assertEqual(self._selected_finger, 'any')
         self.device.VerifyStop()
 
     def test_verify_wrong_finger_no_match(self):
@@ -1585,6 +1591,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-no-match')
+        self.assertEqual(self._selected_finger, 'any')
         self.device.VerifyStop()
 
     def test_verify_any_finger_match(self):
@@ -1594,6 +1601,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
+        self.assertEqual(self._selected_finger, 'any')
         self.device.VerifyStop()
 
     def test_verify_any_finger_no_match(self):
@@ -1605,6 +1613,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-no-match')
+        self.assertEqual(self._selected_finger, 'any')
         self.device.VerifyStop()
 
     def test_verify_finger_not_enrolled(self):
