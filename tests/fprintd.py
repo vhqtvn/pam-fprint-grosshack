@@ -579,6 +579,8 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         super().tearDown()
 
     def wait_for_result(self, expected=None, max_wait=-1):
+        self._last_result = None
+        self._verify_stopped = False
         self._abort = False
 
         if max_wait > 0:
@@ -2200,9 +2202,12 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
             self.assertTrue(self._verify_stopped)
             self.assertEqual(self._last_result, 'verify-match')
+            self.assertTrue(self.finger_present)
 
             self.send_error(con=con)
-            self.wait_for_result(max_wait=200, expected='verify-match')
+            self.wait_for_result(max_wait=200)
+            self.assertIsNone(self._last_result)
+            self.assertFalse(self.finger_present)
 
     def test_verify_stop_restarts_immediately(self):
         self.send_image('tented_arch')
@@ -2272,7 +2277,9 @@ class FPrintdVirtualDeviceStorageVerificationUtils(object):
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
 
-        self.wait_for_result(max_wait=200, expected='verify-match')
+        self.wait_for_result(max_wait=200)
+        self.assertIsNone(self._last_result)
+        self.assertFalse(self.finger_present)
 
 class FPrintdVirtualDeviceStorageVerificationTests(FPrintdVirtualStorageDeviceBaseTest,
                                                    FPrintdVirtualDeviceStorageVerificationUtils,
