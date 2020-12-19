@@ -123,6 +123,8 @@ ctx = GLib.main_context_default()
 
 class FPrintdTest(dbusmock.DBusTestCase):
 
+    socket_env = 'FP_VIRTUAL_IMAGE'
+
     @staticmethod
     def path_from_service_file(sf):
         with open(SERVICE_FILE) as f:
@@ -159,7 +161,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
         cls.tmpdir = tempfile.mkdtemp(prefix='libfprint-')
 
         cls.sockaddr = os.path.join(cls.tmpdir, 'virtual-image.socket')
-        os.environ['FP_VIRTUAL_IMAGE'] = cls.sockaddr
+        os.environ[cls.socket_env] = cls.sockaddr
 
         cls.prints = {}
         for f in glob.glob(os.path.join(imgdir, '*.png')):
@@ -187,7 +189,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
         dbusmock.DBusTestCase.tearDownClass()
 
 
-    def daemon_start(self):
+    def daemon_start(self, driver='Virtual image device'):
         timeout = get_timeout('daemon_start')  # seconds
         env = os.environ.copy()
         env['G_DEBUG'] = 'fatal-criticals'
@@ -234,7 +236,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
                                                  'net.reactivated.Fprint.Device',
                                                  None)
 
-                    if 'Virtual image device' in str(dev.get_cached_property('name')):
+                    if driver in str(dev.get_cached_property('name')):
                         self.device = dev
                         break
                 else:
