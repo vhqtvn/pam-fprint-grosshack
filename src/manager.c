@@ -432,7 +432,7 @@ fprint_manager_get_default_device (FprintManager *manager,
 GQuark
 fprint_error_quark (void)
 {
-  static volatile gsize quark = 0;
+  static gsize quark = 0;
 
   if (g_once_init_enter (&quark))
     {
