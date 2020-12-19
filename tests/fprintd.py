@@ -605,11 +605,16 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         if expected is not None:
             self.assertEqual(self._last_result, expected)
 
-    def enroll_image(self, img, device=None, finger='right-index-finger', expected_result='enroll-completed'):
-        self._maybe_reduce_enroll_stages()
-
+    def enroll_image(self, img, device=None, finger='right-index-finger',
+                     expected_result='enroll-completed', claim_user=None):
         if device is None:
             device = self.device
+        if claim_user:
+            device.Claim('(s)', claim_user)
+
+        if device is self.device:
+            self._maybe_reduce_enroll_stages()
+
         device.EnrollStart('(s)', finger)
 
         while not self.finger_needed:
@@ -628,6 +633,9 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         device.EnrollStop()
         self.assertEqual(self._last_result, expected_result)
         self.assertFalse(self.finger_needed)
+
+        if claim_user:
+            device.Release()
 
     def enroll_multiple_images(self, images_override={}, return_index=-1):
         enroll_map = {
