@@ -524,6 +524,149 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         return bus, dev
 
 
+class FPrintdVirtualStorageDeviceBaseTest(FPrintdTest):
+
+    socket_env = 'FP_VIRTUAL_DEVICE_STORAGE'
+
+    def setUp(self):
+        super().setUp()
+        os.environ['FP_DRIVERS_WHITELIST'] = 'virtual_device_storage'
+
+        self.manager = None
+        self.device = None
+        self.polkitd_start()
+        self.daemon_start(driver='Virtual device with storage and identification for debugging')
+
+        if self.device is None:
+            self.skipTest("Need virtual_storage_device device to run the test")
+
+        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
+                                      'net.reactivated.fprint.device.enroll',
+                                      'net.reactivated.fprint.device.verify'])
+
+        def signal_cb(proxy, sender, signal, params):
+            print(signal, params)
+            if signal == 'EnrollStatus':
+                self._abort = params[1]
+                self._last_result = params[0]
+
+                if not self._abort and self._last_result.startswith('enroll-'):
+                    # Exit wait loop, onto next enroll state (if any)
+                    self._abort = True
+                elif self._abort:
+                    pass
+                else:
+                    self._abort = True
+                    self._last_result = 'Unexpected signal values'
+                    print('Unexpected signal values')
+            elif signal == 'VerifyFingerSelected':
+                pass
+            elif signal == 'VerifyStatus':
+                self._abort = True
+                self._last_result = params[0]
+                self._verify_stopped = params[1]
+            else:
+                self._abort = True
+                self._last_result = 'Unexpected signal'
+
+        self.g_signal_id = self.device.connect('g-signal', signal_cb)
+
+    def tearDown(self):
+        self.polkitd_stop()
+        self.device.disconnect(self.g_signal_id)
+        self.device = None
+        self.manager = None
+
+        super().tearDown()
+
+    def send_command(self, command, *args):
+        self.assertIn(command, ['INSERT', 'REMOVE', 'SCAN', 'ERROR', 'LIST'])
+
+        with Connection(self.sockaddr) as con:
+            params = ' '.join(str(p) for p in args)
+            con.sendall('{} {}'.format(command, params).encode('utf-8'))
+            res = []
+            while True:
+                r = con.recv(1024)
+                if not r:
+                    break
+                res.append(r)
+
+        return b''.join(res)
+
+    def wait_for_result(self, expected=None):
+        self._abort = False
+        while not self._abort:
+            ctx.iteration(True)
+
+        self.assertTrue(self._abort)
+        self._abort = False
+
+        if expected is not None:
+            self.assertEqual(self._last_result, expected)
+
+    def enroll_print(self, nick, finger='right-index-finger', expected_result='enroll-completed'):
+        # Needs to assume success
+        self.send_command('SCAN', nick)
+
+        self.device.EnrollStart('(s)', finger)
+
+        # We only "scan" once, but multiple enroll stages are still signalled
+        stages = self.device.get_cached_property('num-enroll-stages').unpack()
+        self.wait_for_result(expected_result)
+
+        self.device.EnrollStop()
+        self.assertEqual(self._last_result, expected_result)
+
+    def test_garbage_collect(self):
+        self.device.Claim('(s)', 'testuser')
+
+        # We expect collection in this order
+        garbage_collect = [
+            'no-metadata-print',
+            'FP1-20201216-7-ABCDEFGH-testuser',
+            'FP1-20201217-7-12345678-testuser',
+        ]
+        for e in garbage_collect:
+            self.send_command('INSERT', e)
+        # Enroll a few prints that must not be touched, sort them in at various points
+        enrolled_prints = {
+          'FP1-20000101-7-ABCDEFGH-testuser' : 'left-index-finger',
+          'FP1-20201231-7-ABCDEFGH-testuser' : 'right-index-finger',
+          'no-metadata-new' : 'left-middle-finger',
+        }
+        for i, f in enrolled_prints.items():
+            self.enroll_print(i, f)
+
+        # The virtual device sends a trailing \n
+        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
+
+        def trigger_garbagecollect():
+            self.send_command('ERROR', int(FPrint.DeviceError.DATA_FULL))
+            self.device.EnrollStart('(s)', 'right-thumb')
+            self.device.EnrollStop()
+
+        trigger_garbagecollect()
+
+        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        garbage_collect.pop()
+        self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
+
+        trigger_garbagecollect()
+
+        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        garbage_collect.pop()
+        self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
+
+        trigger_garbagecollect()
+
+        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        garbage_collect.pop()
+        self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
+
+        self.device.Release()
+
 class FPrintdManagerTests(FPrintdVirtualDeviceBaseTest):
 
     def setUp(self):
