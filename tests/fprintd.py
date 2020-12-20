@@ -71,17 +71,20 @@ def get_timeout(topic='default'):
         'valgrind': {
             'test': 300,
             'default': 20,
-            'daemon_start': 60
+            'daemon_start': 60,
+            'daemon_stop': 10,
         },
         'asan': {
             'test': 120,
             'default': 6,
-            'daemon_start': 10
+            'daemon_start': 10,
+            'daemon_stop': 8,
         },
         'default': {
             'test': 60,
             'default': 3,
-            'daemon_start': 5
+            'daemon_start': 5,
+            'daemon_stop': 2,
         }
     }
 
@@ -278,7 +281,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
                 self.daemon.terminate()
             except OSError:
                 pass
-            self.daemon.wait(timeout=2)
+            self.daemon.wait(timeout=get_timeout('daemon_start'))
             self.assertLess(self.daemon.returncode, 128)
             self.assertGreaterEqual(self.daemon.returncode, 0)
 
