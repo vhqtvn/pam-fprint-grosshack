@@ -1064,7 +1064,7 @@ can_start_action (FprintDevice *rdev, GError **error)
     case ACTION_VERIFY:
       g_set_error (error,
                    FPRINT_ERROR, FPRINT_ERROR_ALREADY_IN_USE,
-                   "Enrollment already in progress");
+                   "Verification already in progress");
       break;
 
     case ACTION_OPEN:
