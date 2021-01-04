@@ -1384,6 +1384,38 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
     def test_verify_error_data_full(self):
         self.assertVerifyError(FPrint.DeviceError.DATA_FULL, 'verify-unknown-error')
 
+    def test_multiple_verify(self):
+        self.send_image('tented_arch')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-no-match')
+        self.device.VerifyStop()
+
+        self.device.VerifyStart('(s)', self.verify_finger)
+        self.send_image('whorl')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-match')
+
+    def test_multiple_verify_cancelled(self):
+        with Connection(self.sockaddr) as con:
+            self.send_finger_automatic(False, con=con)
+            self.send_finger_report(True, con=con)
+            self.send_image('tented_arch', con=con)
+            self.wait_for_result()
+            self.assertTrue(self._verify_stopped)
+            self.assertEqual(self._last_result, 'verify-no-match')
+            self.device.VerifyStop()
+
+            # We'll be cancelled at this point, so con is invalid
+
+        self.device.VerifyStart('(s)', self.verify_finger)
+        self.send_finger_report(False)
+        self.send_image('whorl')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-match')
+
     def test_verify_start_during_verify(self):
         with self.assertFprintError('AlreadyInUse'):
             self.device.VerifyStart('(s)', self.verify_finger)
