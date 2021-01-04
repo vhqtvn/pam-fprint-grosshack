@@ -296,24 +296,36 @@ class FPrintdTest(dbusmock.DBusTestCase):
             '.*net\.reactivated\.Fprint\.Error\.{}.*'.format(fprint_error))
 
     # From libfprint tests
-    def send_retry(self, retry_error=FPrint.DeviceRetry.TOO_SHORT):
-        with Connection(self.sockaddr) as con:
+    def send_retry(self, retry_error=FPrint.DeviceRetry.TOO_SHORT, con=None):
+        if con:
             con.sendall(struct.pack('ii', -1, retry_error))
+            return
+
+        with Connection(self.sockaddr) as con:
+            self.send_retry(retry_error, con)
 
     # From libfprint tests
-    def send_error(self, error=FPrint.DeviceError.GENERAL):
-        with Connection(self.sockaddr) as con:
+    def send_error(self, error=FPrint.DeviceError.GENERAL, con=None):
+        if con:
             con.sendall(struct.pack('ii', -2, error))
+            return
+
+        with Connection(self.sockaddr) as con:
+            self.send_error(error, con)
 
     # From libfprint tests
-    def send_remove(self):
-        with Connection(self.sockaddr) as con:
+    def send_remove(self, con=None):
+        if con:
             con.sendall(struct.pack('ii', -5, 0))
+            return
+
+        with Connection(self.sockaddr) as con:
+            self.send_remove(con=con)
 
     # From libfprint tests
-    def send_image(self, image):
-        img = self.prints[image]
-        with Connection(self.sockaddr) as con:
+    def send_image(self, image, con=None):
+        if con:
+            img = self.prints[image]
             mem = img.get_data()
             mem = mem.tobytes()
             self.assertEqual(len(mem), img.get_width() * img.get_height())
@@ -322,6 +334,28 @@ class FPrintdTest(dbusmock.DBusTestCase):
             encoded_img += mem
 
             con.sendall(encoded_img)
+            return
+
+        with Connection(self.sockaddr) as con:
+            self.send_image(image, con)
+
+    def send_finger_automatic(self, automatic, con=None):
+        # Set whether finger on/off is reported around images
+        if con:
+            con.sendall(struct.pack('ii', -3, 1 if automatic else 0))
+            return
+
+        with Connection(self.sockaddr) as con:
+            self.send_finger_automatic(automatic, con=con)
+
+    def send_finger_report(self, has_finger, con=None):
+        # Send finger on/off
+        if con:
+            con.sendall(struct.pack('ii', -4, 1 if has_finger else 0))
+            return
+
+        with Connection(self.sockaddr) as con:
+            self.send_finger_report(has_finger, con=con)
 
     def call_device_method_async(self, method, *args):
         """ add cancellable... """
