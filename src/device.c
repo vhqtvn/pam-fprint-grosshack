@@ -1445,6 +1445,50 @@ enroll_progress_cb (FpDevice *dev,
     g_signal_emit (rdev, signals[SIGNAL_ENROLL_STATUS], 0, name, FALSE);
 }
 
+static gint
+garbage_collect_sort (gconstpointer a, gconstpointer b)
+{
+  /* Prefer */
+  FpPrint *print_a = *((FpPrint **) a);
+  FpPrint *print_b = *((FpPrint **) b);
+  const GDate *date_a, *date_b;
+  guint32 julian_a = 0;
+  guint32 julian_b = 0;
+  gint32 rand_a, rand_b;
+
+  date_a = fp_print_get_enroll_date (print_a);
+  date_b = fp_print_get_enroll_date (print_b);
+
+  if (date_a && g_date_valid (date_a))
+    julian_a = g_date_get_julian (date_a);
+  if (date_b && g_date_valid (date_b))
+    julian_b = g_date_get_julian (date_b);
+
+  /* Sort older prints first. */
+  if (julian_a != julian_b)
+    return julian_b - julian_a;
+
+  /* Randomize the order,
+   * do so by sorting on a random number we assign to each print.
+   * Not nice, but gets the job done.
+   */
+  rand_a = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (print_a), "sort-rand"));
+  rand_b = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (print_b), "sort-rand"));
+  if (rand_a == 0)
+    {
+      rand_a = g_random_int_range (1, G_MAXINT32);
+      g_object_set_data (G_OBJECT (print_a), "sort-rand", GINT_TO_POINTER (rand_a));
+    }
+
+  if (rand_b == 0)
+    {
+      rand_b = g_random_int_range (1, G_MAXINT32);
+      g_object_set_data (G_OBJECT (print_b), "sort-rand", GINT_TO_POINTER (rand_b));
+    }
+
+  return rand_b - rand_a;
+}
+
 static gboolean
 try_delete_print (FprintDevice *rdev)
 {
@@ -1461,6 +1505,10 @@ try_delete_print (FprintDevice *rdev)
     }
 
   g_debug ("Device has %d prints stored", device_prints->len);
+
+  /* Sort in order of preferred garbage collection.
+   * With randomization if we can't sort them. */
+  g_ptr_array_sort (device_prints, garbage_collect_sort);
 
   users = store.discover_users ();
 
