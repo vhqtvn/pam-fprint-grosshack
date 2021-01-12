@@ -667,6 +667,41 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdTest):
 
         self.device.Release()
 
+    def test_delete(self):
+        self.device.Claim('(s)', 'testuser')
+
+        # We expect collection in this order
+        garbage_prints = [
+            'no-metadata-print',
+            'FP1-20201216-7-ABCDEFGH-testuser',
+            'FP1-20201217-7-12345678-testuser',
+            'FP1-20201216-7-ABCDEFGH-other',
+            'FP1-20201217-7-12345678-other',
+        ]
+        for e in garbage_prints:
+            self.send_command('INSERT', e)
+        # Enroll a few prints that will be deleted
+        enrolled_prints = {
+          'FP1-20000101-7-ABCDEFGH-testuser' : 'left-index-finger',
+          'FP1-20201231-7-ABCDEFGH-testuser' : 'right-index-finger',
+          'no-metadata-new' : 'left-middle-finger',
+        }
+        for i, f in enrolled_prints.items():
+            self.enroll_print(i, f)
+
+        # The virtual device sends a trailing \n
+        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        self.assertEqual(set(prints), set(garbage_prints + list(enrolled_prints.keys())))
+
+        # Now, delete all prints for the user
+        self.device.DeleteEnrolledFingers2()
+
+        # And verify they are all gone
+        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        self.assertEqual(set(prints), set(garbage_prints))
+
+        self.device.Release()
+
 class FPrintdManagerTests(FPrintdVirtualDeviceBaseTest):
 
     def setUp(self):
