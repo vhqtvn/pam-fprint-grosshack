@@ -1,6 +1,14 @@
 This file lists notable changes in each release. For the full history of all
 changes, see ChangeLog.
 
+Version 1.90.9:
+
+Highlights:
+ - Fix multiple daemon lockup issues (#97)
+ - Fix print garbage collection to not delete used prints
+ - pam: Use the device with the most prints
+
+
 Version 1.90.8:
 
 It seems that we are finally reaching the end of the tunnel with regard
