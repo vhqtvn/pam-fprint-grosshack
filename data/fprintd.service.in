@@ -13,6 +13,7 @@ ProtectKernelTunables=true
 ProtectControlGroups=true
 # This always corresponds to /var/lib/fprint
 StateDirectory=fprint
+StateDirectoryMode=0700
 ProtectHome=true
 PrivateTmp=true
 
