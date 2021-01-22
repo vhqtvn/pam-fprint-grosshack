@@ -152,7 +152,7 @@ open_device (pam_handle_t *pamh,
 
   num_devices = 0;
   max_prints = 0;
-  while ((r = sd_bus_message_read_basic (m, 'o', &s)) > 0)
+  while (sd_bus_message_read_basic (m, 'o', &s) > 0)
     {
       size_t enrolled_prints = user_enrolled_prints_num (pamh, bus, s, username);
 
@@ -499,15 +499,15 @@ do_verify (sd_bus      *bus,
 
       /* Ignore errors from VerifyStop */
       data->verify_started = false;
-      sd_bus_call_method (bus,
-                          "net.reactivated.Fprint",
-                          data->dev,
-                          "net.reactivated.Fprint.Device",
-                          "VerifyStop",
-                          NULL,
-                          NULL,
-                          NULL,
-                          NULL);
+      (void) sd_bus_call_method (bus,
+                                 "net.reactivated.Fprint",
+                                 data->dev,
+                                 "net.reactivated.Fprint.Device",
+                                 "VerifyStop",
+                                 NULL,
+                                 NULL,
+                                 NULL,
+                                 NULL);
 
       if (data->timed_out)
         {
@@ -585,7 +585,7 @@ user_enrolled_prints_num (pam_handle_t *pamh,
       return 0;
     }
 
-  while ((r = sd_bus_message_read_basic (m, 's', &s)) > 0)
+  while (sd_bus_message_read_basic (m, 's', &s) > 0)
     num_fingers++;
   sd_bus_message_exit_container (m);
 
