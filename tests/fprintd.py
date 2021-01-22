@@ -1172,6 +1172,15 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         devices = self.manager.GetDevices()
         self.assertNotIn(self.device.get_object_path(), devices)
 
+    def test_concourrent_claim(self):
+        self.call_device_method_async('Claim', '(s)', [''])
+        self.call_device_method_async('Claim', '(s)', [''])
+
+        with self.assertFprintError('AlreadyInUse'):
+            self.wait_for_device_reply(expected_replies=2)
+
+        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+
 
 class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
 
@@ -1719,6 +1728,86 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.assertFalse(self.finger_present)
         self.assertFalse(self.finger_needed)
         self.assertEqual([{'finger-needed': False}], self._changed_properties)
+
+    def test_concourrent_enroll_start(self):
+        self.call_device_method_async('EnrollStart', '(s)', ['left-little-finger'])
+        self.call_device_method_async('EnrollStart', '(s)', ['left-thumb'])
+
+        with self.assertFprintError('AlreadyInUse'):
+            self.wait_for_device_reply(expected_replies=2)
+
+        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+
+    def test_concourrent_verify_start(self):
+        self.enroll_image('whorl', finger='left-thumb')
+        self.call_device_method_async('VerifyStart', '(s)', ['any'])
+        self.call_device_method_async('VerifyStart', '(s)', ['left-thumb'])
+
+        with self.assertFprintError('AlreadyInUse'):
+            self.wait_for_device_reply(expected_replies=2)
+
+        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+
+    def test_concourrent_list_enrolled_fingers(self):
+        self.enroll_image('whorl')
+        self.call_device_method_async('ListEnrolledFingers', '(s)', ['testuser'])
+        self.call_device_method_async('ListEnrolledFingers', '(s)', ['testuser'])
+
+        # No failure is expected here since it's all sync
+        self.wait_for_device_reply(expected_replies=2)
+        self.assertEqual([(['right-index-finger'],), (['right-index-finger'],)],
+            [ f.unpack() for f in self._async_call_res ])
+
+    def test_concourrent_delete_enrolled_fingers(self):
+        self.enroll_image('whorl')
+        self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
+        self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
+
+        # No failure is expected here since it's all sync
+        self.wait_for_device_reply(expected_replies=2)
+        self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
+            self._async_call_res)
+
+    def test_concourrent_delete_enrolled_fingers_unclaimed(self):
+        self.enroll_image('whorl')
+        self.device.Release()
+        self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
+        self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
+
+        # No failure is expected here since it's all sync
+        self.wait_for_device_reply(expected_replies=2)
+        self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
+            self._async_call_res)
+
+    def test_concourrent_delete_enrolled_fingers2(self):
+        self.enroll_image('whorl')
+        self.call_device_method_async('DeleteEnrolledFingers2', '()', [])
+        self.call_device_method_async('DeleteEnrolledFingers2', '()', [])
+
+        # No failure is expected here since it's all sync
+        self.wait_for_device_reply(expected_replies=2)
+        self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
+            self._async_call_res)
+
+    def test_concourrent_delete_enrolled_finger(self):
+        self.enroll_image('whorl', finger='left-thumb')
+        self.enroll_image('tented_arch', finger='right-thumb')
+        self.call_device_method_async('DeleteEnrolledFinger', '(s)', ['left-thumb'])
+        self.call_device_method_async('DeleteEnrolledFinger', '(s)', ['right-thumb'])
+
+        # No failure is expected here since it's all sync
+        self.wait_for_device_reply(expected_replies=2)
+        self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
+            self._async_call_res)
+
+    def test_concourrent_release(self):
+        self.call_device_method_async('Release', '()', [])
+        self.call_device_method_async('Release', '()', [])
+
+        with self.assertFprintError('AlreadyInUse'):
+            self.wait_for_device_reply(expected_replies=2)
+
+        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
 
 
 class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
