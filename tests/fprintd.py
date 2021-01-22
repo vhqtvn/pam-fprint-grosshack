@@ -454,6 +454,15 @@ class FPrintdTest(dbusmock.DBusTestCase):
         return self.wait_for_async_reply(self.device, method=method,
             expected_replies=expected_replies)
 
+    def wait_for_device_reply_relaxed(self, method=None, expected_replies=1, accepted_exceptions=[]):
+        try:
+            self.wait_for_device_reply(method=method, expected_replies=expected_replies)
+        except GLib.Error as e:
+            for ae in accepted_exceptions:
+                if 'GDBus.Error:{}.Error.{}'.format(FPRINT_NAMESPACE, ae) in str(e):
+                    return
+            raise(e)
+
     def get_async_replies(self, method=None, proxy=None):
         method_calls = self._async_call_res.get(proxy if proxy else self.device, {})
         return method_calls.get(method, []) if method else method_calls
@@ -1185,7 +1194,7 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('AlreadyInUse'):
             self.wait_for_device_reply(expected_replies=2)
 
-        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
 
 class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
@@ -1742,7 +1751,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('AlreadyInUse'):
             self.wait_for_device_reply(expected_replies=2)
 
-        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
     def test_concourrent_verify_start(self):
         self.enroll_image('whorl', finger='left-thumb')
@@ -1752,7 +1761,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('AlreadyInUse'):
             self.wait_for_device_reply(expected_replies=2)
 
-        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
     def test_concourrent_list_enrolled_fingers(self):
         self.enroll_image('whorl')
@@ -1762,17 +1771,17 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         # No failure is expected here since it's all sync
         self.wait_for_device_reply(expected_replies=2)
         self.assertEqual([(['right-index-finger'],), (['right-index-finger'],)],
-            [ f.unpack() for f in self._async_call_res ])
+            [ f.unpack() for f in self.get_all_async_replies() ])
 
     def test_concourrent_delete_enrolled_fingers(self):
         self.enroll_image('whorl')
         self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
         self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
 
-        # No failure is expected here since it's all sync
-        self.wait_for_device_reply(expected_replies=2)
+        self.wait_for_device_reply_relaxed(expected_replies=2,
+            accepted_exceptions=['NoEnrolledPrints'])
         self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
-            self._async_call_res)
+            self.get_all_async_replies())
 
     def test_concourrent_delete_enrolled_fingers_unclaimed(self):
         self.enroll_image('whorl')
@@ -1780,20 +1789,20 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
         self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
 
-        # No failure is expected here since it's all sync
-        self.wait_for_device_reply(expected_replies=2)
+        self.wait_for_device_reply_relaxed(expected_replies=2,
+            accepted_exceptions=['NoEnrolledPrints'])
         self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
-            self._async_call_res)
+            self.get_all_async_replies())
 
     def test_concourrent_delete_enrolled_fingers2(self):
         self.enroll_image('whorl')
         self.call_device_method_async('DeleteEnrolledFingers2', '()', [])
         self.call_device_method_async('DeleteEnrolledFingers2', '()', [])
 
-        # No failure is expected here since it's all sync
-        self.wait_for_device_reply(expected_replies=2)
+        self.wait_for_device_reply_relaxed(expected_replies=2,
+            accepted_exceptions=['NoEnrolledPrints'])
         self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
-            self._async_call_res)
+            self.get_all_async_replies())
 
     def test_concourrent_delete_enrolled_finger(self):
         self.enroll_image('whorl', finger='left-thumb')
@@ -1804,16 +1813,16 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         # No failure is expected here since it's all sync
         self.wait_for_device_reply(expected_replies=2)
         self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
-            self._async_call_res)
+            self.get_all_async_replies())
 
     def test_concourrent_release(self):
         self.call_device_method_async('Release', '()', [])
         self.call_device_method_async('Release', '()', [])
 
-        with self.assertFprintError('AlreadyInUse'):
+        with self.assertFprintError(['AlreadyInUse', 'ClaimDevice']):
             self.wait_for_device_reply(expected_replies=2)
 
-        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
 
 class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
@@ -1915,7 +1924,7 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
         self.call_device_method_async('EnrollStop', '()', [])
         self.call_device_method_async('EnrollStop', '()', [])
 
-        with self.assertFprintError('AlreadyInUse'):
+        with self.assertFprintError(['AlreadyInUse', 'NoActionInProgress']):
             self.wait_for_device_reply(method='EnrollStop', expected_replies=2)
 
         self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
@@ -2064,7 +2073,7 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         self.call_device_method_async('VerifyStop', '()', [])
         self.call_device_method_async('VerifyStop', '()', [])
 
-        with self.assertFprintError('AlreadyInUse'):
+        with self.assertFprintError(['AlreadyInUse', 'NoActionInProgress']):
             self.wait_for_device_reply(method='VerifyStop', expected_replies=2)
 
         self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
