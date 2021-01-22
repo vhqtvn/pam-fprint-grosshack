@@ -396,17 +396,18 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
     def _method_call_handler(self, proxy, res):
         try:
-            self._async_call_res = proxy.call_finish(res)
+            self._async_call_res.append(proxy.call_finish(res))
         except Exception as e:
-            self._async_call_res = e
+            self._async_call_res.append(e)
 
-    def wait_for_device_reply(self):
-        self._async_call_res = None
-        while not self._async_call_res:
+    def wait_for_device_reply(self, expected_replies=1):
+        self._async_call_res = []
+        while len(self._async_call_res) != expected_replies:
             ctx.iteration(True)
 
-        if isinstance(self._async_call_res, Exception):
-            raise self._async_call_res
+        for res in self._async_call_res:
+            if isinstance(res, Exception):
+                raise res
 
     def gdbus_device_method_call_process(self, method, args=[]):
         return subprocess.Popen([
@@ -1677,9 +1678,11 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
         self._abort = False
         self.device.Claim('(s)', 'testuser')
         self.device.EnrollStart('(s)', 'left-middle-finger')
+        self.stop_on_teardown = True
 
     def tearDown(self):
-        self.device.EnrollStop()
+        if self.stop_on_teardown:
+            self.device.EnrollStop()
         self.device.Release()
         super().tearDown()
 
@@ -1762,6 +1765,16 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('AlreadyInUse'):
             self.device.DeleteEnrolledFinger('(s)', 'left-thumb')
 
+    def test_enroll_concourrent_stop(self):
+        self.stop_on_teardown = False
+        self.call_device_method_async('EnrollStop', '()', [])
+        self.call_device_method_async('EnrollStop', '()', [])
+
+        with self.assertFprintError('AlreadyInUse'):
+            self.wait_for_device_reply(expected_replies=2)
+
+        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
@@ -1770,6 +1783,7 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         super().setUpClass()
         cls.enroll_finger = 'left-middle-finger'
         cls.verify_finger = cls.enroll_finger
+        cls.stop_on_teardown = True
 
     def setUp(self):
         super().setUp()
@@ -1778,7 +1792,8 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         self.device.VerifyStart('(s)', self.verify_finger)
 
     def tearDown(self):
-        self.device.VerifyStop()
+        if self.stop_on_teardown:
+            self.device.VerifyStop()
         self.device.Release()
         super().tearDown()
 
@@ -1898,6 +1913,16 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
     def test_delete_finger_during_verify(self):
         with self.assertFprintError('AlreadyInUse'):
             self.device.DeleteEnrolledFinger('(s)', 'left-thumb')
+
+    def test_verify_concourrent_stop(self):
+        self.stop_on_teardown = False
+        self.call_device_method_async('VerifyStop', '()', [])
+        self.call_device_method_async('VerifyStop', '()', [])
+
+        with self.assertFprintError('AlreadyInUse'):
+            self.wait_for_device_reply(expected_replies=2)
+
+        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
 
 
 class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTests):
