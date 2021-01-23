@@ -133,6 +133,7 @@ ctx = GLib.main_context_default()
 class FPrintdTest(dbusmock.DBusTestCase):
 
     socket_env = 'FP_VIRTUAL_IMAGE'
+    device_driver = 'virtual_image'
 
     @staticmethod
     def path_from_service_file(sf):
@@ -294,6 +295,11 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self._polkitd.terminate()
         self._polkitd.wait()
 
+    def polkitd_allow_all(self):
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
+                                      FprintDevicePermission.enroll,
+                                      FprintDevicePermission.verify])
+
     def get_current_user(self):
         return pwd.getpwuid(os.getuid()).pw_name
 
@@ -302,7 +308,6 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self.addCleanup(shutil.rmtree, self.test_dir)
         self.state_dir = os.path.join(self.test_dir, 'state')
         self.run_dir = os.path.join(self.test_dir, 'run')
-        self.device_driver = 'virtual_image'
         self.device_id = 0
         self._async_call_res = {}
         os.environ['FP_DRIVERS_WHITELIST'] = self.device_driver
@@ -503,16 +508,18 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
 class FPrintdVirtualDeviceBaseTest(FPrintdTest):
 
+    driver_name = 'Virtual image device'
+
     def setUp(self):
         super().setUp()
 
         self.manager = None
         self.device = None
         self.polkitd_start()
-        self.daemon_start()
+        self.daemon_start(self.driver_name)
 
         if self.device is None:
-            self.skipTest("Need virtual_image device to run the test")
+            self.skipTest("Need {} device to run the test".format(self.device_driver))
 
         self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
                                       FprintDevicePermission.enroll,
@@ -643,60 +650,11 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         return bus, dev
 
 
-class FPrintdVirtualStorageDeviceBaseTest(FPrintdTest):
+class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
 
     socket_env = 'FP_VIRTUAL_DEVICE_STORAGE'
-
-    def setUp(self):
-        super().setUp()
-        os.environ['FP_DRIVERS_WHITELIST'] = 'virtual_device_storage'
-
-        self.manager = None
-        self.device = None
-        self.polkitd_start()
-        self.daemon_start(driver='Virtual device with storage and identification for debugging')
-
-        if self.device is None:
-            self.skipTest("Need virtual_storage_device device to run the test")
-
-        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
-                                      FprintDevicePermission.enroll,
-                                      FprintDevicePermission.verify])
-
-        def signal_cb(proxy, sender, signal, params):
-            print(signal, params)
-            if signal == 'EnrollStatus':
-                self._abort = params[1]
-                self._last_result = params[0]
-
-                if not self._abort and self._last_result.startswith('enroll-'):
-                    # Exit wait loop, onto next enroll state (if any)
-                    self._abort = True
-                elif self._abort:
-                    pass
-                else:
-                    self._abort = True
-                    self._last_result = 'Unexpected signal values'
-                    print('Unexpected signal values')
-            elif signal == 'VerifyFingerSelected':
-                pass
-            elif signal == 'VerifyStatus':
-                self._abort = True
-                self._last_result = params[0]
-                self._verify_stopped = params[1]
-            else:
-                self._abort = True
-                self._last_result = 'Unexpected signal'
-
-        self.g_signal_id = self.device.connect('g-signal', signal_cb)
-
-    def tearDown(self):
-        self.polkitd_stop()
-        self.device.disconnect(self.g_signal_id)
-        self.device = None
-        self.manager = None
-
-        super().tearDown()
+    device_driver = 'virtual_device_storage'
+    driver_name = 'Virtual device with storage and identification for debugging'
 
     def send_command(self, command, *args):
         self.assertIn(command, ['INSERT', 'REMOVE', 'SCAN', 'ERROR', 'LIST'])
@@ -712,17 +670,6 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdTest):
                 res.append(r)
 
         return b''.join(res)
-
-    def wait_for_result(self, expected=None):
-        self._abort = False
-        while not self._abort:
-            ctx.iteration(True)
-
-        self.assertTrue(self._abort)
-        self._abort = False
-
-        if expected is not None:
-            self.assertEqual(self._last_result, expected)
 
     def enroll_print(self, nick, finger='right-index-finger', expected_result='enroll-completed'):
         # Needs to assume success
