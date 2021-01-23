@@ -247,6 +247,8 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
                     if driver in str(dev.get_cached_property('name')):
                         self.device = dev
+                        self._device_cancellable = Gio.Cancellable()
+                        self.addCleanup(self._device_cancellable.cancel)
                         break
                 else:
                     print('Did not find virtual device! Probably libfprint was build without the corresponding driver!')
@@ -302,6 +304,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self.run_dir = os.path.join(self.test_dir, 'run')
         self.device_driver = 'virtual_image'
         self.device_id = 0
+        self._async_call_res = {}
         os.environ['FP_DRIVERS_WHITELIST'] = self.device_driver
 
     def assertFprintError(self, fprint_error):
@@ -399,25 +402,62 @@ class FPrintdTest(dbusmock.DBusTestCase):
         while iterate and self.finger_present != has_finger:
             ctx.iteration(False)
 
-    def call_device_method_async(self, method, *args):
-        """ add cancellable... """
+    def call_proxy_method_async(self, proxy, method, *args):
+        def call_handler(proxy, res):
+            nonlocal method
+
+            if proxy not in self._async_call_res.keys():
+                self._async_call_res[proxy] = {}
+            if method not in self._async_call_res[proxy].keys():
+                self._async_call_res[proxy][method] = []
+
+            try:
+                ret = proxy.call_finish(res)
+            except Exception as e:
+                ret = e
+            self._async_call_res[proxy][method].append(ret)
+
         self.device.call(method, GLib.Variant(*args),
-            Gio.DBusCallFlags.NONE, -1, None, self._method_call_handler)
+            Gio.DBusCallFlags.NONE, -1, self._device_cancellable,
+            call_handler)
 
-    def _method_call_handler(self, proxy, res):
-        try:
-            self._async_call_res.append(proxy.call_finish(res))
-        except Exception as e:
-            self._async_call_res.append(e)
+    def call_device_method_async(self, method, *args):
+        return self.call_proxy_method_async(self.device, method, *args)
 
-    def wait_for_device_reply(self, expected_replies=1):
-        self._async_call_res = []
-        while len(self._async_call_res) != expected_replies:
+    def wait_for_async_reply(self, proxy, method=None, expected_replies=1):
+        if proxy in self._async_call_res:
+            proxy_replies = self._async_call_res[proxy]
+            if method and method in proxy_replies:
+                proxy_replies[method] = []
+            else:
+                proxy_replies = {}
+
+        def get_replies():
+            nonlocal proxy, method
+            return (self.get_all_async_replies(proxy=proxy) if not method
+                else self.get_async_replies(proxy=proxy, method=method))
+
+        while len(get_replies()) != expected_replies:
             ctx.iteration(True)
 
-        for res in self._async_call_res:
+        for res in get_replies():
             if isinstance(res, Exception):
                 raise res
+
+    def wait_for_device_reply(self, method=None, expected_replies=1):
+        return self.wait_for_async_reply(self.device, method=method,
+            expected_replies=expected_replies)
+
+    def get_async_replies(self, method=None, proxy=None):
+        method_calls = self._async_call_res.get(proxy if proxy else self.device, {})
+        return method_calls.get(method, []) if method else method_calls
+
+    def get_all_async_replies(self, proxy=None):
+        method_calls = self.get_async_replies(proxy=proxy)
+        all_replies = []
+        for method, replies in method_calls.items():
+            all_replies.extend(replies)
+        return all_replies
 
     def gdbus_device_method_call_process(self, method, args=[]):
         return subprocess.Popen([
@@ -1781,9 +1821,9 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
         self.call_device_method_async('EnrollStop', '()', [])
 
         with self.assertFprintError('AlreadyInUse'):
-            self.wait_for_device_reply(expected_replies=2)
+            self.wait_for_device_reply(method='EnrollStop', expected_replies=2)
 
-        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
@@ -1930,9 +1970,9 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         self.call_device_method_async('VerifyStop', '()', [])
 
         with self.assertFprintError('AlreadyInUse'):
-            self.wait_for_device_reply(expected_replies=2)
+            self.wait_for_device_reply(method='VerifyStop', expected_replies=2)
 
-        self.assertIn(GLib.Variant('()', ()), self._async_call_res)
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
 
 class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTests):
