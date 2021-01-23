@@ -44,6 +44,12 @@ except ImportError:
 
 SERVICE_FILE = '/usr/share/dbus-1/system-services/net.reactivated.Fprint.service'
 
+class FprintDevicePermission:
+    verify = FPRINT_NAMESPACE.lower() + '.device.verify'
+    enroll = FPRINT_NAMESPACE.lower() + '.device.enroll'
+    set_username = FPRINT_NAMESPACE.lower() + '.device.setusername'
+
+
 def get_timeout(topic='default'):
     vals = {
         'valgrind': {
@@ -446,9 +452,9 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         if self.device is None:
             self.skipTest("Need virtual_image device to run the test")
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
-                                      'net.reactivated.fprint.device.enroll',
-                                      'net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
+                                      FprintDevicePermission.enroll,
+                                      FprintDevicePermission.verify])
 
         def signal_cb(proxy, sender, signal, params):
             print(signal, params)
@@ -585,9 +591,9 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdTest):
         if self.device is None:
             self.skipTest("Need virtual_storage_device device to run the test")
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
-                                      'net.reactivated.fprint.device.enroll',
-                                      'net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
+                                      FprintDevicePermission.enroll,
+                                      FprintDevicePermission.verify])
 
         def signal_cb(proxy, sender, signal, params):
             print(signal, params)
@@ -833,19 +839,19 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         self.assertFalse(self.finger_present)
 
     def test_allowed_claim_release_enroll(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
-                                      'net.reactivated.fprint.device.enroll'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
+                                      FprintDevicePermission.enroll])
         self.device.Claim('(s)', 'testuser')
         self.device.Release()
 
     def test_allowed_claim_release_verify(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
-                                      'net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
+                                      FprintDevicePermission.verify])
         self.device.Claim('(s)', 'testuser')
         self.device.Release()
 
     def test_allowed_claim_current_user(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.enroll])
         self.device.Claim('(s)', '')
         self.device.Release()
 
@@ -853,21 +859,21 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         self.device.Release()
 
     def test_allowed_list_enrolled_fingers_empty_user(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.enroll])
         self.device.Claim('(s)', '')
         self.enroll_image('whorl', finger='left-thumb')
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.verify])
 
         self.assertEqual(self.device.ListEnrolledFingers('(s)', ''), ['left-thumb'])
         self.assertEqual(self.device.ListEnrolledFingers('(s)', self.get_current_user()), ['left-thumb'])
 
     def test_allowed_list_enrolled_fingers_current_user(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.enroll])
         self.device.Claim('(s)', self.get_current_user())
         self.enroll_image('whorl', finger='right-thumb')
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.verify])
 
         self.assertEqual(self.device.ListEnrolledFingers('(s)', ''), ['right-thumb'])
         self.assertEqual(self.device.ListEnrolledFingers('(s)', self.get_current_user()), ['right-thumb'])
@@ -878,51 +884,51 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('PermissionDenied'):
             self.device.Claim('(s)', 'testuser')
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username])
 
         with self.assertFprintError('PermissionDenied'):
             self.device.Claim('(s)', 'testuser')
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.enroll])
 
         with self.assertFprintError('PermissionDenied'):
             self.device.Claim('(s)', 'testuser')
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.verify])
 
         with self.assertFprintError('PermissionDenied'):
             self.device.Claim('(s)', 'testuser')
 
     def test_unallowed_enroll_with_verify_claim(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.verify])
         self.device.Claim('(s)', '')
 
         with self.assertFprintError('PermissionDenied'):
             self.enroll_image('whorl', finger='right-thumb')
 
     def test_unallowed_delete_with_verify_claim(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.verify])
         self.device.Claim('(s)', '')
 
         with self.assertFprintError('PermissionDenied'):
             self.device.DeleteEnrolledFingers('(s)', 'testuser')
 
     def test_unallowed_delete2_with_verify_claim(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.verify])
         self.device.Claim('(s)', '')
 
         with self.assertFprintError('PermissionDenied'):
             self.device.DeleteEnrolledFingers2()
 
     def test_unallowed_delete_single_with_verify_claim(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.verify])
         self.device.Claim('(s)', '')
 
         with self.assertFprintError('PermissionDenied'):
             self.device.DeleteEnrolledFingers('(s)', 'right-thumb')
 
     def test_unallowed_verify_with_enroll_claim(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.enroll])
         self.device.Claim('(s)', '')
 
         with self.assertFprintError('PermissionDenied'):
@@ -1103,8 +1109,8 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
         if not self._has_hotplug:
             self.skipTest("libfprint is too old for hotplug")
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername',
-                                      'net.reactivated.fprint.device.enroll'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
+                                      FprintDevicePermission.enroll])
         self.device.Claim('(s)', 'testuser')
         self.device.EnrollStart('(s)', 'left-index-finger')
 
@@ -1130,7 +1136,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.device.Claim('(s)', 'testuser')
 
     def tearDown(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.enroll])
         try:
             self.device.Release()
         except GLib.GError as e:
@@ -1472,7 +1478,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('PermissionDenied'):
             self.device.EnrollStart('(s)', 'right-index-finger')
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.enroll'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.enroll])
         self.enroll_image('whorl')
 
     def test_always_allowed_enroll_stop(self):
@@ -1497,7 +1503,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
 
     def test_list_enrolled_fingers_current_user(self):
         self.enroll_image('whorl')
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.verify'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.verify])
 
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.ListEnrolledFingers('(s)', '')
@@ -1512,7 +1518,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('PermissionDenied'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username])
         with self.assertFprintError('PermissionDenied'):
             self.device.ListEnrolledFingers('(s)', 'testuser')
 
@@ -1526,7 +1532,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('PermissionDenied'):
             self.device.ListEnrolledFingers('(s)', self.get_current_user())
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username])
         with self.assertFprintError('PermissionDenied'):
             self.device.ListEnrolledFingers('(s)', '')
 
@@ -1540,7 +1546,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         with self.assertFprintError('PermissionDenied'):
             self.device.DeleteEnrolledFingers('(s)', 'testuser')
 
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username])
         with self.assertFprintError('PermissionDenied'):
             self.device.DeleteEnrolledFingers('(s)', 'testuser')
 
@@ -1953,8 +1959,8 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
 
     def test_hanging_claim_does_not_block_new_claim_external_client(self):
         self._polkitd_obj.SetAllowed([
-            'net.reactivated.fprint.device.setusername',
-            'net.reactivated.fprint.device.enroll' ])
+            FprintDevicePermission.set_username,
+            FprintDevicePermission.enroll ])
         self._polkitd_obj.SimulateHang(True)
         self._polkitd_obj.SetDelay(0.5)
 
@@ -1974,8 +1980,8 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
 
     def test_hanging_claim_does_not_block_new_claim(self):
         self._polkitd_obj.SetAllowed([
-            'net.reactivated.fprint.device.setusername',
-            'net.reactivated.fprint.device.enroll' ])
+            FprintDevicePermission.set_username,
+            FprintDevicePermission.enroll ])
         self._polkitd_obj.SimulateHang(True)
         self._polkitd_obj.SetDelay(0.5)
 
@@ -1994,10 +2000,10 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
 
     def test_hanging_claim_enroll_does_not_block_new_claim(self):
         self._polkitd_obj.SetAllowed([
-            'net.reactivated.fprint.device.setusername',
-            'net.reactivated.fprint.device.enroll' ])
+            FprintDevicePermission.set_username,
+            FprintDevicePermission.enroll ])
         self._polkitd_obj.SimulateHangActions([
-            'net.reactivated.fprint.device.enroll'])
+            FprintDevicePermission.enroll])
         self._polkitd_obj.SetDelay(0.5)
 
         gdbus = self.start_hanging_gdbus_claim()
@@ -2015,7 +2021,7 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
         self.device.Release()
 
     def test_hanging_claim_does_not_block_new_release(self):
-        self._polkitd_obj.SetAllowed(['net.reactivated.fprint.device.setusername'])
+        self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username])
         self._polkitd_obj.SimulateHang(True)
 
         gdbus = self.gdbus_device_method_call_process('Claim', ['testuser'])
@@ -2029,16 +2035,16 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
 
     def test_hanging_claim_does_not_block_list(self):
         self._polkitd_obj.SetAllowed([
-            'net.reactivated.fprint.device.setusername',
-            'net.reactivated.fprint.device.enroll',
-            'net.reactivated.fprint.device.verify'])
+            FprintDevicePermission.set_username,
+            FprintDevicePermission.enroll,
+            FprintDevicePermission.verify])
 
         self.device.Claim('(s)', '')
         self.enroll_image('whorl', finger='left-thumb')
         self.device.Release()
 
         self._polkitd_obj.SimulateHangActions([
-            'net.reactivated.fprint.device.setusername'])
+            FprintDevicePermission.set_username])
 
         gdbus = self.start_hanging_gdbus_claim()
 
@@ -2049,11 +2055,11 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
 
     def test_hanging_claim_can_proceed_when_released(self):
         self._polkitd_obj.SetAllowed([
-            'net.reactivated.fprint.device.setusername',
-            'net.reactivated.fprint.device.verify'])
+            FprintDevicePermission.set_username,
+            FprintDevicePermission.verify])
 
         self._polkitd_obj.SimulateHangActions([
-            'net.reactivated.fprint.device.setusername'])
+            FprintDevicePermission.set_username])
 
         gdbus = self.start_hanging_gdbus_claim()
 
@@ -2070,12 +2076,12 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
 
     def test_hanging_claim_does_not_block_empty_list(self):
         self._polkitd_obj.SetAllowed([
-            'net.reactivated.fprint.device.setusername',
-            'net.reactivated.fprint.device.enroll',
-            'net.reactivated.fprint.device.verify'])
+            FprintDevicePermission.set_username,
+            FprintDevicePermission.enroll,
+            FprintDevicePermission.verify])
 
         self._polkitd_obj.SimulateHangActions([
-            'net.reactivated.fprint.device.setusername'])
+            FprintDevicePermission.set_username])
 
         gdbus = self.start_hanging_gdbus_claim()
 
@@ -2086,16 +2092,16 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
 
     def test_hanging_claim_does_not_block_verification(self):
         self._polkitd_obj.SetAllowed([
-            'net.reactivated.fprint.device.setusername',
-            'net.reactivated.fprint.device.enroll',
-            'net.reactivated.fprint.device.verify'])
+            FprintDevicePermission.set_username,
+            FprintDevicePermission.enroll,
+            FprintDevicePermission.verify])
 
         self.device.Claim('(s)', '')
         self.enroll_image('whorl', finger='left-thumb')
         self.device.Release()
 
         self._polkitd_obj.SimulateHangActions([
-            'net.reactivated.fprint.device.setusername'])
+            FprintDevicePermission.set_username])
 
         gdbus = self.start_hanging_gdbus_claim()
 
