@@ -558,8 +558,14 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
 
         super().tearDown()
 
-    def wait_for_result(self, expected=None):
+    def wait_for_result(self, expected=None, max_wait=-1):
         self._abort = False
+
+        if max_wait > 0:
+            def abort_timeout():
+                self._abort = True
+            GLib.timeout_add(max_wait, abort_timeout)
+
         while not self._abort:
             ctx.iteration(True)
 
@@ -2077,6 +2083,19 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
             self.wait_for_device_reply(method='VerifyStop', expected_replies=2)
 
         self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
+
+    def test_verify_error_ignored_after_report(self):
+        with Connection(self.sockaddr) as con:
+            self.send_finger_automatic(False, con=con)
+            self.send_finger_report(True, con=con)
+            self.send_image('whorl', con=con)
+            self.wait_for_result()
+
+            self.assertTrue(self._verify_stopped)
+            self.assertEqual(self._last_result, 'verify-match')
+
+            self.send_error(con=con)
+            self.wait_for_result(max_wait=200, expected='verify-match')
 
 
 class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTests):
