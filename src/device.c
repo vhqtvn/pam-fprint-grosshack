@@ -2212,7 +2212,7 @@ handle_unauthorized_access (FprintDevice          *rdev,
 
   g_assert (error);
 
-  g_warning ("Client %s not authorized to call method '%s' for device %s: %s",
+  g_warning ("Authorization denied to %s to call method '%s' for device '%s': %s",
              g_dbus_method_invocation_get_sender (invocation),
              g_dbus_method_invocation_get_method_name (invocation),
              fp_device_get_name (priv->dev),
@@ -2238,9 +2238,9 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
 
   method_name = g_dbus_method_invocation_get_method_name (invocation);
 
-  g_debug ("Requesting device '%s' authorization for method %s from %s",
-           fp_device_get_name (priv->dev), method_name,
-           g_dbus_method_invocation_get_sender (invocation));
+  g_debug ("Requesting authorization from %s to call method '%s' for device '%s'",
+           g_dbus_method_invocation_get_sender (invocation), method_name,
+           fp_device_get_name (priv->dev));
 
   if (g_str_equal (method_name, "Claim"))
     needs_user_auth = TRUE;
@@ -2268,10 +2268,10 @@ action_authorization_handler (GDBusInterfaceSkeleton *interface,
                                                    &error))
     return handle_unauthorized_access (rdev, invocation, error);
 
-  g_debug ("Authorization granted to %s to call method '%s' for device %s!",
-           fp_device_get_name (priv->dev),
+  g_debug ("Authorization granted to %s to call method '%s' for device '%s'!",
+           g_dbus_method_invocation_get_sender (invocation),
            g_dbus_method_invocation_get_method_name (invocation),
-           g_dbus_method_invocation_get_sender (invocation));
+           fp_device_get_name (priv->dev));
 
   return TRUE;
 }
