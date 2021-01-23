@@ -28,6 +28,7 @@ import sys
 import tempfile
 import glob
 import pwd
+import re
 import shutil
 import socket
 import struct
@@ -42,7 +43,9 @@ try:
 except ImportError:
     DEVNULL = open(os.devnull, 'wb')
 
-SERVICE_FILE = '/usr/share/dbus-1/system-services/net.reactivated.Fprint.service'
+FPRINT_NAMESPACE = 'net.reactivated.Fprint'
+FPRINT_PATH = '/' + FPRINT_NAMESPACE.replace('.', '/')
+SERVICE_FILE = '/usr/share/dbus-1/system-services/{}.service'.format(FPRINT_NAMESPACE)
 
 class FprintDevicePermission:
     verify = FPRINT_NAMESPACE.lower() + '.device.verify'
@@ -225,9 +228,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
                 self.manager = Gio.DBusProxy.new_sync(self.dbus,
                                                       Gio.DBusProxyFlags.DO_NOT_AUTO_START,
                                                       None,
-                                                      'net.reactivated.Fprint',
-                                                      '/net/reactivated/Fprint/Manager',
-                                                      'net.reactivated.Fprint.Manager',
+                                                      FPRINT_NAMESPACE,
+                                                      FPRINT_PATH + '/Manager',
+                                                      FPRINT_NAMESPACE + '.Manager',
                                                       None)
 
                 devices = self.manager.GetDevices()
@@ -237,9 +240,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
                     dev = Gio.DBusProxy.new_sync(self.dbus,
                                                  Gio.DBusProxyFlags.DO_NOT_AUTO_START,
                                                  None,
-                                                 'net.reactivated.Fprint',
+                                                 FPRINT_NAMESPACE,
                                                  path,
-                                                 'net.reactivated.Fprint.Device',
+                                                 FPRINT_NAMESPACE + '.Device',
                                                  None)
 
                     if driver in str(dev.get_cached_property('name')):
@@ -303,7 +306,8 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
     def assertFprintError(self, fprint_error):
         return self.assertRaisesRegex(GLib.Error,
-            '.*net\.reactivated\.Fprint\.Error\.{}.*'.format(fprint_error))
+            re.escape('GDBus.Error:{}.Error.{}:'.format(
+                FPRINT_NAMESPACE, fprint_error)))
 
     def skipTestIfCanWrite(self, path):
         try:
@@ -564,9 +568,9 @@ class FPrintdVirtualDeviceBaseTest(FPrintdTest):
         dev = Gio.DBusProxy.new_sync(bus,
                                      Gio.DBusProxyFlags.DO_NOT_AUTO_START,
                                      None,
-                                     'net.reactivated.Fprint',
+                                     FPRINT_NAMESPACE,
                                      dev_path,
-                                     'net.reactivated.Fprint.Device',
+                                     FPRINT_NAMESPACE + '.Device',
                                      None)
 
         if claim is not None:
@@ -792,7 +796,7 @@ class FPrintdManagerPreStartTests(FPrintdTest):
             self._appeared_name = 'NAME_VANISHED'
 
         id = Gio.bus_watch_name_on_connection(self.dbus,
-            'net.reactivated.Fprint', Gio.BusNameWatcherFlags.NONE,
+            FPRINT_NAMESPACE, Gio.BusNameWatcherFlags.NONE,
             on_name_appeared, on_name_vanished)
         self.addCleanup(Gio.bus_unwatch_name, id)
 
@@ -800,23 +804,23 @@ class FPrintdManagerPreStartTests(FPrintdTest):
         while not self._appeared_name:
             ctx.iteration(True)
 
-        self.assertEqual(self._appeared_name, 'net.reactivated.Fprint')
+        self.assertEqual(self._appeared_name, FPRINT_NAMESPACE)
 
         try:
             appeared_device = self.dbus.call_sync(
-                'net.reactivated.Fprint',
-                '/net/reactivated/Fprint/Manager',
-                'net.reactivated.Fprint.Manager',
+                FPRINT_NAMESPACE,
+                FPRINT_PATH + '/Manager',
+                FPRINT_NAMESPACE + '.Manager',
                 'GetDefaultDevice', None, None,
                 Gio.DBusCallFlags.NO_AUTO_START, 500, None)
         except GLib.GError as e:
-            if 'net.reactivated.Fprint.Error.NoSuchDevice' in e.message:
+            if FPRINT_NAMESPACE + '.Error.NoSuchDevice' in e.message:
                 self.skipTest("Need virtual_image device to run the test")
             raise(e)
 
         self.assertIsNotNone(appeared_device)
         [dev_path] = appeared_device
-        self.assertTrue(dev_path.startswith('/net/reactivated/Fprint/Device/'))
+        self.assertTrue(dev_path.startswith(FPRINT_PATH + '/Device/'))
 
 
 class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
