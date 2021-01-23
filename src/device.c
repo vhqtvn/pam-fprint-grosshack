@@ -33,6 +33,8 @@
 #include "fprintd.h"
 #include "storage.h"
 
+#define VERIFY_STOP_DEVICE_WAIT 1 /* Seconds to wait for the device to complete */
+
 static const char *FINGERS_NAMES[] = {
   [FP_FINGER_UNKNOWN]      = "unknown",
   [FP_FINGER_LEFT_THUMB]   = "left-thumb",
@@ -93,6 +95,8 @@ typedef struct
   guint32          id;
   FpDevice        *dev;
   SessionData     *_session;
+
+  guint            verify_stop_wait_timeout_id;
 
   PolkitAuthority *auth;
 
@@ -235,6 +239,7 @@ fprint_device_finalize (GObject *object)
   FprintDevice *self = (FprintDevice *) object;
   FprintDevicePrivate *priv = fprint_device_get_instance_private (self);
 
+  g_clear_handle_id (&priv->verify_stop_wait_timeout_id, g_source_remove);
   g_hash_table_destroy (priv->clients);
   session_data_set_new (priv, NULL, NULL);
   g_clear_object (&priv->auth);
@@ -1487,10 +1492,42 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
 }
 
 static gboolean
+verify_stop_wait_timeout (gpointer data)
+{
+  guint *timeout_id = data;
+
+  *timeout_id = 0;
+  return FALSE;
+}
+
+static gboolean
+verify_has_completed (FprintDevice *rdev)
+{
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+
+  if (!priv->current_cancellable ||
+      g_cancellable_is_cancelled (priv->current_cancellable))
+    return TRUE;
+
+  switch (priv->current_action)
+    {
+    case ACTION_VERIFY:
+      return !priv->verify_data;
+
+    case ACTION_IDENTIFY:
+      return !priv->identify_data;
+
+    default:
+      g_assert_not_reached ();
+    }
+}
+
+static gboolean
 fprint_device_verify_stop (FprintDBusDevice      *dbus_dev,
                            GDBusMethodInvocation *invocation)
 {
   FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
 
   g_autoptr(GError) error = NULL;
 
@@ -1504,6 +1541,40 @@ fprint_device_verify_stop (FprintDBusDevice      *dbus_dev,
     {
       g_dbus_method_invocation_return_gerror (invocation, error);
       return TRUE;
+    }
+
+  if (!verify_has_completed (rdev))
+    {
+      g_autoptr(SessionData) session = session_data_get (priv);
+
+      if (session->verify_status_reported)
+        {
+          /* If we got a status report we need to delay the cancellation
+           * of the action, leaving the device some more time to complete
+           * the operation (and in case return the real error) before proceed
+           * in cancelling it.
+           * In case Release or client vanished while waiting the invocation
+           * will be handled by stoppable_action_completed() during cancellation
+           */
+          g_assert (priv->verify_stop_wait_timeout_id == 0);
+
+          priv->verify_stop_wait_timeout_id =
+            g_timeout_add_seconds (VERIFY_STOP_DEVICE_WAIT, verify_stop_wait_timeout,
+                                   &priv->verify_stop_wait_timeout_id);
+
+          g_assert (priv->current_cancel_invocation == NULL);
+          priv->current_cancel_invocation = invocation;
+
+          while (priv->verify_stop_wait_timeout_id && !verify_has_completed (rdev))
+            g_main_context_iteration (NULL, TRUE);
+
+          g_clear_handle_id (&priv->verify_stop_wait_timeout_id, g_source_remove);
+
+          if (!priv->current_cancel_invocation)
+            return TRUE;
+
+          priv->current_cancel_invocation = NULL;
+        }
     }
 
   stoppable_action_stop (rdev, invocation);

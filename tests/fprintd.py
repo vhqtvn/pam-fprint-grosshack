@@ -387,14 +387,17 @@ class FPrintdTest(dbusmock.DBusTestCase):
         with Connection(self.sockaddr) as con:
             self.send_image(image, con)
 
-    def send_finger_automatic(self, automatic, con=None):
+    def send_finger_automatic(self, automatic, con=None, iterate=True):
         # Set whether finger on/off is reported around images
         if con:
             con.sendall(struct.pack('ii', -3, 1 if automatic else 0))
             return
 
         with Connection(self.sockaddr) as con:
-            self.send_finger_automatic(automatic, con=con)
+            self.send_finger_automatic(automatic, con=con, iterate=iterate)
+
+        while iterate and ctx.pending():
+            ctx.iteration(False)
 
     def send_finger_report(self, has_finger, con=None, iterate=True):
         # Send finger on/off
@@ -1944,6 +1947,7 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         cls.enroll_finger = 'left-middle-finger'
         cls.verify_finger = cls.enroll_finger
         cls.stop_on_teardown = True
+        cls.releases_on_teardown = True
 
     def setUp(self):
         super().setUp()
@@ -1954,7 +1958,8 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
     def tearDown(self):
         if self.stop_on_teardown:
             self.device.VerifyStop()
-        self.device.Release()
+        if self.releases_on_teardown:
+            self.device.Release()
         super().tearDown()
 
     def assertVerifyRetry(self, device_error, expected_error):
@@ -2096,6 +2101,60 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
             self.send_error(con=con)
             self.wait_for_result(max_wait=200, expected='verify-match')
+
+    def test_verify_stop_restarts_immediately(self):
+        self.send_image('tented_arch')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-no-match')
+
+        self.call_device_method_async('VerifyStop', '()', [])
+        self.call_device_method_async('VerifyStart', '(s)', [self.verify_finger])
+
+        self.wait_for_device_reply(expected_replies=2)
+
+    def test_verify_stop_waits_for_completion(self):
+        self.stop_on_teardown = False
+
+        with Connection(self.sockaddr) as con:
+            self.send_finger_automatic(False, con=con)
+            self.send_finger_report(True, con=con)
+            self.send_image('tented_arch', con=con)
+            self.wait_for_result()
+
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-no-match')
+
+        self.call_device_method_async('VerifyStop', '()', [])
+
+        def restart_verify(abort=False):
+            self.call_device_method_async('VerifyStart', '(s)', [self.verify_finger])
+            with self.assertFprintError('AlreadyInUse'):
+                self.wait_for_device_reply(method='VerifyStart')
+
+            self.assertFalse(self.get_async_replies(method='VerifyStop'))
+            self._abort = abort
+
+        restart_verify()
+        GLib.timeout_add(100, restart_verify)
+        GLib.timeout_add(300, restart_verify, True)
+        self.wait_for_result()
+
+    def test_verify_stop_waits_for_completion_waiting_timeout(self):
+        self.test_verify_stop_waits_for_completion()
+        self.wait_for_device_reply(method='VerifyStop')
+        self.assertTrue(self.get_async_replies(method='VerifyStop'))
+
+    def test_verify_stop_waits_for_completion_is_stopped_by_release(self):
+        # During the release here we're testing the case in which
+        # while we're waiting for VerifyStop to return, Release stops the
+        # verification, making the invocation to return
+        self.releases_on_teardown = False
+        self.test_verify_stop_waits_for_completion()
+        self.assertFalse(self.get_async_replies(method='VerifyStop'))
+        self.call_device_method_async('Release', '()', [])
+        self.wait_for_device_reply(method='Release')
+        self.assertTrue(self.get_async_replies(method='VerifyStop'))
 
 
 class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTests):
