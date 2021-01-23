@@ -308,9 +308,15 @@ class FPrintdTest(dbusmock.DBusTestCase):
         os.environ['FP_DRIVERS_WHITELIST'] = self.device_driver
 
     def assertFprintError(self, fprint_error):
+        if isinstance(fprint_error, list) or isinstance(fprint_error, tuple):
+            fprint_error = [ re.escape(e) for e in fprint_error ]
+            fprint_error = '({})'.format('|'.join(fprint_error))
+        else:
+            fprint_error = re.escape(fprint_error)
+
         return self.assertRaisesRegex(GLib.Error,
-            re.escape('GDBus.Error:{}.Error.{}:'.format(
-                FPRINT_NAMESPACE, fprint_error)))
+            re.escape('GDBus.Error:{}.Error.'.format(FPRINT_NAMESPACE)) +
+                '{}:'.format(fprint_error))
 
     def skipTestIfCanWrite(self, path):
         try:
