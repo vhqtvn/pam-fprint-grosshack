@@ -822,6 +822,18 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
         self.enroll_print('FP1-20000101-7-ABCDEFGH-testuser', 'left-index-finger')
         self.assertEqual(self.device.ListEnrolledFingers('(s)', 'testuser'), ['left-index-finger'])
 
+    def test_scan_type_changes(self):
+        self.device.Claim('(s)', 'testuser')
+        self.addCleanup(self.device.Release)
+
+        for scan_type in [FPrint.ScanType.PRESS, FPrint.ScanType.SWIPE]:
+            scan_type = scan_type.value_nick
+            self.send_command('SET_SCAN_TYPE', scan_type)
+            while self.device.get_cached_property('scan-type').unpack() != scan_type:
+                ctx.iteration(True)
+            self.assertIn({'scan-type': scan_type}, self._changed_properties)
+            self.assertEqual(self.device.get_cached_property('scan-type').unpack(), scan_type)
+
 class FPrintdVirtualNoStorageDeviceBaseTest(FPrintdVirtualStorageDeviceBaseTest):
 
     socket_env = 'FP_VIRTUAL_DEVICE'
