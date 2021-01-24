@@ -828,6 +828,35 @@ class FPrintdVirtualNoStorageDeviceBaseTest(FPrintdVirtualStorageDeviceBaseTest)
     device_driver = 'virtual_device'
     driver_name = 'Virtual device for debugging'
 
+class FPrintdVirtualNoStorageDeviceTest(FPrintdVirtualNoStorageDeviceBaseTest):
+
+    def check_verify_finger_match(self, image, expect_match):
+        self.device.VerifyStart('(s)', 'any')
+        self.send_image(image)
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        if expect_match:
+            self.assertEqual(self._last_result, 'verify-match')
+        else:
+            self.assertEqual(self._last_result, 'verify-no-match')
+        self.device.VerifyStop()
+
+    def test_verify_any_finger_match_first_only(self):
+        self.device.Claim('(s)', 'testuser')
+        self.addCleanup(self.device.Release)
+
+        enrolled, enroll_map = self.enroll_multiple_images()
+        self.check_verify_finger_match(enroll_map[enrolled[0]], expect_match=True)
+        self.check_verify_finger_match(enroll_map[enrolled[1]], expect_match=False)
+        self.check_verify_finger_match(enroll_map[enrolled[2]], expect_match=False)
+
+    def test_verify_any_finger_no_match(self):
+        self.device.Claim('(s)', 'testuser')
+        self.addCleanup(self.device.Release)
+
+        FPrintdVirtualDeviceClaimedTest.test_verify_any_finger_no_match(self)
+
+
 class FPrintdManagerTests(FPrintdVirtualDeviceBaseTest):
 
     def setUp(self):
