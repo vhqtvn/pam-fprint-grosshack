@@ -814,6 +814,14 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
 
         self.device.Release()
 
+    def test_enroll_with_one_stage_only(self):
+        self.device.Claim('(s)', 'testuser')
+        self.addCleanup(self.device.Release)
+        self._maybe_reduce_enroll_stages(stages=1)
+
+        self.enroll_print('FP1-20000101-7-ABCDEFGH-testuser', 'left-index-finger')
+        self.assertEqual(self.device.ListEnrolledFingers('(s)', 'testuser'), ['left-index-finger'])
+
 class FPrintdVirtualNoStorageDeviceBaseTest(FPrintdVirtualStorageDeviceBaseTest):
 
     socket_env = 'FP_VIRTUAL_DEVICE'
