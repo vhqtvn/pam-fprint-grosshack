@@ -345,6 +345,10 @@ class FPrintdTest(dbusmock.DBusTestCase):
     def finger_present(self):
         return self.device.get_cached_property('finger-present').unpack()
 
+    @property
+    def num_enroll_stages(self):
+        return self.device.get_cached_property('num-enroll-stages').unpack()
+
     # From libfprint tests
     def send_retry(self, retry_error=FPrint.DeviceRetry.TOO_SHORT, con=None):
         if con:
@@ -412,6 +416,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
         while iterate and self.finger_present != has_finger:
             ctx.iteration(False)
+
+    def _maybe_reduce_enroll_stages(self):
+        pass
 
     def call_proxy_method_async(self, proxy, method, *args):
         def call_handler(proxy, res):
@@ -586,6 +593,8 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
             self.assertEqual(self._last_result, expected)
 
     def enroll_image(self, img, device=None, finger='right-index-finger', expected_result='enroll-completed'):
+        self._maybe_reduce_enroll_stages()
+
         if device is None:
             device = self.device
         device.EnrollStart('(s)', finger)
@@ -594,7 +603,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
             ctx.iteration(False)
         self.assertTrue(self.finger_needed)
 
-        stages = device.get_cached_property('num-enroll-stages').unpack()
+        stages = self.num_enroll_stages
         for stage in range(stages):
             self.send_image(img)
             if stage < stages - 1:
@@ -655,6 +664,7 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
     socket_env = 'FP_VIRTUAL_DEVICE_STORAGE'
     device_driver = 'virtual_device_storage'
     driver_name = 'Virtual device with storage and identification for debugging'
+    enroll_stages = 2
 
     def _send_command(self, con, command, *args):
         params = ' '.join(str(p) for p in args)
@@ -705,6 +715,18 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
     def enroll_print(self, nick, finger='right-index-finger', expected_result='enroll-completed'):
         # Using the name of the image as the print id
         super().enroll_image(img=nick, finger=finger, expected_result=expected_result)
+
+    def _maybe_reduce_enroll_stages(self, stages=-1):
+        # Reduce the number of default enroll stages, we can go a bit faster
+        stages = stages if stages > 0 else self.enroll_stages
+        if self.num_enroll_stages == stages:
+            return
+        self.send_command('SET_ENROLL_STAGES', stages)
+        while self.num_enroll_stages != stages:
+            ctx.iteration(True)
+        self.assertIn({'num-enroll-stages': stages}, self._changed_properties)
+        self._changed_properties.remove({'num-enroll-stages': stages})
+        self.assertEqual(self.num_enroll_stages, stages)
 
 
 class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
