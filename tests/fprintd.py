@@ -699,7 +699,7 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
         self.send_command('RETRY', int(retry_error))
 
     def send_remove(self, con=None):
-        self.skipTest('Not implemented for {}'.format(self.device_driver))
+        self.send_command('UNPLUG')
 
     def send_finger_automatic(self, automatic, con=None, iterate=True):
         if not automatic:
@@ -1224,9 +1224,6 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
     def test_removal_during_enroll(self):
         if not self._has_hotplug:
             self.skipTest("libfprint is too old for hotplug")
-
-        if self.device_driver == 'virtual_device_storage':
-            self.skipTest('Not implemented for virtual_device_storage')
 
         self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
                                       FprintDevicePermission.enroll])
