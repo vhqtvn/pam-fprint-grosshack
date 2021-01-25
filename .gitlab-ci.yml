@@ -45,7 +45,7 @@ stages:
     - dnf remove -y libfprint-devel
     - git clone https://gitlab.freedesktop.org/libfprint/libfprint.git
     - cd libfprint
-    - meson . _build --prefix=/usr -Ddrivers=virtual_image -Ddoc=false
+    - meson . _build --prefix=/usr -Ddrivers=virtual_image,virtual_device,virtual_device_storage -Ddoc=false
     - ninja -C _build
     - ninja -C _build install
     - cd ..
