@@ -665,6 +665,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         }
         enroll_map.update(images_override)
         enrolled_prints = []
+        enrolled_prints_info = {}
 
         self.try_release()
 
@@ -673,15 +674,21 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
             for finger, p in print_map.items():
                 self.enroll_image(p, finger=finger)
                 enrolled_prints.append(p)
+                enrolled_prints_info[p] = (user, finger)
             self.device.Release()
 
         self.assertCountEqual(enrolled_prints, set(enrolled_prints))
 
         for user in enroll_map:
-            enrolled = self.device.ListEnrolledFingers('(s)', user)
-            self.assertCountEqual(enroll_map[user].keys(), enrolled)
+            enrolled_fingers = enroll_map[user].keys()
+            if enrolled_fingers:
+                enrolled = self.device.ListEnrolledFingers('(s)', user)
+                self.assertCountEqual(enrolled_fingers, enrolled)
+            else:
+                with self.assertFprintError('NoEnrolledPrints'):
+                    self.device.ListEnrolledFingers('(s)', user)
 
-        return enroll_map
+        return (enroll_map, enrolled_prints_info)
 
     def get_secondary_bus_and_device(self, claim=None):
         addr = os.environ['DBUS_SYSTEM_BUS_ADDRESS']
@@ -1657,7 +1664,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.device.VerifyStop()
 
     def test_verify_any_finger_multiple_users(self):
-        enroll_map = self.enroll_users_images()
+        enroll_map, enrolled_prints_info = self.enroll_users_images()
         enrolled_users = list(enroll_map)
 
         for verifying_user in enrolled_users:
