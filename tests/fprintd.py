@@ -417,6 +417,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
         while iterate and self.finger_present != has_finger:
             ctx.iteration(False)
 
+    def send_sleep(self, con=None):
+        self.skipTest('Not implemented for {}'.format(self.device_driver))
+
     def _maybe_reduce_enroll_stages(self):
         pass
 
@@ -711,6 +714,10 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
 
         while iterate and self.finger_present != has_finger:
             ctx.iteration(False)
+
+    def send_sleep(self, timeout, con=None):
+        self.assertGreaterEqual(timeout, 0)
+        self.send_command('SLEEP', timeout)
 
     def enroll_print(self, nick, finger='right-index-finger', expected_result='enroll-completed'):
         # Using the name of the image as the print id
@@ -2123,20 +2130,18 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
 
-    def test_multiple_verify_cancelled(self):
-        if self.device_driver != 'virtual_image':
-            self.skipTest('Relies on virtual_image driver specifics')
-
+    def start_verify_with_delayed_stop(self, image):
         with Connection(self.sockaddr) as con:
             self.send_finger_automatic(False, con=con)
             self.send_finger_report(True, con=con)
-            self.send_image('tented_arch', con=con)
-            self.wait_for_result()
-            self.assertTrue(self._verify_stopped)
-            self.assertEqual(self._last_result, 'verify-no-match')
-            self.device.VerifyStop()
+            self.send_image(image, con=con)
 
-            # We'll be cancelled at this point, so con is invalid
+    def test_multiple_verify_cancelled(self):
+        self.start_verify_with_delayed_stop('tented_arch')
+        self.wait_for_result()
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-no-match')
+        self.device.VerifyStop()
 
         self.device.VerifyStart('(s)', self.verify_finger)
         self.send_finger_report(False)
@@ -2200,9 +2205,6 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
             self.wait_for_result(max_wait=200, expected='verify-match')
 
     def test_verify_stop_restarts_immediately(self):
-        if self.device_driver != 'virtual_image':
-            self.skipTest('Relies on virtual_image driver specifics')
-
         self.send_image('tented_arch')
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
@@ -2214,16 +2216,10 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         self.wait_for_device_reply(expected_replies=2)
 
     def test_verify_stop_waits_for_completion(self):
-        if self.device_driver != 'virtual_image':
-            self.skipTest('Relies on virtual_image driver specifics')
-
         self.stop_on_teardown = False
 
-        with Connection(self.sockaddr) as con:
-            self.send_finger_automatic(False, con=con)
-            self.send_finger_report(True, con=con)
-            self.send_image('tented_arch', con=con)
-            self.wait_for_result()
+        self.start_verify_with_delayed_stop('tented_arch')
+        self.wait_for_result()
 
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-no-match')
@@ -2260,13 +2256,32 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
         self.assertTrue(self.get_async_replies(method='VerifyStop'))
 
 
+class FPrintdVirtualDeviceStorageVerificationUtils(object):
+    def start_verify_with_delayed_stop(self, image, match=None):
+        self.send_sleep(50)
+        self.send_image(image)
+        self.send_sleep(get_timeout('test') * 1000)
+
+    def test_verify_error_ignored_after_report(self):
+        self.send_sleep(50)
+        self.send_image('whorl')
+        self.send_sleep(0)
+        self.send_error(FPrint.DeviceError.BUSY)
+        self.wait_for_result()
+
+        self.assertTrue(self._verify_stopped)
+        self.assertEqual(self._last_result, 'verify-match')
+
+        self.wait_for_result(max_wait=200, expected='verify-match')
+
 class FPrintdVirtualDeviceStorageVerificationTests(FPrintdVirtualStorageDeviceBaseTest,
+                                                   FPrintdVirtualDeviceStorageVerificationUtils,
                                                    FPrintdVirtualDeviceVerificationTests):
-    # Repeat the tests for the Virtual storage device
+    # Repeat the tests for the Virtual storage device, with specific overrides
     pass
 
 class FPrintdVirtualDeviceNoStorageVerificationTests(FPrintdVirtualNoStorageDeviceBaseTest,
-                                                     FPrintdVirtualDeviceVerificationTests):
+                                                     FPrintdVirtualDeviceStorageVerificationTests):
     # Repeat the tests for the Virtual device (with no storage)
     pass
 
@@ -2283,14 +2298,16 @@ class FPrintdVirtualDeviceIdentificationTests(FPrintdVirtualDeviceVerificationTe
 
 
 class FPrintdVirtualDeviceStorageIdentificationTests(FPrintdVirtualStorageDeviceBaseTest,
+                                                     FPrintdVirtualDeviceStorageVerificationUtils,
                                                      FPrintdVirtualDeviceIdentificationTests):
     # Repeat the tests for the Virtual storage device
     pass
 
 class FPrintdVirtualDeviceNoStorageIdentificationTests(FPrintdVirtualNoStorageDeviceBaseTest,
-                                                       FPrintdVirtualDeviceIdentificationTests):
+                                                       FPrintdVirtualDeviceStorageIdentificationTests):
     # Repeat the tests for the Virtual device (with no storage)
     pass
+
 
 class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
 
