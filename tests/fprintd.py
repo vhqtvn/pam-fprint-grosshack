@@ -2613,7 +2613,7 @@ class FPrintdVirtualDeviceNoStorageIdentificationTests(FPrintdVirtualNoStorageDe
     pass
 
 
-class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
+class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualStorageDeviceBaseTest):
 
     def wait_for_hanging_clients(self):
         while not self._polkitd_obj.HaveHangingCalls():
@@ -2785,7 +2785,7 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualDeviceBaseTest):
         self.assertIsNone(gdbus.poll())
 
 
-class FPrintdUtilsTest(FPrintdVirtualDeviceBaseTest):
+class FPrintdUtilsTest(FPrintdVirtualStorageDeviceBaseTest):
 
     @classmethod
     def setUpClass(cls):
