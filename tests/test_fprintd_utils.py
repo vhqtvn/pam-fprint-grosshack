@@ -158,20 +158,14 @@ class TestFprintdUtils(TestFprintdUtilsBase):
         self.assertEqual(ret, 0)
 
     def test_fprintd_delete(self):
-        # Has fingerprints enrolled
-        out, ret = self.run_utility_process('list', ['toto'])
-        self.assertRegex(out, rb'left-little-finger')
-        self.assertEqual(ret, 0)
-        self.assertRegex(out, rb'right-little-finger')
-
         # Delete fingerprints
         out, ret = self.run_utility_process('delete', ['toto'])
         self.assertRegex(out, rb'Fingerprints deleted')
         self.assertEqual(ret, 0)
 
         # Doesn't have fingerprints
-        out, ret = self.run_utility_process('list', ['toto'])
-        self.assertRegex(out, rb'has no fingers enrolled for')
+        out, ret = self.run_utility_process('delete', ['toto'])
+        self.assertRegex(out, rb'No fingerprints to delete on')
         self.assertEqual(ret, 0)
 
 

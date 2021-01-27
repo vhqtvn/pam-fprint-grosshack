@@ -1985,9 +1985,14 @@ delete_enrolled_fingers (FprintDevice *rdev,
 
   if (!user_has_print_enrolled (rdev, user, finger))
     {
-      g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
-                   "Fingerprint for finger %s is not enrolled",
-                   fp_finger_to_name (finger));
+      if (finger != FP_FINGER_UNKNOWN)
+        g_set_error (error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
+                     "Fingerprint for finger %s is not enrolled",
+                     fp_finger_to_name (finger));
+      else
+        g_set_error_literal (error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
+                             "No fingerprint enrolled");
+
       return FALSE;
     }
 
@@ -2192,11 +2197,8 @@ fprint_device_delete_enrolled_fingers (FprintDBusDevice      *dbus_dev,
   if (!opened && fp_device_has_storage (priv->dev))
     fp_device_close_sync (priv->dev, NULL, NULL);
 
-  if (error &&
-      !g_error_matches (error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS))
+  if (error)
     {
-      /* FIXME: We should probably expose NoEnrolledPrints as an actual error,
-       * but not changing the API for now */
       g_dbus_method_invocation_return_gerror (invocation,
                                               error);
       return TRUE;
@@ -2237,14 +2239,8 @@ fprint_device_delete_enrolled_fingers2 (FprintDBusDevice      *dbus_dev,
 
   if (!delete_enrolled_fingers (rdev, session->username, FP_FINGER_UNKNOWN, &error))
     {
-      if (!g_error_matches (error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS))
-        {
-          /* FIXME: We should probably expose NoEnrolledPrints as an actual error,
-           * but not changing the API for now */
-          g_dbus_method_invocation_return_gerror (invocation,
-                                                  error);
-          return TRUE;
-        }
+      g_dbus_method_invocation_return_gerror (invocation, error);
+      return TRUE;
     }
 
   fprint_dbus_device_complete_delete_enrolled_fingers2 (dbus_dev,

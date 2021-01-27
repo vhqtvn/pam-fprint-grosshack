@@ -1246,7 +1246,12 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
             self.device.EnrollStop()
 
     def test_unclaimed_delete_enrolled_fingers(self):
-        self.device.DeleteEnrolledFingers('(s)', 'testuser')
+        self.enroll_image('whorl', claim_user='foo-user')
+        self.device.DeleteEnrolledFingers('(s)', 'foo-user')
+
+    def test_unclaimed_delete_enrolled_fingers_no_prints(self):
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.DeleteEnrolledFingers('(s)', 'testuser')
 
     def test_unclaimed_delete_enrolled_finger(self):
         with self.assertFprintError('ClaimDevice'):
@@ -2044,11 +2049,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_device_reply_relaxed(expected_replies=2,
             accepted_exceptions=accepted_exceptions)
 
-        if self.device_driver == 'virtual_device_storage':
-            self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
-        else:
-            self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
-                self.get_all_async_replies())
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
     def test_concourrent_delete_enrolled_fingers_unclaimed(self):
         self.enroll_image('whorl')
@@ -2063,11 +2064,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_device_reply_relaxed(expected_replies=2,
             accepted_exceptions=accepted_exceptions)
 
-        if self.device_driver == 'virtual_device_storage':
-            self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
-        else:
-            self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
-                self.get_all_async_replies())
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
     def test_concourrent_delete_enrolled_fingers2(self):
         self.enroll_image('whorl')
@@ -2081,11 +2078,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_device_reply_relaxed(expected_replies=2,
             accepted_exceptions=accepted_exceptions)
 
-        if self.device_driver == 'virtual_device_storage':
-            self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
-        else:
-            self.assertEqual([GLib.Variant('()', ()), GLib.Variant('()', ())],
-                self.get_all_async_replies())
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
     def test_concourrent_delete_enrolled_finger(self):
         self.enroll_image('whorl', finger='left-thumb')
@@ -2114,6 +2107,24 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
             self.wait_for_device_reply(expected_replies=2)
 
         self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
+
+    def test_already_claimed_same_user_delete_enrolled_fingers(self):
+        self.enroll_image('whorl')
+        self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+    def test_already_claimed_same_user_delete_enrolled_fingers_no_prints(self):
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+    def test_already_claimed_other_user_delete_enrolled_fingers(self):
+        self.device.Release()
+        self.enroll_image('whorl', claim_user='nottestuser')
+        self.device.Claim('(s)', 'testuser')
+        self.device.DeleteEnrolledFingers('(s)', 'nottestuser')
+
+    def test_already_claimed_other_user_delete_enrolled_fingers_no_prints(self):
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.DeleteEnrolledFingers('(s)', 'nottestuser')
 
 
 class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
@@ -2842,13 +2853,6 @@ class FPrintdUtilsTest(FPrintdVirtualDeviceBaseTest):
 
         self.device.Claim('(s)', self.get_current_user())
         self.device.Release()
-
-    def test_already_claimed_same_user_delete_enrolled_fingers(self):
-        self.device.DeleteEnrolledFingers('(s)', 'testuser')
-
-    def test_already_claimed_other_user_delete_enrolled_fingers(self):
-        self.device.DeleteEnrolledFingers('(s)', 'nottestuser')
-
 
 
 def list_tests():

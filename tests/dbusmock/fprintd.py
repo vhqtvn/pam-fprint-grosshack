@@ -184,6 +184,11 @@ def DeleteEnrolledFingers2(device):
         raise dbus.exceptions.DBusException(
             'Device was not claimed before use',
             name='net.reactivated.Fprint.Error.ClaimDevice')
+    if not device.fingers[device.claimed_user]:
+        raise dbus.exceptions.DBusException(
+            'No enrolled prints in device {} for user {}'.format(device.path,
+                device.claimed_user),
+            name='net.reactivated.Fprint.Error.NoEnrolledPrints')
     device.fingers[device.claimed_user] = []
 
 @dbus.service.method(DEVICE_IFACE,
