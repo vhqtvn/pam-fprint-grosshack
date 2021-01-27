@@ -360,6 +360,16 @@ class FPrintdTest(dbusmock.DBusTestCase):
     def get_print_name_file_path(self, user, finger_name):
         return self.get_print_file_path(user, FINGERS_MAP[finger_name])
 
+    def set_print_not_writable(self, user, finger):
+        # Replace the print with a directory, so that deletion via unlink will fail
+        # But it is still listed, not using chmod as it won't work in CI environment
+        print_file = self.get_print_file_path(user, finger)
+        if os.path.exists(print_file):
+            os.rename(print_file, print_file + '_renamed')
+            self.addCleanup(os.rename, print_file + '_renamed', print_file)
+        os.makedirs(print_file)
+        self.addCleanup(os.rmdir, print_file)
+
     def assertFingerInStorage(self, user, finger):
         self.assertTrue(os.path.exists(self.get_print_file_path(user, finger)))
 
@@ -1496,11 +1506,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.enroll_image('whorl')
         self.enroll_image('tented_arch', finger='left-index-finger')
 
-        print_file = self.get_print_file_path('testuser', FPrint.Finger.RIGHT_INDEX)
-        device_dir = os.path.dirname(print_file)
-        os.chmod(device_dir, mode=0o500)
-        self.addCleanup(os.chmod, device_dir, mode=0o750)
-        self.skipTestIfCanWrite(device_dir)
+        self.set_print_not_writable('testuser', FPrint.Finger.RIGHT_INDEX)
 
         self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
         self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
@@ -1509,7 +1515,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
             self.device.DeleteEnrolledFingers('(s)', 'testuser')
 
         self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
-        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+        self.assertFingerNotInStorage('testuser', FPrint.Finger.LEFT_INDEX)
 
     def test_enroll_delete2(self):
         self.enroll_image('whorl')
@@ -1539,11 +1545,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.enroll_image('whorl')
         self.enroll_image('tented_arch', finger='left-index-finger')
 
-        print_file = self.get_print_file_path('testuser', FPrint.Finger.RIGHT_INDEX)
-        device_dir = os.path.dirname(print_file)
-        os.chmod(device_dir, mode=0o500)
-        self.addCleanup(os.chmod, device_dir, mode=0o750)
-        self.skipTestIfCanWrite(device_dir)
+        self.set_print_not_writable('testuser', FPrint.Finger.RIGHT_INDEX)
 
         self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
         self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
@@ -1552,7 +1554,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
             self.device.DeleteEnrolledFingers2()
 
         self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
-        self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
+        self.assertFingerNotInStorage('testuser', FPrint.Finger.LEFT_INDEX)
 
     def test_enroll_delete_single(self):
         self.enroll_image('whorl', finger='right-index-finger')
@@ -1573,11 +1575,7 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.enroll_image('whorl', finger='right-index-finger')
         self.enroll_image('tented_arch', finger='left-index-finger')
 
-        print_file = self.get_print_file_path('testuser', FPrint.Finger.RIGHT_INDEX)
-        device_dir = os.path.dirname(print_file)
-        os.chmod(device_dir, mode=0o500)
-        self.addCleanup(os.chmod, device_dir, mode=0o750)
-        self.skipTestIfCanWrite(device_dir)
+        self.set_print_not_writable('testuser', FPrint.Finger.RIGHT_INDEX)
 
         self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
         self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
@@ -1587,6 +1585,8 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
 
         self.assertFingerInStorage('testuser', FPrint.Finger.LEFT_INDEX)
         self.assertFingerInStorage('testuser', FPrint.Finger.RIGHT_INDEX)
+
+        self.set_print_not_writable('testuser', FPrint.Finger.LEFT_INDEX)
 
         with self.assertFprintError('PrintsNotDeleted'):
             self.device.DeleteEnrolledFinger('(s)', 'left-index-finger')
@@ -1609,6 +1609,13 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.addCleanup(os.chmod, self.state_dir, mode=0o700)
 
         self.skipTestIfCanWrite(self.state_dir)
+
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.VerifyStart('(s)', 'any')
+
+    def test_verify_read_print_error(self):
+        self.enroll_image('whorl', finger='left-thumb')
+        self.set_print_not_writable('testuser', FPrint.Finger.LEFT_THUMB)
 
         with self.assertFprintError('NoEnrolledPrints'):
             self.device.VerifyStart('(s)', 'any')
