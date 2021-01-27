@@ -227,6 +227,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
             if os.path.exists(valgrind):
                 argv.insert(2, '--suppressions=%s' % valgrind)
             self.valgrind = True
+        self.kill_daemon = False
         self.daemon = subprocess.Popen(argv,
                                        env=env,
                                        stdout=None,
@@ -281,9 +282,18 @@ class FPrintdTest(dbusmock.DBusTestCase):
                 self.daemon.terminate()
             except OSError:
                 pass
-            self.daemon.wait(timeout=get_timeout('daemon_start'))
-            self.assertLess(self.daemon.returncode, 128)
-            self.assertGreaterEqual(self.daemon.returncode, 0)
+
+            try:
+                self.daemon.wait(timeout=get_timeout('daemon_stop'))
+            except subprocess.TimeoutExpired as e:
+                if self.kill_daemon:
+                    self.daemon.kill()
+                else:
+                    raise(e)
+
+            if not self.kill_daemon:
+                self.assertLess(self.daemon.returncode, 128)
+                self.assertGreaterEqual(self.daemon.returncode, 0)
 
         self.daemon = None
 
