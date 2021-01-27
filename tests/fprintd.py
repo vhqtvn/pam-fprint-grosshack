@@ -70,6 +70,7 @@ def get_timeout(topic='default'):
     vals = {
         'valgrind': {
             'test': 300,
+            'device_sleep': 600,
             'default': 20,
             'daemon_start': 60,
             'daemon_stop': 10,
@@ -77,11 +78,13 @@ def get_timeout(topic='default'):
         'asan': {
             'test': 120,
             'default': 6,
+            'device_sleep': 400,
             'daemon_start': 10,
             'daemon_stop': 8,
         },
         'default': {
             'test': 60,
+            'device_sleep': 100,
             'default': 3,
             'daemon_start': 5,
             'daemon_stop': 2,
@@ -2245,6 +2248,49 @@ class FPrintdVirtualDeviceStorageClaimedTest(FPrintdVirtualStorageDeviceBaseTest
 
         with self.assertFprintError('PrintsNotDeletedFromDevice'):
             self.device.DeleteEnrolledFinger('(s)', 'left-thumb')
+
+    def test_delete_enrolled_fingers_storage_error_has_higher_priority(self):
+        self.enroll_print('deleted-print', finger='left-thumb')
+        self.send_sleep(get_timeout('device_sleep'))
+        self.send_error(FPrint.DeviceError.BUSY)
+
+        self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
+        self.wait_for_result(max_wait=10)
+        self.assertFalse(self.get_all_async_replies())
+
+        self.set_print_not_writable('testuser', FPrint.Finger.LEFT_THUMB)
+
+        with self.assertFprintError('PrintsNotDeleted'):
+            self.wait_for_device_reply()
+
+    def test_delete_enrolled_fingers2_storage_error_has_higher_priority(self):
+        self.enroll_print('deleted-print', finger='left-thumb')
+        self.send_sleep(get_timeout('device_sleep'))
+        self.send_error(FPrint.DeviceError.BUSY)
+
+        self.call_device_method_async('DeleteEnrolledFingers2', '()', [])
+        self.wait_for_result(max_wait=10)
+        self.assertFalse(self.get_all_async_replies())
+
+        self.set_print_not_writable('testuser', FPrint.Finger.LEFT_THUMB)
+
+        with self.assertFprintError('PrintsNotDeleted'):
+            self.wait_for_device_reply()
+
+    def test_delete_enrolled_finger_storage_error_has_higher_priority(self):
+        self.enroll_print('deleted-print', finger='left-thumb')
+        self.send_sleep(get_timeout('device_sleep'))
+        self.send_error(FPrint.DeviceError.BUSY)
+
+        self.call_device_method_async('DeleteEnrolledFinger', '(s)', ['left-thumb'])
+        self.wait_for_result(max_wait=10)
+        self.assertFalse(self.get_all_async_replies())
+
+        self.set_print_not_writable('testuser', FPrint.Finger.LEFT_THUMB)
+
+        with self.assertFprintError('PrintsNotDeleted'):
+            self.wait_for_device_reply()
+
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
