@@ -36,6 +36,7 @@ import dbusmock
 import gi
 gi.require_version('FPrint', '2.0')
 from gi.repository import GLib, Gio, FPrint
+from output_checker import OutputChecker
 import cairo
 
 try:
@@ -2832,20 +2833,23 @@ class FPrintdUtilsTest(FPrintdVirtualStorageDeviceBaseTest):
             if os.path.exists(valgrind):
                 argv.insert(2, '--suppressions=%s' % valgrind)
             self.valgrind = True
+        output = OutputChecker()
         self.utils_proc[name] = subprocess.Popen(argv,
                                                  env=env,
-                                                 stdout=None,
+                                                 stdout=output.fd,
                                                  stderr=subprocess.STDOUT)
+        output.writer_attached()
         self.addCleanup(self.utils_proc[name].wait)
         self.addCleanup(self.utils_proc[name].terminate)
-        return self.utils_proc[name]
+        self.addCleanup(output.assert_closed)
+        return self.utils_proc[name], output
 
     def test_vanished_client_operation_is_cancelled(self):
         self.device.Claim('(s)', self.get_current_user())
         self.enroll_image('whorl')
         self.device.Release()
 
-        verify = self.util_start('verify')
+        verify, output = self.util_start('verify')
         time.sleep(1)
         verify.terminate()
         self.assertLess(verify.wait(), 128)
