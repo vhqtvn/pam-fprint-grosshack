@@ -2297,6 +2297,17 @@ class FPrintdVirtualDeviceStorageClaimedTest(FPrintdVirtualStorageDeviceBaseTest
         with self.assertFprintError('Internal'):
             self.device.Release()
 
+    def test_release_fails_while_closing(self):
+        self.send_sleep(300)
+        self.call_device_method_async('Release', '()', [])
+        self.wait_for_result(max_wait=10)
+        self.assertFalse(self.get_all_async_replies())
+
+        with self.assertFprintError('AlreadyInUse'):
+            self.device.Release()
+
+        self.wait_for_device_reply()
+        self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
