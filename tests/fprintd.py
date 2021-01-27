@@ -2176,8 +2176,64 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
 
 class FPrintdVirtualDeviceStorageClaimedTest(FPrintdVirtualStorageDeviceBaseTest,
                                              FPrintdVirtualDeviceClaimedTest):
-    pass
     # Repeat the tests for the Virtual storage device
+
+    def test_release_waits_for_deletion(self):
+        self.enroll_print('new-print')
+        self.send_sleep(get_timeout('daemon_stop') * 1000 * 0.5)
+        self.call_device_method_async('DeleteEnrolledFingers2', '()', [])
+        self.wait_for_result(max_wait=100)
+        self.call_device_method_async('Release', '()', [])
+        with self.assertFprintError('Internal'):
+            self.wait_for_device_reply(method='Release')
+
+        self.assertFalse(self.get_async_replies(
+            method='DeleteEnrolledFingers2'))
+
+    def test_delete_enrolled_fingers_device_error(self):
+        self.enroll_print('new-print')
+        self.send_sleep(10)
+        self.send_error(FPrint.DeviceError.BUSY)
+
+        with self.assertFprintError('PrintsNotDeletedFromDevice'):
+            self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+    def test_delete_enrolled_fingers2_device_error(self):
+        self.enroll_print('new-print')
+        self.send_sleep(10)
+        self.send_error(FPrint.DeviceError.BUSY)
+
+        with self.assertFprintError('PrintsNotDeletedFromDevice'):
+            self.device.DeleteEnrolledFingers2()
+
+    def test_delete_enrolled_finger_device_error(self):
+        self.enroll_print('new-print', finger='left-thumb')
+        self.send_sleep(10)
+        self.send_error(FPrint.DeviceError.BUSY)
+
+        with self.assertFprintError('PrintsNotDeletedFromDevice'):
+            self.device.DeleteEnrolledFinger('(s)', 'left-thumb')
+
+    def test_delete_enrolled_fingers_device_removed(self):
+        self.enroll_print('deleted-print')
+        self.send_command('REMOVE', 'deleted-print')
+
+        with self.assertFprintError('PrintsNotDeletedFromDevice'):
+            self.device.DeleteEnrolledFingers('(s)', 'testuser')
+
+    def test_delete_enrolled_fingers2_device_removed(self):
+        self.enroll_print('deleted-print')
+        self.send_command('REMOVE', 'deleted-print')
+
+        with self.assertFprintError('PrintsNotDeletedFromDevice'):
+            self.device.DeleteEnrolledFingers2()
+
+    def test_delete_enrolled_finger_device_removed(self):
+        self.enroll_print('deleted-print', finger='left-thumb')
+        self.send_command('REMOVE', 'deleted-print')
+
+        with self.assertFprintError('PrintsNotDeletedFromDevice'):
+            self.device.DeleteEnrolledFinger('(s)', 'left-thumb')
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
