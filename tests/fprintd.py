@@ -2291,6 +2291,12 @@ class FPrintdVirtualDeviceStorageClaimedTest(FPrintdVirtualStorageDeviceBaseTest
         with self.assertFprintError('PrintsNotDeleted'):
             self.wait_for_device_reply()
 
+    def test_release_error(self):
+        self.send_error(FPrint.DeviceError.PROTO)
+
+        with self.assertFprintError('Internal'):
+            self.device.Release()
+
 
 class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
 
