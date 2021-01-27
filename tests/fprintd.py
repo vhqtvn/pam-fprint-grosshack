@@ -1603,6 +1603,10 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
 
         self.enroll_image('whorl', expected_result='enroll-failed')
 
+    def test_enroll_write_print_error(self):
+        self.set_print_not_writable('testuser', FPrint.Finger.LEFT_THUMB)
+        self.enroll_image('whorl', expected_result='enroll-failed', finger='left-thumb')
+
     def test_verify_invalid_storage_dir(self):
         self.enroll_image('whorl')
         os.chmod(self.state_dir, mode=0o000)

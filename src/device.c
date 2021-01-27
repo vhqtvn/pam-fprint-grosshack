@@ -1791,7 +1791,7 @@ enroll_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
     {
       int r;
       r = store.print_data_save (print);
-      if (r < 0)
+      if (r != 0)
         name = "enroll-failed";
     }
 
