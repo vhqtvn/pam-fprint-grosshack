@@ -463,6 +463,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
     def send_sleep(self, con=None):
         self.skipTest('Not implemented for {}'.format(self.device_driver))
 
+    def set_keep_alive(self, value):
+        self.skipTest('Not implemented for {}'.format(self.device_driver))
+
     def _maybe_reduce_enroll_stages(self):
         pass
 
@@ -622,6 +625,8 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         super().tearDown()
 
     def try_release(self):
+        if not self.device:
+            return
         try:
             self.device.Release()
         except GLib.GError as e:
@@ -827,7 +832,8 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
     def send_command(self, command, *args):
         self.assertIn(command, ['INSERT', 'REMOVE', 'SCAN', 'ERROR', 'RETRY',
             'FINGER', 'UNPLUG', 'SLEEP', 'SET_ENROLL_STAGES', 'SET_SCAN_TYPE',
-            'SET_CANCELLATION_ENABLED', 'LIST'])
+            'SET_CANCELLATION_ENABLED', 'LIST', 'IGNORED_COMMAND',
+            'SET_KEEP_ALIVE'])
 
         with Connection(self.sockaddr) as con:
             res = self._send_command(con, command, *args)
@@ -861,6 +867,9 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
     def send_sleep(self, timeout, con=None):
         self.assertGreaterEqual(timeout, 0)
         self.send_command('SLEEP', timeout)
+
+    def set_keep_alive(self, value):
+        self.send_command('SET_KEEP_ALIVE', 1 if value else 0)
 
     def enroll_print(self, nick, finger='right-index-finger', expected_result='enroll-completed'):
         # Using the name of the image as the print id
@@ -2857,6 +2866,63 @@ class FPrintdUtilsTest(FPrintdVirtualStorageDeviceBaseTest):
 
         self.device.Claim('(s)', self.get_current_user())
         self.device.Release()
+
+    def test_delete_no_prints(self):
+        delete, out = self.util_start('delete', [self.get_current_user()])
+        out.check_line('No fingerprints to delete on {}'.format(
+            self.driver_name).encode('utf-8'), get_timeout())
+        self.assertEqual(delete.wait(), 0)
+
+    def test_delete_already_claimed(self):
+        self.device.Claim('(s)', self.get_current_user())
+        self.addCleanup(self.try_release)
+        self.enroll_image('whorl')
+
+        delete, out = self.util_start('delete', [self.get_current_user()])
+        out.check_line('{}.Error.AlreadyInUse'.format(FPRINT_NAMESPACE), get_timeout())
+        self.assertNotEqual(delete.wait(), 0)
+        self.assertLess(delete.wait(), 128)
+
+    def test_delete_error_claiming(self):
+        self.device.Claim('(s)', self.get_current_user())
+        self.addCleanup(self.try_release)
+        self.set_keep_alive(True)
+        self.device.Release()
+
+        self.send_error(FPrint.DeviceError.PROTO)
+        delete, out = self.util_start('delete', [self.get_current_user()])
+        out.check_line('{}.Error.Internal'.format(FPRINT_NAMESPACE), get_timeout())
+        self.assertNotEqual(delete.wait(), 0)
+        self.assertLess(delete.wait(), 128)
+
+    def test_delete_error(self):
+        self.device.Claim('(s)', self.get_current_user())
+        self.addCleanup(self.try_release)
+        self.enroll_image('whorl')
+        self.set_keep_alive(True)
+        self.device.Release()
+
+        self.send_command('IGNORED_COMMAND') # During claim
+        self.send_error(FPrint.DeviceError.PROTO)  # During delete
+
+        delete, out = self.util_start('delete', [self.get_current_user()])
+        out.check_line('Failed to delete fingerprints', get_timeout())
+        self.assertNotEqual(delete.wait(), 0)
+        self.assertLess(delete.wait(), 128)
+
+    def test_delete_release_error(self):
+        self.device.Claim('(s)', self.get_current_user())
+        self.addCleanup(self.try_release)
+        self.set_keep_alive(True)
+        self.device.Release()
+
+        self.send_command('IGNORED_COMMAND')  # During claim
+        self.send_error(FPrint.DeviceError.PROTO)  # During release
+
+        delete, out = self.util_start('delete', [self.get_current_user()])
+        out.check_line('Release failed with error', get_timeout())
+        self.assertNotEqual(delete.wait(), 0)
+        self.assertLess(delete.wait(), 128)
 
 
 def list_tests():
