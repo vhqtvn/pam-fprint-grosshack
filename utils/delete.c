@@ -50,8 +50,23 @@ create_manager (void)
     }
 }
 
+static gboolean
+delete_user_prints (FprintDBusDevice *dev,
+                    const char       *fingername,
+                    GError          **error)
+{
+  if (fingername)
+    return fprint_dbus_device_call_delete_enrolled_finger_sync (dev, fingername,
+                                                                NULL, error);
+  else
+    return fprint_dbus_device_call_delete_enrolled_fingers2_sync (dev, NULL,
+                                                                  error);
+}
+
 static void
-delete_fingerprints (FprintDBusDevice *dev, const char *username)
+delete_fingerprints (FprintDBusDevice *dev,
+                     const char       *username,
+                     const char       *fingername)
 {
   g_autoptr(GError) error = NULL;
 
@@ -61,8 +76,7 @@ delete_fingerprints (FprintDBusDevice *dev, const char *username)
       exit (1);
     }
 
-  if (!fprint_dbus_device_call_delete_enrolled_fingers2_sync (dev, NULL,
-                                                              &error))
+  if (!delete_user_prints (dev, fingername, &error))
     {
       gboolean ignore_error = FALSE;
       if (g_dbus_error_is_remote_error (error))
@@ -91,8 +105,13 @@ delete_fingerprints (FprintDBusDevice *dev, const char *username)
     }
   else
     {
-      g_print ("Fingerprints deleted on %s\n",
-               fprint_dbus_device_get_name (dev));
+      if (fingername)
+        g_print ("Fingerprint %s of user %s deleted on %s\n",
+                 fingername, username,
+                 fprint_dbus_device_get_name (dev));
+      else
+        g_print ("Fingerprints of user %s deleted on %s\n", username,
+                 fprint_dbus_device_get_name (dev));
     }
   g_clear_error (&error);
 
@@ -104,10 +123,12 @@ delete_fingerprints (FprintDBusDevice *dev, const char *username)
 }
 
 static void
-process_devices (char **argv)
+process_devices (guint argc, char **argv)
 {
+  g_autoptr(GOptionContext) option_context = NULL;
   g_autoptr(GError) error = NULL;
   g_auto(GStrv) devices = NULL;
+  char *fingername = NULL;
   char *path;
   guint num_devices;
   guint i;
@@ -133,6 +154,15 @@ process_devices (char **argv)
       g_print ("Device at %s\n", path);
     }
 
+
+  const GOptionEntry user_options[] = {
+    { "finger", 'f',  0, G_OPTION_ARG_STRING, &fingername, "Finger selected to verify (default is automatic)", NULL },
+    { NULL }
+  };
+
+  option_context = g_option_context_new (NULL);
+  g_option_context_add_main_entries (option_context, user_options, NULL);
+
   for (i = 0; devices[i] != NULL; i++)
     {
       g_autoptr(FprintDBusDevice) dev = NULL;
@@ -148,7 +178,39 @@ process_devices (char **argv)
                                                path, NULL, NULL);
 
       for (j = 1; argv[j] != NULL; j++)
-        delete_fingerprints (dev, argv[j]);
+        {
+          const char *username = argv[j];
+          fingername = NULL;
+
+          if (argc > j + 1 && argv[j + 1][0] == '-')
+            {
+              g_autoptr(GError) local_error = NULL;
+              g_autoptr(GPtrArray) user_args = NULL;
+
+              user_args = g_ptr_array_new_full (3, NULL);
+              g_ptr_array_add (user_args, argv[j]);
+              g_ptr_array_add (user_args, argv[j + 1]);
+
+              if (argc > j + 2)
+                g_ptr_array_add (user_args, argv[j + 2]);
+
+              int new_argc = user_args->len;
+              char **new_argv = (char **) user_args->pdata;
+
+              if (!g_option_context_parse (option_context, &new_argc,
+                                           &new_argv, &local_error))
+                {
+                  g_print ("couldn't parse command-line options: %s\n",
+                           local_error->message);
+                  j += 1;
+                  continue;
+                }
+
+              j += 2;
+            }
+
+          delete_fingerprints (dev, username, fingername);
+        }
     }
 }
 
@@ -164,7 +226,7 @@ main (int argc, char **argv)
 
   g_option_context_set_ignore_unknown_options (option_context, TRUE);
   g_option_context_set_summary (option_context,
-                                "<username> [usernames ...]");
+                                "<username> [-f finger-name [usernames [-f finger-name  ]...]");
 
   if (!g_option_context_parse (option_context, &argc, &argv, &local_error))
     {
@@ -182,7 +244,7 @@ main (int argc, char **argv)
     }
 
   create_manager ();
-  process_devices (argv);
+  process_devices (argc, argv);
 
   return 0;
 }

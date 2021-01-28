@@ -160,7 +160,7 @@ class TestFprintdUtils(TestFprintdUtilsBase):
     def test_fprintd_delete(self):
         # Delete fingerprints
         out, ret = self.run_utility_process('delete', ['toto'])
-        self.assertRegex(out, rb'Fingerprints deleted')
+        self.assertRegex(out, rb'Fingerprints of user toto deleted')
         self.assertEqual(ret, 0)
 
         # Doesn't have fingerprints

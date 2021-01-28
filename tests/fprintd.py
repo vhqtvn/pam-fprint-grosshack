@@ -2936,6 +2936,50 @@ class FPrintdUtilsTest(FPrintdVirtualStorageDeviceBaseTest):
         self.assertNotEqual(delete.wait(), 0)
         self.assertLess(delete.wait(), 128)
 
+    def test_delete_single_finger(self):
+        self.device.Claim('(s)', 'testuser')
+        enrolled, enroll_map = self.enroll_multiple_images()
+        self.addCleanup(self.try_release)
+        self.device.Release()
+
+        finger_name = enrolled[0]
+        delete, out = self.util_start('delete', ['testuser',
+            '-f', finger_name])
+
+        out.check_line('Using device {}'.format(
+            self.device.get_object_path()), get_timeout())
+
+        out.check_line('Fingerprint {} of user {} deleted on {}'.format(
+            finger_name, 'testuser', self.driver_name), get_timeout())
+        self.assertEqual(delete.wait(), 0)
+
+        remaining = self.device.ListEnrolledFingers('(s)', 'testuser')
+        self.assertNotIn(finger_name, remaining)
+        self.assertCountEqual(enrolled[1:], remaining)
+
+    def test_delete_multiple_users_single_finger(self):
+        self.addCleanup(self.try_release)
+        enroll_map, enrolled_prints_info = self.enroll_users_images()
+        delete_args = []
+        for user, print_info in enroll_map.items():
+            for f in print_info:
+                delete_args.append(user)
+                delete_args.append('-f')
+                delete_args.append(f)
+
+        delete, out = self.util_start('delete', delete_args)
+        out.check_line('Using device {}'.format(
+            self.device.get_object_path()), get_timeout())
+
+        for user, print_info in enroll_map.items():
+            for f in print_info:
+                out.check_line('Fingerprint {} of user {} deleted on {}'.format(
+                    f, user, self.driver_name), get_timeout())
+
+        self.assertEqual(delete.wait(), 0)
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.ListEnrolledFingers('(s)', 'testuser')
+
     def test_enroll(self):
         self.device.Claim('(s)', self.get_current_user())
         self.set_keep_alive(True)
