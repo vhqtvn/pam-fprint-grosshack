@@ -1437,7 +1437,15 @@ class FPrintdVirtualDeviceTest(FPrintdVirtualDeviceBaseTest):
 class FPrintdVirtualDeviceStorageTest(FPrintdVirtualStorageDeviceBaseTest,
                                       FPrintdVirtualDeviceTest):
     # Repeat the tests for the Virtual storage device
-    pass
+    def test_claim_error(self):
+        self.device.Claim('(s)', self.get_current_user())
+        self.addCleanup(self.try_release)
+        self.set_keep_alive(True)
+        self.device.Release()
+
+        self.send_error(FPrint.DeviceError.PROTO)
+        with self.assertFprintError('Internal'):
+            self.device.Claim('(s)', 'testuser')
 
 
 class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
