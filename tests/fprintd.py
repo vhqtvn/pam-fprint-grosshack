@@ -3012,6 +3012,65 @@ class FPrintdUtilsTest(FPrintdVirtualStorageDeviceBaseTest):
         self.assertNotEqual(enroll.wait(), 0)
         self.assertLess(enroll.wait(), 128)
 
+    def run_verify(self, finger, match, error=None):
+        self.device.Claim('(s)', 'testuser')
+        finger_name = self.get_finger_name(finger)
+        override = {} if finger is FPrint.Finger.UNKNOWN else {
+            finger_name: 'print-id',
+        }
+        enrolled, enroll_map = self.enroll_multiple_images(
+            images_override=override)
+        self.set_keep_alive(True)
+        self.device.Release()
+
+        verify, out = self.util_start(
+            'verify', ['-f', finger_name, 'testuser'])
+        out.check_line('Using device {}'.format(
+            self.device.get_object_path()), get_timeout())
+        out.check_line('Verify started!', get_timeout())
+        out.check_line('Verifying: {}'.format(finger_name), get_timeout())
+
+        if error:
+            self.send_error(error)
+            self.assertNotEqual(verify.wait(), 0)
+            self.assertLess(verify.wait(), 128)
+            out.check_line('Verify result: verify-disconnected (done)', get_timeout())
+        elif match:
+            verify_finger = enrolled[0] if finger is FPrint.Finger.UNKNOWN else finger_name
+            self.send_image(enroll_map[verify_finger])
+            out.check_line('Verify result: verify-match (done)', get_timeout())
+            self.assertEqual(verify.wait(), 0)
+        else:
+            if finger is FPrint.Finger.UNKNOWN:
+                verify_image = 'another-print'
+            else:
+                enroll_map.pop(finger_name)
+                verify_image = list(enroll_map.values())[0]
+            self.send_image(verify_image)
+            out.check_line('Verify result: verify-no-match (done)', get_timeout())
+            self.assertNotEqual(verify.wait(), 0)
+            self.assertLess(verify.wait(), 128)
+
+    def test_verify_match(self):
+        self.run_verify(finger=FPrint.Finger.RIGHT_THUMB, match=True)
+
+    def test_verify_no_match(self):
+        self.run_verify(finger=FPrint.Finger.LEFT_MIDDLE, match=False)
+
+    def test_verify_error(self):
+        self.run_verify(finger=FPrint.Finger.RIGHT_THUMB, match=False,
+            error=FPrint.DeviceError.PROTO)
+
+    def test_verify_any_finger_match(self):
+        self.run_verify(finger=FPrint.Finger.UNKNOWN, match=True)
+
+    def test_verify_any_finger_no_match(self):
+        self.run_verify(finger=FPrint.Finger.UNKNOWN, match=False)
+
+    def test_verify_any_finger_error(self):
+        self.run_verify(finger=FPrint.Finger.UNKNOWN, match=False,
+            error=FPrint.DeviceError.PROTO)
+
 
 def list_tests():
     import unittest_inspector
