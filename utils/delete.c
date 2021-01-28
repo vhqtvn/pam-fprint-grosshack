@@ -155,16 +155,33 @@ process_devices (char **argv)
 int
 main (int argc, char **argv)
 {
+  g_autoptr(GOptionContext) option_context = NULL;
+  g_autoptr(GError) local_error = NULL;
+
+  option_context = g_option_context_new ("Delete fingerprints");
+
   setlocale (LC_ALL, "");
 
-  create_manager ();
+  g_option_context_set_ignore_unknown_options (option_context, TRUE);
+  g_option_context_set_summary (option_context,
+                                "<username> [usernames ...]");
+
+  if (!g_option_context_parse (option_context, &argc, &argv, &local_error))
+    {
+      g_print ("couldn't parse command-line options: %s\n", local_error->message);
+      return EXIT_FAILURE;
+    }
 
   if (argc < 2)
     {
-      g_print ("Usage: %s <username> [usernames...]\n", argv[0]);
-      return 1;
+      g_autofree char *usage = NULL;
+
+      usage = g_option_context_get_help (option_context, FALSE, NULL);
+      g_print ("%s", usage);
+      return EXIT_FAILURE;
     }
 
+  create_manager ();
   process_devices (argv);
 
   return 0;
