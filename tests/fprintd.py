@@ -2321,7 +2321,7 @@ class FPrintdVirtualDeviceStorageClaimedTest(FPrintdVirtualStorageDeviceBaseTest
         self.send_error(FPrint.DeviceError.BUSY)
 
         self.call_device_method_async('DeleteEnrolledFingers', '(s)', ['testuser'])
-        self.wait_for_result(max_wait=10)
+        self.wait_for_result(max_wait=get_timeout('device_sleep') / 2)
         self.assertFalse(self.get_all_async_replies())
 
         self.set_print_not_writable('testuser', FPrint.Finger.LEFT_THUMB)
@@ -2335,7 +2335,7 @@ class FPrintdVirtualDeviceStorageClaimedTest(FPrintdVirtualStorageDeviceBaseTest
         self.send_error(FPrint.DeviceError.BUSY)
 
         self.call_device_method_async('DeleteEnrolledFingers2', '()', [])
-        self.wait_for_result(max_wait=10)
+        self.wait_for_result(max_wait=get_timeout('device_sleep') / 2)
         self.assertFalse(self.get_all_async_replies())
 
         self.set_print_not_writable('testuser', FPrint.Finger.LEFT_THUMB)
@@ -2349,7 +2349,7 @@ class FPrintdVirtualDeviceStorageClaimedTest(FPrintdVirtualStorageDeviceBaseTest
         self.send_error(FPrint.DeviceError.BUSY)
 
         self.call_device_method_async('DeleteEnrolledFinger', '(s)', ['left-thumb'])
-        self.wait_for_result(max_wait=10)
+        self.wait_for_result(max_wait=get_timeout('device_sleep') / 2)
         self.assertFalse(self.get_all_async_replies())
 
         self.set_print_not_writable('testuser', FPrint.Finger.LEFT_THUMB)
@@ -2366,7 +2366,7 @@ class FPrintdVirtualDeviceStorageClaimedTest(FPrintdVirtualStorageDeviceBaseTest
     def test_release_fails_while_closing(self):
         self.send_sleep(300)
         self.call_device_method_async('Release', '()', [])
-        self.wait_for_result(max_wait=10)
+        self.wait_for_result(max_wait=150)
         self.assertFalse(self.get_all_async_replies())
 
         with self.assertFprintError('AlreadyInUse'):
