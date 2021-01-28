@@ -65,6 +65,7 @@ FINGERS_MAP = {
     "right-middle-finger": FPrint.Finger.RIGHT_MIDDLE,
     "right-ring-finger": FPrint.Finger.RIGHT_RING,
     "right-little-finger": FPrint.Finger.RIGHT_LITTLE,
+    "any": FPrint.Finger.UNKNOWN,
 }
 
 def get_timeout(topic='default'):
@@ -363,6 +364,9 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
     def get_print_name_file_path(self, user, finger_name):
         return self.get_print_file_path(user, FINGERS_MAP[finger_name])
+
+    def get_finger_name(self, finger):
+        return {v: k for k, v in FINGERS_MAP.items()}[finger]
 
     def set_print_not_writable(self, user, finger):
         # Replace the print with a directory, so that deletion via unlink will fail
@@ -2931,6 +2935,82 @@ class FPrintdUtilsTest(FPrintdVirtualStorageDeviceBaseTest):
         out.check_line('Release failed with error', get_timeout())
         self.assertNotEqual(delete.wait(), 0)
         self.assertLess(delete.wait(), 128)
+
+    def test_enroll(self):
+        self.device.Claim('(s)', self.get_current_user())
+        self.set_keep_alive(True)
+        self.device.Release()
+
+        finger_name = self.get_finger_name(FPrint.Finger.LEFT_THUMB)
+        enroll, out = self.util_start('enroll', [self.get_current_user(),
+            '-f', finger_name])
+        out.check_line('Using device {}'.format(
+            self.device.get_object_path()), get_timeout())
+
+        out.check_line('Enrolling {} finger.'.format(finger_name).encode('utf-8'),
+            get_timeout())
+
+        self.send_image('print-id')
+        out.check_line('Enroll result: enroll-stage-passed', get_timeout())
+
+        self.send_image('print-id')
+        out.check_line('Enroll result: enroll-stage-passed', get_timeout())
+
+        self.send_retry(FPrint.DeviceRetry.TOO_SHORT)
+        out.check_line('Enroll result: enroll-swipe-too-short', get_timeout())
+
+        self.send_image('print-id')
+        out.check_line('Enroll result: enroll-stage-passed', get_timeout())
+
+        self.send_image('print-id')
+        out.check_line('Enroll result: enroll-stage-passed', get_timeout())
+
+        self.send_retry(FPrint.DeviceRetry.CENTER_FINGER)
+        out.check_line('Enroll result: enroll-finger-not-centered', get_timeout())
+
+        self.send_image('print-id')
+        out.check_line('Enroll result: enroll-completed', get_timeout())
+
+        self.assertEqual(enroll.wait(), 0)
+
+    def test_enroll_error(self):
+        self.device.Claim('(s)', self.get_current_user())
+        self.set_keep_alive(True)
+        self.device.Release()
+
+        finger_name = self.get_finger_name(FPrint.Finger.LEFT_MIDDLE)
+        enroll, out = self.util_start('enroll', [self.get_current_user(),
+            '-f', finger_name])
+        out.check_line('Using device {}'.format(
+            self.device.get_object_path()), get_timeout())
+
+        out.check_line('Enrolling {} finger.'.format(finger_name).encode('utf-8'),
+            get_timeout())
+
+        self.send_image('print-id')
+        out.check_line('Enroll result: enroll-stage-passed', get_timeout())
+
+        self.send_image('print-id')
+        out.check_line('Enroll result: enroll-stage-passed', get_timeout())
+
+        self.send_retry(FPrint.DeviceRetry.TOO_SHORT)
+        out.check_line('Enroll result: enroll-swipe-too-short', get_timeout())
+
+        self.send_error(FPrint.DeviceError.PROTO)
+        out.check_line('Enroll result: enroll-disconnected', get_timeout())
+
+        self.assertNotEqual(enroll.wait(), 0)
+        self.assertLess(enroll.wait(), 128)
+
+    def test_enroll_error_invalid_finger(self):
+        finger_name = 'eleventh-hand-finger'
+        enroll, out = self.util_start('enroll', [self.get_current_user(),
+            '-f', finger_name])
+
+        out.check_line('Invalid finger name \'{}\''.format(finger_name), get_timeout())
+
+        self.assertNotEqual(enroll.wait(), 0)
+        self.assertLess(enroll.wait(), 128)
 
 
 def list_tests():
