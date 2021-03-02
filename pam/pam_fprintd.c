@@ -565,7 +565,7 @@ do_verify (sd_bus      *bus,
             }
           else if (str_equal (data->result, "verify-unknown-error"))
             {
-              return PAM_AUTHINFO_UNAVAIL;
+              return PAM_AUTH_ERR;
             }
           else if (str_equal (data->result, "verify-disconnected"))
             {
