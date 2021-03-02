@@ -1436,7 +1436,6 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
 
   g_autoptr(GPtrArray) gallery = NULL;
-  g_autoptr(FpPrint) print = NULL;
   g_autoptr(SessionData) session = NULL;
   g_autoptr(GError) error = NULL;
   FpFinger finger = finger_name_to_fp_finger (finger_name);
@@ -1457,10 +1456,9 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
 
   if (finger == FP_FINGER_UNKNOWN)
     {
-      g_autoptr(GSList) prints = NULL;
+      gallery = load_user_prints (rdev, session->username);
 
-      prints = store.discover_prints (priv->dev, session->username);
-      if (prints == NULL)
+      if (!gallery->len)
         {
           g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
                        "No fingerprints enrolled");
@@ -1469,35 +1467,20 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
         }
       if (fp_device_supports_identify (priv->dev))
         {
-          GSList *l;
+          guint i;
 
-          gallery = g_ptr_array_new_with_free_func (g_object_unref);
-
-          for (l = prints; l != NULL; l = l->next)
+          for (i = 0; i < gallery->len; i++)
             {
-              g_debug ("adding finger %u to the gallery", GPOINTER_TO_UINT (l->data));
-              store.print_data_load (priv->dev, GPOINTER_TO_UINT (l->data),
-                                     session->username, &print);
+              FpPrint *fprint = g_ptr_array_index (gallery, i);
 
-              if (print)
-                g_ptr_array_add (gallery, g_steal_pointer (&print));
+              g_debug ("adding finger %s to the gallery",
+                       fp_finger_to_name (fp_print_get_finger (fprint)));
             }
-        }
-      else
-        {
-          finger = GPOINTER_TO_UINT (prints->data);
         }
     }
 
   if (fp_device_supports_identify (priv->dev) && finger == FP_FINGER_UNKNOWN)
     {
-      if (gallery->len == 0)
-        {
-          g_set_error (&error, FPRINT_ERROR, FPRINT_ERROR_NO_ENROLLED_PRINTS,
-                       "No fingerprints on that device");
-          g_dbus_method_invocation_return_gerror (invocation, error);
-          return TRUE;
-        }
       priv->current_action = ACTION_IDENTIFY;
 
       g_debug ("start identification device %d", priv->id);
@@ -1509,12 +1492,19 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
     }
   else
     {
+      g_autoptr(FpPrint) print = NULL;
+
       priv->current_action = ACTION_VERIFY;
 
-      g_debug ("start verification device %d finger %d", priv->id, finger);
-
-      store.print_data_load (priv->dev, finger,
-                             session->username, &print);
+      if (gallery)
+        {
+          print = g_ptr_array_steal_index_fast (gallery, 0);
+          finger = fp_print_get_finger (print);
+        }
+      else
+        {
+          store.print_data_load (priv->dev, finger, session->username, &print);
+        }
 
       if (!print)
         {
@@ -1524,6 +1514,9 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
                                                   error);
           return TRUE;
         }
+
+      g_debug ("start verification device %d finger %s", priv->id,
+               fp_finger_to_name (finger));
 
       priv->current_cancellable = g_cancellable_new ();
       priv->verify_data = g_object_ref (print);
