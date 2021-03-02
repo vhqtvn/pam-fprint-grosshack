@@ -1494,8 +1494,6 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
     {
       g_autoptr(FpPrint) print = NULL;
 
-      priv->current_action = ACTION_VERIFY;
-
       if (gallery)
         {
           print = g_ptr_array_steal_index_fast (gallery, 0);
@@ -1518,6 +1516,7 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
       g_debug ("start verification device %d finger %s", priv->id,
                fp_finger_to_name (finger));
 
+      priv->current_action = ACTION_VERIFY;
       priv->current_cancellable = g_cancellable_new ();
       priv->verify_data = g_object_ref (print);
       fp_device_verify (priv->dev, print, priv->current_cancellable,
