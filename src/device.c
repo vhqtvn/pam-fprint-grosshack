@@ -1797,8 +1797,9 @@ enroll_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
    * enough. */
   if (g_error_matches (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_DATA_FULL))
     {
-      g_debug ("Device storage is full, trying to garbage collect old prints");
-      if (try_delete_print (rdev))
+      g_debug ("Device storage is full");
+      if (fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_STORAGE_LIST) &&
+          try_delete_print (rdev))
         {
           /* Success? Then restart the operation */
           fp_device_enroll (priv->dev,
@@ -1940,6 +1941,15 @@ enroll_identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
 }
 
 static gboolean
+is_first_enrollment (FprintDevice * rdev)
+{
+  g_autoptr(GPtrArray) host_prints = NULL;
+  host_prints = load_all_prints (rdev);
+
+  return host_prints->len == 0;
+}
+
+static gboolean
 fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
                             GDBusMethodInvocation *invocation,
                             const char            *finger_name)
@@ -1990,6 +2000,15 @@ fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
   priv->current_cancellable = g_cancellable_new ();
   priv->enroll_data = finger;
   priv->current_action = ACTION_ENROLL;
+
+  if (is_first_enrollment (rdev))
+    {
+      g_autoptr(GError) clear_err = NULL;
+
+      if (!fp_device_clear_storage_sync (priv->dev, NULL, &clear_err))
+        g_warning ("Failed to clear storage before first enrollment: %s",
+                   clear_err->message);
+    }
 
   if (fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_IDENTIFY))
     {

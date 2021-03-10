@@ -850,7 +850,7 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
         self.assertIn(command, ['INSERT', 'REMOVE', 'SCAN', 'ERROR', 'RETRY',
             'FINGER', 'UNPLUG', 'SLEEP', 'SET_ENROLL_STAGES', 'SET_SCAN_TYPE',
             'SET_CANCELLATION_ENABLED', 'LIST', 'IGNORED_COMMAND',
-            'SET_KEEP_ALIVE'])
+            'SET_KEEP_ALIVE', 'CONT'])
 
         with Connection(self.sockaddr) as con:
             res = self._send_command(con, command, *args)
@@ -935,6 +935,8 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
           'FP1-20201231-7-ABCDEFGH-testuser' : 'right-index-finger',
           'no-metadata-new' : 'left-middle-finger',
         }
+        # Explicitly fail initial cleanup (not needed, but faster)
+        self.send_command('ERROR', 0)
         for i, f in enrolled_prints.items():
             self.enroll_print(i, f)
 
@@ -973,6 +975,8 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
         self.device.Claim('(s)', 'testuser')
 
         self.assertEqual(self.get_stored_prints(), ['stored-print'])
+        # Explicitly fail initial cleanup (not needed, but faster)
+        self.send_command('ERROR', 0)
         self.device.EnrollStart('(s)', 'right-thumb')
         self.send_image('stored-print')  # During identify
         self.wait_for_result('enroll-stage-passed')
@@ -990,6 +994,8 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
         self.device.Claim('(s)', 'testuser')
 
         self.assertEqual(self.get_stored_prints(), ['stored-print'])
+        # Explicitly fail initial cleanup (not needed, but faster)
+        self.send_command('ERROR', 0)
         self.device.EnrollStart('(s)', 'right-thumb')
         self.send_image('stored-print')  # During identify
         self.send_error(FPrint.DeviceError.PROTO)  # During garbage collecting
@@ -3065,6 +3071,10 @@ class FPrintdUtilsTest(FPrintdVirtualStorageDeviceBaseTest):
         self.set_keep_alive(True)
         self.device.Release()
 
+        # Open and clear storage
+        self.send_command('CONT')
+        self.send_command('CONT')
+
         finger_name = self.get_finger_name(FPrint.Finger.LEFT_THUMB)
         enroll, out = self.util_start('enroll', [self.get_current_user(),
             '-f', finger_name])
@@ -3104,6 +3114,10 @@ class FPrintdUtilsTest(FPrintdVirtualStorageDeviceBaseTest):
         self.device.Claim('(s)', self.get_current_user())
         self.set_keep_alive(True)
         self.device.Release()
+
+        # Open and clear storage
+        self.send_command('CONT')
+        self.send_command('CONT')
 
         finger_name = self.get_finger_name(FPrint.Finger.LEFT_MIDDLE)
         enroll, out = self.util_start('enroll', [self.get_current_user(),
