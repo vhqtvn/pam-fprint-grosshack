@@ -127,18 +127,7 @@ def AddDevice(self, device_name, num_enroll_stages, scan_type,
                    DEVICE_IFACE,
                    # Properties
                    device_properties,
-                   # Methods
-                   [
-                       ('ListEnrolledFingers', 's', 'as', ListEnrolledFingers),
-                       ('DeleteEnrolledFingers', 's', '', DeleteEnrolledFingers),
-                       ('DeleteEnrolledFingers2', '', '', DeleteEnrolledFingers2),
-                       ('Claim', 's', '', Claim),
-                       ('Release', '', '', Release),
-                       ('VerifyStart', 's', '', VerifyStart),
-                       ('VerifyStop', '', '', VerifyStop),
-                       ('EnrollStart', 's', '', EnrollStart),
-                       ('EnrollStop', '', '', EnrollStop)
-    ])
+                   [])
 
     device = mockobject.objects[path]
     device.fingers = {}
