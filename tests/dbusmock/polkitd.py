@@ -99,13 +99,3 @@ def SetAllowed(self, actions):
     '''Set allowed actions'''
 
     self.allowed = actions
-
-@dbus.service.method(MAIN_IFACE,
-                     in_signature='', out_signature='o')
-def GetDefaultDevice(self):
-    devices = self.GetDevices()
-    if len(devices) < 1:
-        raise dbus.exceptions.DBusException(
-            'No devices available',
-            name='net.reactivated.Fprint.Error.NoSuchDevice')
-    return devices[0]
