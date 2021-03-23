@@ -20,7 +20,7 @@ __license__ = 'LGPL 3+'
 import dbus
 import time
 
-from dbusmock import MOCK_IFACE, mockobject
+from dbusmock import MOCK_IFACE
 
 BUS_NAME = 'org.freedesktop.PolicyKit1'
 MAIN_OBJ = '/org/freedesktop/PolicyKit1/Authority'
@@ -29,14 +29,12 @@ SYSTEM_BUS = True
 IS_OBJECT_MANAGER = False
 
 def load(mock, parameters):
-    polkitd = mockobject.objects[MAIN_OBJ]
-    # default state
-    polkitd.allow_unknown = False
-    polkitd.allowed = []
-    polkitd.delay = 0
-    polkitd.simulate_hang = False
-    polkitd.hanging_actions = []
-    polkitd.hanging_calls = []
+    mock.allow_unknown = False
+    mock.allowed = []
+    mock.delay = 0
+    mock.simulate_hang = False
+    mock.hanging_actions = []
+    mock.hanging_calls = []
 
     mock.AddProperties(MAIN_IFACE,
                        dbus.Dictionary({
