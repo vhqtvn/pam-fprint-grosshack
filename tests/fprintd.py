@@ -2244,6 +2244,13 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
     def test_enroll_error_data_full(self):
         self.assertEnrollError(FPrint.DeviceError.DATA_FULL, 'enroll-data-full')
 
+    def test_enroll_already_enrolled_finger(self):
+        self.enroll_image('whorl', start=False)
+
+        self.stop_on_teardown = False
+        with self.assertFprintError('FingerAlreadyEnrolled'):
+            self.device.EnrollStart('(s)', 'left-middle-finger')
+
     def test_enroll_duplicate_image(self):
         self.enroll_image('whorl', finger='left-thumb', start=False)
         self.enroll_image('whorl', finger='right-thumb', stop=False,
