@@ -907,11 +907,20 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
         self._changed_properties.remove({'num-enroll-stages': stages})
         self.assertEqual(self.num_enroll_stages, stages)
 
+    def get_stored_prints(self):
+        return self.send_command('LIST').decode('ascii').split('\n')[:-1]
+
 
 class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
-    def test_garbage_collect(self):
+    def setUp(self):
+        super().setUp()
         self.device.Claim('(s)', 'testuser')
 
+    def tearDown(self):
+        self.try_release()
+        super().tearDown()
+
+    def test_garbage_collect(self):
         # We expect collection in this order
         garbage_collect = [
             'no-metadata-print',
@@ -930,7 +939,7 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
             self.enroll_print(i, f)
 
         # The virtual device sends a trailing \n
-        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        prints = self.get_stored_prints()
         self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
 
         def trigger_garbagecollect():
@@ -941,27 +950,23 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
 
         trigger_garbagecollect()
 
-        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        prints = self.get_stored_prints()
         garbage_collect.pop()
         self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
 
         trigger_garbagecollect()
 
-        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        prints = self.get_stored_prints()
         garbage_collect.pop()
         self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
 
         trigger_garbagecollect()
 
-        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        prints = self.get_stored_prints()
         garbage_collect.pop()
         self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
-
-        self.device.Release()
 
     def test_delete(self):
-        self.device.Claim('(s)', 'testuser')
-
         # We expect collection in this order
         garbage_prints = [
             'no-metadata-print',
@@ -982,30 +987,23 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
             self.enroll_print(i, f)
 
         # The virtual device sends a trailing \n
-        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        prints = self.get_stored_prints()
         self.assertEqual(set(prints), set(garbage_prints + list(enrolled_prints.keys())))
 
         # Now, delete all prints for the user
         self.device.DeleteEnrolledFingers2()
 
         # And verify they are all gone
-        prints = self.send_command('LIST').decode('ascii').split('\n')[:-1]
+        prints = self.get_stored_prints()
         self.assertEqual(set(prints), set(garbage_prints))
 
-        self.device.Release()
-
     def test_enroll_with_one_stage_only(self):
-        self.device.Claim('(s)', 'testuser')
-        self.addCleanup(self.device.Release)
         self._maybe_reduce_enroll_stages(stages=1)
 
         self.enroll_print('FP1-20000101-7-ABCDEFGH-testuser', 'left-index-finger')
         self.assertEqual(self.device.ListEnrolledFingers('(s)', 'testuser'), ['left-index-finger'])
 
     def test_scan_type_changes(self):
-        self.device.Claim('(s)', 'testuser')
-        self.addCleanup(self.device.Release)
-
         for scan_type in [FPrint.ScanType.PRESS, FPrint.ScanType.SWIPE]:
             scan_type = scan_type.value_nick
             self.send_command('SET_SCAN_TYPE', scan_type)
