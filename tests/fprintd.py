@@ -676,7 +676,11 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
             ctx.iteration(False)
         self.assertTrue(self.finger_needed)
 
-        stages = self.num_enroll_stages
+        if expected_result == 'enroll-duplicate':
+            stages = 1
+        else:
+            stages = self.num_enroll_stages
+
         for stage in range(stages):
             self.send_image(img)
             if stage < stages - 1:
@@ -733,9 +737,12 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
             self.device.Claim('(s)', user)
             for finger, p in print_map.items():
                 if allow_duplicates and p in enrolled_prints:
-                    duplicates_prints_info[p] = (user, finger)
-                    # FIXME: as further test we can still try enroll and expect
-                    # for enrollment error.
+                    prints_infos = duplicates_prints_info.get(p, [])
+                    prints_infos.append((user, finger))
+                    duplicates_prints_info[p] = prints_infos
+                    if self.has_identification:
+                        self.enroll_image(p, finger=finger,
+                            expected_result='enroll-duplicate')
                     continue
                 self.enroll_image(p, finger=finger)
                 enrolled_prints.append(p)
@@ -746,27 +753,28 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
             # We can't just enroll duplicates prints, as fprint will check for
             # duplicates prints, so we've to handle this manually, copying the
             # actual prints
-            for print_image, print_info in duplicates_prints_info.items():
-                orig_username, orig_finger = enrolled_prints_info[print_image]
-                dup_username, dup_finger = print_info
-                dup_fp_finger = FINGERS_MAP[dup_finger]
+            for print_image, print_infos in duplicates_prints_info.items():
+                for print_info in print_infos:
+                    orig_username, orig_finger = enrolled_prints_info[print_image]
+                    dup_username, dup_finger = print_info
+                    dup_fp_finger = FINGERS_MAP[dup_finger]
 
-                orig_path = self.get_print_name_file_path(orig_username, orig_finger)
-                self.assertTrue(os.path.exists(orig_path))
+                    orig_path = self.get_print_name_file_path(orig_username, orig_finger)
+                    self.assertTrue(os.path.exists(orig_path))
 
-                with open(orig_path, mode='rb') as print_file:
-                    dup_print = FPrint.Print.deserialize(print_file.read())
-                    dup_print.set_username(dup_username)
-                    dup_print.set_finger(dup_fp_finger)
+                    with open(orig_path, mode='rb') as print_file:
+                        dup_print = FPrint.Print.deserialize(print_file.read())
+                        dup_print.set_username(dup_username)
+                        dup_print.set_finger(dup_fp_finger)
 
-                    dup_path = self.get_print_name_file_path(dup_username, dup_finger)
-                    os.makedirs(os.path.dirname(dup_path), exist_ok=True)
-                    with open(dup_path, mode='wb') as new_print_file:
-                        new_print_file.write(dup_print.serialize())
-                        print('Created ',dup_username,'duplicated',dup_finger,
-                            'print in', dup_path)
+                        dup_path = self.get_print_name_file_path(dup_username, dup_finger)
+                        os.makedirs(os.path.dirname(dup_path), exist_ok=True)
+                        with open(dup_path, mode='wb') as new_print_file:
+                            new_print_file.write(dup_print.serialize())
+                            print('Created ',dup_username,'duplicated',dup_finger,
+                                'print in', dup_path)
 
-                self.assertFingerInStorage(dup_username, dup_fp_finger)
+                    self.assertFingerInStorage(dup_username, dup_fp_finger)
         else:
             self.assertCountEqual(enrolled_prints, set(enrolled_prints))
 
@@ -1813,6 +1821,17 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
 
             self.device.Release()
 
+    def test_enroll_users_duplicate_prints(self):
+        _enroll_map, prints_info = self.enroll_users_images(enroll_map={
+            'test-user1': {'left-thumb': 'whorl', 'right-thumb': 'whorl'},
+            'test-user2': {'left-index-finger': 'whorl'},
+            'test-user3': {'left-little-finger': 'tented_arch'},
+        }, allow_duplicates=True)
+        self.assertEqual(prints_info, {
+            'whorl': ('test-user1', 'left-thumb'),
+            'tented_arch': ('test-user3', 'left-little-finger'),
+        })
+
     def test_verify_finger_not_enrolled(self):
         self.enroll_image('whorl', finger='left-thumb')
         with self.assertFprintError('NoEnrolledPrints'):
@@ -2224,6 +2243,12 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
 
     def test_enroll_error_data_full(self):
         self.assertEnrollError(FPrint.DeviceError.DATA_FULL, 'enroll-data-full')
+
+    def test_enroll_duplicate_image(self):
+        self.enroll_image('whorl', finger='left-thumb', start=False)
+        self.enroll_image('whorl', finger='right-thumb', stop=False,
+            expected_result='enroll-duplicate' if self.has_identification
+                else 'enroll-completed')
 
     def test_enroll_start_during_enroll(self):
         with self.assertFprintError('AlreadyInUse'):
