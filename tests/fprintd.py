@@ -659,7 +659,8 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
             self.assertEqual(self._last_result, expected)
 
     def enroll_image(self, img, device=None, finger='right-index-finger',
-                     expected_result='enroll-completed', claim_user=None):
+                     expected_result='enroll-completed', claim_user=None,
+                     start=True, stop=True):
         if device is None:
             device = self.device
         if claim_user:
@@ -668,7 +669,8 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         if device is self.device:
             self._maybe_reduce_enroll_stages()
 
-        device.EnrollStart('(s)', finger)
+        if start:
+            device.EnrollStart('(s)', finger)
 
         while not self.finger_needed:
             ctx.iteration(False)
@@ -683,7 +685,9 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
                 self.wait_for_result(expected_result)
                 self.assertFalse(self.finger_needed)
 
-        device.EnrollStop()
+        if stop:
+            device.EnrollStop()
+
         self.assertEqual(self._last_result, expected_result)
         self.assertFalse(self.finger_needed)
 
@@ -2226,9 +2230,7 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
             self.device.EnrollStart('(s)', 'left-thumb')
 
     def test_verify_start_during_enroll(self):
-        self.device.EnrollStop()
-        self.wait_for_result()
-        self.enroll_image('whorl')
+        self.enroll_image('whorl', start=False)
         self.device.EnrollStart('(s)', 'right-thumb')
         with self.assertFprintError('AlreadyInUse'):
             self.device.VerifyStart('(s)', 'any')
@@ -2262,6 +2264,12 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
             self.wait_for_device_reply(method='EnrollStop', expected_replies=2)
 
         self.assertIn(GLib.Variant('()', ()), self.get_all_async_replies())
+
+
+class FPrintdVirtualDeviceNoStorageEnrollTests(FPrintdVirtualNoStorageDeviceBaseTest,
+                                               FPrintdVirtualDeviceEnrollTests):
+    # Repeat the tests for the Virtual device (with no storage)
+    pass
 
 
 class FPrintdVirtualDeviceStorageClaimedTest(FPrintdVirtualStorageDeviceBaseTest,
