@@ -306,8 +306,11 @@ on_nr_enroll_stages_changed (FprintDevice *rdev,
   FprintDBusDevice *dbus_dev = FPRINT_DBUS_DEVICE (rdev);
   gint nr_enroll_stages;
 
+  nr_enroll_stages = fp_device_get_nr_enroll_stages (device);
+
   /* One extra step for our internal identification. */
-  nr_enroll_stages = fp_device_get_nr_enroll_stages (device) + 1;
+  if (fp_device_supports_identify (device))
+    nr_enroll_stages += 1;
 
   g_debug ("Device %s enroll stages changed to %d",
            fp_device_get_name (device),
@@ -1830,6 +1833,21 @@ enroll_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
 }
 
 static void
+enroll_start (FprintDevice *rdev)
+{
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+
+  fp_device_enroll (priv->dev,
+                    fprint_device_create_enroll_template (rdev, priv->enroll_data),
+                    priv->current_cancellable,
+                    enroll_progress_cb,
+                    rdev,
+                    NULL,
+                    (GAsyncReadyCallback) enroll_cb,
+                    rdev);
+}
+
+static void
 enroll_identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
 {
   g_autoptr(GError) error = NULL;
@@ -1917,14 +1935,7 @@ enroll_identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
   g_signal_emit (rdev, signals[SIGNAL_ENROLL_STATUS], 0, "enroll-stage-passed", FALSE);
 
   /* We are good and can start to enroll. */
-  fp_device_enroll (priv->dev,
-                    fprint_device_create_enroll_template (rdev, priv->enroll_data),
-                    priv->current_cancellable,
-                    enroll_progress_cb,
-                    rdev,
-                    NULL,
-                    (GAsyncReadyCallback) enroll_cb,
-                    rdev);
+  enroll_start (rdev);
 }
 
 static gboolean
@@ -1933,7 +1944,6 @@ fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
                             const char            *finger_name)
 {
   g_autoptr(GError) error = NULL;
-  g_autoptr(GPtrArray) all_prints = NULL;
   FprintDevice *rdev = FPRINT_DEVICE (dbus_dev);
   FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
   FpFinger finger = finger_name_to_fp_finger (finger_name);
@@ -1964,22 +1974,36 @@ fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
   priv->enroll_data = finger;
   priv->current_action = ACTION_ENROLL;
 
-  /* We (now) have the policy that there must be no duplicate prints.
-   * We need to do this for MoC devices, as their "identify" function
-   * will generally just identify across all device stored prints.
-   * For MoH, we also do it. For consistency and because it allows us
-   * to implement new features in the future (i.e. logging in/unlocking
-   * the correct user without selecting it first).
-   */
-  all_prints = load_all_prints (rdev);
-  fp_device_identify (priv->dev,
-                      all_prints,
-                      priv->current_cancellable,
-                      NULL,
-                      NULL,
-                      NULL,
-                      (GAsyncReadyCallback) enroll_identify_cb,
-                      rdev);
+  if (fp_device_supports_identify (priv->dev))
+    {
+      g_autoptr(GPtrArray) all_prints = load_all_prints (rdev);
+
+      /* We (now) have the policy that there must be no duplicate prints.
+       * We need to do this for MoC devices, as their "identify" function
+       * will generally just identify across all device stored prints.
+       * For MoH, we also do it. For consistency and because it allows us
+       * to implement new features in the future (i.e. logging in/unlocking
+       * the correct user without selecting it first).
+       */
+      fp_device_identify (priv->dev,
+                          all_prints,
+                          priv->current_cancellable,
+                          NULL,
+                          NULL,
+                          NULL,
+                          (GAsyncReadyCallback) enroll_identify_cb,
+                          rdev);
+    }
+  else
+    {
+      /* We may still want to try to use verification to check for duplicates
+       * if only one fingerprint was previously enrolled, or add more verify
+       * stages up to a predefined limit */
+      g_warning ("Device %s does not support duplicate identification and so "
+                 "fprintd duplicate detection won't work",
+                 fp_device_get_name (priv->dev));
+      enroll_start (rdev);
+    }
 
   fprint_dbus_device_complete_enroll_start (dbus_dev, invocation);
 

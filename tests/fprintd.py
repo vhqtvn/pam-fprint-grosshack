@@ -567,6 +567,7 @@ class FPrintdVirtualImageDeviceBaseTests(FPrintdTest):
     socket_env = 'FP_VIRTUAL_IMAGE'
     device_driver = 'virtual_image'
     driver_name = 'Virtual image device for debugging'
+    has_identification = True
 
 class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
 
@@ -882,10 +883,12 @@ class FPrintdVirtualStorageDeviceBaseTest(FPrintdVirtualDeviceBaseTest):
     def _maybe_reduce_enroll_stages(self, stages=-1):
         # Reduce the number of default enroll stages, we can go a bit faster
         stages = stages if stages > 0 else self.enroll_stages
-        stages += 1 # Adding the extra stage for duplicates-check
+        if self.has_identification:
+            stages += 1 # Adding the extra stage for duplicates-check
         if self.num_enroll_stages == stages:
             return
-        self.send_command('SET_ENROLL_STAGES', stages - 1)
+        device_stages = stages -1 if self.has_identification else stages
+        self.send_command('SET_ENROLL_STAGES', device_stages)
         while self.num_enroll_stages != stages:
             ctx.iteration(True)
         self.assertIn({'num-enroll-stages': stages}, self._changed_properties)
@@ -1004,10 +1007,8 @@ class FPrintdVirtualNoStorageDeviceBaseTest(FPrintdVirtualStorageDeviceBaseTest)
     socket_env = 'FP_VIRTUAL_DEVICE'
     device_driver = 'virtual_device'
     driver_name = 'Virtual device for debugging'
+    has_identification = False
 
-    def enroll_image(self, img, device=None, finger='right-index-finger',
-                     expected_result='enroll-completed', claim_user=None):
-        self.skipTest('Identification not supported, thus is the enrolling')
 
 class FPrintdVirtualNoStorageDeviceTest(FPrintdVirtualNoStorageDeviceBaseTest):
 
@@ -2212,8 +2213,9 @@ class FPrintdVirtualDeviceEnrollTests(FPrintdVirtualDeviceBaseTest):
         self.assertEnrollError(FPrint.DeviceError.DATA_INVALID, 'enroll-unknown-error')
 
     def test_enroll_error_data_not_found(self):
-        self.assertEnrollError(
-            FPrint.DeviceError.DATA_NOT_FOUND, 'enroll-stage-passed')
+        if self.has_identification:
+            self.assertEnrollError(
+                FPrint.DeviceError.DATA_NOT_FOUND, 'enroll-stage-passed')
         self.assertEnrollError(FPrint.DeviceError.DATA_NOT_FOUND, 'enroll-unknown-error')
 
     def test_enroll_error_data_full(self):
