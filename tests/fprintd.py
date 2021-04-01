@@ -966,6 +966,38 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
         garbage_collect.pop()
         self.assertEqual(set(prints), set(garbage_collect + list(enrolled_prints.keys())))
 
+    def test_garbage_collect_on_duplicate(self):
+        self._maybe_reduce_enroll_stages(stages=1)
+        self.send_command('INSERT', 'stored-print')
+        self.device.Release()
+        self.device.Claim('(s)', 'testuser')
+
+        self.assertEqual(self.get_stored_prints(), ['stored-print'])
+        self.device.EnrollStart('(s)', 'right-thumb')
+        self.send_image('stored-print')  # During identify
+        self.wait_for_result('enroll-stage-passed')
+        self.assertFalse(self.get_stored_prints())
+
+        self.send_image('stored-print')
+        self.wait_for_result('enroll-completed')  # During enroll
+        self.assertEqual(self.get_stored_prints(), ['stored-print'])
+        self.device.EnrollStop()
+
+    def test_garbage_collect_failed_on_duplicate(self):
+        self._maybe_reduce_enroll_stages(stages=1)
+        self.send_command('INSERT', 'stored-print')
+        self.device.Release()
+        self.device.Claim('(s)', 'testuser')
+
+        self.assertEqual(self.get_stored_prints(), ['stored-print'])
+        self.device.EnrollStart('(s)', 'right-thumb')
+        self.send_image('stored-print')  # During identify
+        self.send_error(FPrint.DeviceError.PROTO)  # During garbage collecting
+        self.wait_for_result('enroll-duplicate')
+        self.assertEqual(self.get_stored_prints(), ['stored-print'])
+
+        self.device.EnrollStop()
+
     def test_delete(self):
         # We expect collection in this order
         garbage_prints = [
