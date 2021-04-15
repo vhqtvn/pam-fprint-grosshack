@@ -33,3 +33,14 @@ API use cases
   of PIN code authentication and/or tokens)
   * Given a list of users, verify which one has scanned their finger
 
+Debugging
+=========
+
+To enable debug output run `systemctl edit fprintd.service` then enter:
+```
+[Service]
+Environment=G_MESSAGES_DEBUG=all
+```
+Save the result and restart fprintd using `systemctl restart fprintd.service`.
+
+After that, you can grab the logs using `journalctl -u fprintd.service`.
