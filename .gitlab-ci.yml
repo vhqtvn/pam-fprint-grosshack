@@ -63,6 +63,7 @@ test_indent:
 build_stable:
   extends: .fprintd_build_preconditions
   stage: build
+  allow_failure: true
   script:
     - meson _build
     - ninja -C _build -v
