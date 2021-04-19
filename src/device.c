@@ -309,7 +309,7 @@ on_nr_enroll_stages_changed (FprintDevice *rdev,
   nr_enroll_stages = fp_device_get_nr_enroll_stages (device);
 
   /* One extra step for our internal identification. */
-  if (fp_device_supports_identify (device))
+  if (fp_device_has_feature (device, FP_DEVICE_FEATURE_IDENTIFY))
     nr_enroll_stages += 1;
 
   g_debug ("Device %s enroll stages changed to %d",
@@ -1469,7 +1469,7 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
           g_dbus_method_invocation_return_gerror (invocation, error);
           return TRUE;
         }
-      if (fp_device_supports_identify (priv->dev))
+      if (fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_IDENTIFY))
         {
           guint i;
 
@@ -1483,7 +1483,8 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
         }
     }
 
-  if (fp_device_supports_identify (priv->dev) && finger == FP_FINGER_UNKNOWN)
+  if (fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_IDENTIFY) &&
+      finger == FP_FINGER_UNKNOWN)
     {
       priv->current_action = ACTION_IDENTIFY;
 
@@ -1913,7 +1914,7 @@ enroll_identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
       return;
     }
 
-  if (found_print && fp_device_has_storage (priv->dev))
+  if (found_print && fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_STORAGE))
     {
       if (!fp_print_get_device_stored (found_print))
         g_critical ("libfprint driver bug: Returned device print not marked as stored on device.");
@@ -1990,7 +1991,7 @@ fprint_device_enroll_start (FprintDBusDevice      *dbus_dev,
   priv->enroll_data = finger;
   priv->current_action = ACTION_ENROLL;
 
-  if (fp_device_supports_identify (priv->dev))
+  if (fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_IDENTIFY))
     {
       g_autoptr(GPtrArray) all_prints = load_all_prints (rdev);
 
@@ -2146,7 +2147,7 @@ delete_enrolled_fingers (FprintDevice *rdev,
 
   /* First try deleting the print from the device, we don't consider it
    * fatal if this does not work. */
-  if (fp_device_has_storage (priv->dev))
+  if (fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_STORAGE))
     {
       g_autoptr(GSList) prints = NULL;
       GSList *l;
@@ -2332,7 +2333,7 @@ fprint_device_delete_enrolled_fingers (FprintDBusDevice      *dbus_dev,
   sender = g_dbus_method_invocation_get_sender (invocation);
   _fprint_device_add_client (rdev, sender);
 
-  if (!opened && fp_device_has_storage (priv->dev))
+  if (!opened && fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_STORAGE))
     fp_device_open_sync (priv->dev, NULL, NULL);
 
   user = g_object_steal_qdata (G_OBJECT (invocation), quark_auth_user);
@@ -2342,7 +2343,7 @@ fprint_device_delete_enrolled_fingers (FprintDBusDevice      *dbus_dev,
   g_clear_error (&error);
   delete_enrolled_fingers (rdev, user, FP_FINGER_UNKNOWN, &error);
 
-  if (!opened && fp_device_has_storage (priv->dev))
+  if (!opened && fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_STORAGE))
     fp_device_close_sync (priv->dev, NULL, NULL);
 
   if (error)
