@@ -270,3 +270,8 @@ msgstr "Votre doigt n'était pas centré, essayez de le glisser une nouvelle foi
 #: ../pam/fingerprint-strings.h:140 ../pam/fingerprint-strings.h:166
 msgid "Remove your finger, and try swiping your finger again"
 msgstr "Enlevez votre doigt du lecteur et essayez de le glisser une nouvelle fois"
+
+#: ../pam/pam_fprintd.c:560
+#, c-format
+msgid "Failed to match fingerprint"
+msgstr "Echec de reconnaissance de l'empreinte digitale"

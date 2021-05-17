@@ -557,7 +557,7 @@ do_verify (sd_bus      *bus,
         {
           if (str_equal (data->result, "verify-no-match"))
             {
-              send_err_msg (data->pamh, "Failed to match fingerprint");
+              send_err_msg (data->pamh, _("Failed to match fingerprint"));
             }
           else if (str_equal (data->result, "verify-match"))
             {
