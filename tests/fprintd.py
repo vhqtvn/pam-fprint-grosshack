@@ -1047,6 +1047,41 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
             self.assertIn({'scan-type': scan_type}, self._changed_properties)
             self.assertEqual(self.device.get_cached_property('scan-type').unpack(), scan_type)
 
+class FPrintdVirtualStorageNoListDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
+
+    socket_env = 'FP_VIRTUAL_DEVICE_STORAGE_NO_LIST'
+
+    def setUp(self):
+        super().setUp()
+        self.device.Claim('(s)', 'testuser')
+
+    def tearDown(self):
+        self.try_release()
+        super().tearDown()
+
+    def test_clear_storage(self):
+        # We expect collection in this order
+        garbage_collect = [
+            'no-metadata-print',
+            'FP1-20201216-7-ABCDEFGH-testuser',
+            'FP1-20201217-7-12345678-testuser',
+        ]
+        for e in garbage_collect:
+            self.send_command('INSERT', e)
+
+        # Enroll print, return OK for storage clearing
+        self.send_command('CONT', 0)
+        self.enroll_print('print-1', 'left-index-finger')
+
+        prints = self.get_stored_prints()
+        self.assertEqual(set(prints), {'print-1'})
+
+        self.enroll_print('print-2', 'right-index-finger')
+
+        prints = self.get_stored_prints()
+        self.assertEqual(set(prints), {'print-1', 'print-2'})
+
+
 class FPrintdVirtualNoStorageDeviceBaseTest(FPrintdVirtualStorageDeviceBaseTest):
 
     socket_env = 'FP_VIRTUAL_DEVICE'
