@@ -32,3 +32,8 @@ RestrictRealtime=true
 
 # Privilege escalation
 NoNewPrivileges=true
+
+# Protect clock, allow USB and SPI device access
+ProtectClock=yes
+DeviceAllow=char-usb_device rw
+DeviceAllow=char-spi rw
