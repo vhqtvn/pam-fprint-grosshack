@@ -10,6 +10,7 @@ ExecStart=@libexecdir@/fprintd
 # Filesystem lockdown
 ProtectSystem=strict
 ProtectKernelTunables=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
 # This always corresponds to /var/lib/fprint
 StateDirectory=fprint
