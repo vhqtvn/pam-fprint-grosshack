@@ -1,6 +1,24 @@
 This file lists notable changes in each release. For the full history of all
 changes, see ChangeLog.
 
+Version 1.92.0:
+
+API users, please adjust now to planned API changes in 2.0:
+ - EnrollStart will throw an error if the finger was enrolled already
+ - Interactive DBus authentication will only happen when requested
+
+Highlights:
+ - fprintd now prevents the same finger to be enrolled twice
+ - Support clearing storage of match-on-chip devices
+ - pam: Cancel authentication on SIGINT (e.g. ctrl+c with sudo)
+ - pam: Always return PAM_AUTHINFO_UNAVAIL for devices without prints
+ - Expose finger status on DBus
+ - Add method to delete only a specific print of a user
+ - Improved error reporting for deletion
+ - Wait for finger removal before cancelling operations
+ - Prefer older prints when garbage collecting
+ - Major improvements to test coverage
+
 Version 1.90.9:
 
 Highlights:
