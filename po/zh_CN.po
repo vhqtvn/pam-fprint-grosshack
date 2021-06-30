@@ -4,13 +4,13 @@
 # 
 # Translators:
 # Frank Hill <hxf.prc@gmail.com>, 2014
-# Wylmer Wang, 2011
-# Wylmer Wang, 2013
+# e0c668032ced196bd60f2b6a070d982d_8f72ae0, 2011
+# e0c668032ced196bd60f2b6a070d982d_8f72ae0, 2013
 msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-02-06 14:07+0100\n"
+"POT-Creation-Date: 2018-05-31 14:30+0200\n"
 "PO-Revision-Date: 2017-09-19 09:46+0000\n"
 "Last-Translator: Mingye Wang <arthur200126@gmail.com>\n"
 "Language-Team: Chinese (China) (http://www.transifex.com/freedesktop/fprintd/language/zh_CN/)\n"

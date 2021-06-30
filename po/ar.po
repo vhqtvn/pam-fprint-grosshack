@@ -3,13 +3,14 @@
 # This file is distributed under the same license as the PACKAGE package.
 # 
 # Translators:
+# Ibrahim Saed <ibraheem5000@hotmail.com>, 2019
 msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-02-06 14:07+0100\n"
-"PO-Revision-Date: 2017-09-19 09:08+0000\n"
-"Last-Translator: hadess <hadess@hadess.net>\n"
+"POT-Creation-Date: 2018-05-31 14:30+0200\n"
+"PO-Revision-Date: 2019-02-16 09:59+0000\n"
+"Last-Translator: Ibrahim Saed <ibraheem5000@hotmail.com>\n"
 "Language-Team: Arabic (http://www.transifex.com/freedesktop/fprintd/language/ar/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -53,25 +54,25 @@ msgstr "الجهاز يستخدمه مستخدم آخر الآن"
 
 #: ../pam/fingerprint-strings.h:31
 msgid "Place your finger on the fingerprint reader"
-msgstr ""
+msgstr "ضِع إصبعك على قارئ البصمة"
 
 #: ../pam/fingerprint-strings.h:32
 #, c-format
 msgid "Place your finger on %s"
-msgstr ""
+msgstr "ضِع إصبعك على %s"
 
 #: ../pam/fingerprint-strings.h:33
 msgid "Swipe your finger across the fingerprint reader"
-msgstr ""
+msgstr "مرر إصبعك خلال قارئ البصمة"
 
 #: ../pam/fingerprint-strings.h:34
 #, c-format
 msgid "Swipe your finger across %s"
-msgstr ""
+msgstr "مرر إصبعك خلال %s"
 
 #: ../pam/fingerprint-strings.h:36
 msgid "Place your left thumb on the fingerprint reader"
-msgstr ""
+msgstr "ضِع إبهامك الأيسر على قارئ البصمة"
 
 #: ../pam/fingerprint-strings.h:37
 #, c-format
@@ -80,16 +81,16 @@ msgstr "ضع إبهامك الأيسر على %s"
 
 #: ../pam/fingerprint-strings.h:38
 msgid "Swipe your left thumb across the fingerprint reader"
-msgstr ""
+msgstr "مرر إبهامك الأيسر خلال قارئ البصمة"
 
 #: ../pam/fingerprint-strings.h:39
 #, c-format
 msgid "Swipe your left thumb across %s"
-msgstr ""
+msgstr "مرر إبهامك الأيسر خلال %s"
 
 #: ../pam/fingerprint-strings.h:41
 msgid "Place your left index finger on the fingerprint reader"
-msgstr ""
+msgstr "ضِع سبّابتك اليسرى على قارئ البصمة"
 
 #: ../pam/fingerprint-strings.h:42
 #, c-format

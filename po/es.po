@@ -5,12 +5,12 @@
 # Translators:
 # Adolfo Jayme Barrientos, 2015
 # Adolfo Jayme Barrientos, 2014
-# Daniel Mustieles <inactive+leo@transifex.com>, 2012
+# 0f759dd1ea6c4c76cedc299039ca4f23_7584d04 <454cc45058db9632179dc8079c0c1af3_5311>, 2012
 msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-02-06 14:07+0100\n"
+"POT-Creation-Date: 2018-05-31 14:30+0200\n"
 "PO-Revision-Date: 2017-09-19 09:08+0000\n"
 "Last-Translator: Adolfo Jayme Barrientos\n"
 "Language-Team: Spanish (http://www.transifex.com/freedesktop/fprintd/language/es/)\n"

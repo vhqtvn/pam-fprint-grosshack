@@ -7,9 +7,9 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-02-06 14:07+0100\n"
-"PO-Revision-Date: 2017-09-19 09:08+0000\n"
-"Last-Translator: hadess <hadess@hadess.net>\n"
+"POT-Creation-Date: 2018-05-31 14:30+0200\n"
+"PO-Revision-Date: 2021-05-18 18:31+0000\n"
+"Last-Translator: Daniel Șerbănescu <daniel@serbanescu.dk>\n"
 "Language-Team: Romanian (http://www.transifex.com/freedesktop/fprintd/language/ro/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -53,25 +53,25 @@ msgstr "Dispozitivul este deja utilizat de un alt utilizator"
 
 #: ../pam/fingerprint-strings.h:31
 msgid "Place your finger on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:32
 #, c-format
 msgid "Place your finger on %s"
-msgstr ""
+msgstr "Plasați degetul pe %s"
 
 #: ../pam/fingerprint-strings.h:33
 msgid "Swipe your finger across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:34
 #, c-format
 msgid "Swipe your finger across %s"
-msgstr ""
+msgstr "Treceți cu degetul peste %s"
 
 #: ../pam/fingerprint-strings.h:36
 msgid "Place your left thumb on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul mare de la mâna stângă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:37
 #, c-format
@@ -80,16 +80,16 @@ msgstr "Plasați degetul mare de la mâna stângă pe %s"
 
 #: ../pam/fingerprint-strings.h:38
 msgid "Swipe your left thumb across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul mare de la mâna stângă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:39
 #, c-format
 msgid "Swipe your left thumb across %s"
-msgstr ""
+msgstr "Treceți cu degetul mare de la mâna stângă peste %s"
 
 #: ../pam/fingerprint-strings.h:41
 msgid "Place your left index finger on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul arătător de la mâna stângă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:42
 #, c-format
@@ -98,16 +98,16 @@ msgstr "Plasați degetul arătător de la mâna stângă pe %s"
 
 #: ../pam/fingerprint-strings.h:43
 msgid "Swipe your left index finger across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul arătător de la mâna stângă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:44
 #, c-format
 msgid "Swipe your left index finger across %s"
-msgstr ""
+msgstr "Treceți cu degetul arătător de la mâna stângă peste %s"
 
 #: ../pam/fingerprint-strings.h:46
 msgid "Place your left middle finger on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul mijlociu de la mâna stângă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:47
 #, c-format
@@ -116,16 +116,16 @@ msgstr "Plasați degetul mijlociu de la mâna stângă pe %s"
 
 #: ../pam/fingerprint-strings.h:48
 msgid "Swipe your left middle finger across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul mijlociu de la mâna stângă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:49
 #, c-format
 msgid "Swipe your left middle finger across %s"
-msgstr ""
+msgstr "Treceți cu degetul mijlociu de la mâna stângă peste %s"
 
 #: ../pam/fingerprint-strings.h:51
 msgid "Place your left ring finger on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul inelar de la mâna stângă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:52
 #, c-format
@@ -134,16 +134,16 @@ msgstr "Plasați degetul inelar de la mâna stângă pe %s"
 
 #: ../pam/fingerprint-strings.h:53
 msgid "Swipe your left ring finger across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul inelar de la mâna stângă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:54
 #, c-format
 msgid "Swipe your left ring finger across %s"
-msgstr ""
+msgstr "Treceți cu degetul inelar de la mâna stângă peste %s"
 
 #: ../pam/fingerprint-strings.h:56
 msgid "Place your left little finger on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul mic de la mâna stângă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:57
 #, c-format
@@ -152,16 +152,16 @@ msgstr "Plasați degetul mic de la mâna stângă pe %s"
 
 #: ../pam/fingerprint-strings.h:58
 msgid "Swipe your left little finger across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul mic de la mâna stângă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:59
 #, c-format
 msgid "Swipe your left little finger across %s"
-msgstr ""
+msgstr "Treceți cu degetul mic de la mâna stângă peste %s"
 
 #: ../pam/fingerprint-strings.h:61
 msgid "Place your right thumb on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul mare de la mâna dreaptă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:62
 #, c-format
@@ -170,16 +170,16 @@ msgstr "Plasați degetul mare de la mâna dreaptă pe %s"
 
 #: ../pam/fingerprint-strings.h:63
 msgid "Swipe your right thumb across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul mare de la mâna dreaptă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:64
 #, c-format
 msgid "Swipe your right thumb across %s"
-msgstr ""
+msgstr "Treceți cu degetul mare de la mâna dreaptă peste %s"
 
 #: ../pam/fingerprint-strings.h:66
 msgid "Place your right index finger on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul arătător de la mâna dreaptă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:67
 #, c-format
@@ -188,16 +188,16 @@ msgstr "Plasați degetul arătător de la mâna dreaptă pe %s"
 
 #: ../pam/fingerprint-strings.h:68
 msgid "Swipe your right index finger across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul arătător de la mâna dreaptă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:69
 #, c-format
 msgid "Swipe your right index finger across %s"
-msgstr ""
+msgstr "Treceți cu degetul arătător de la mâna dreaptă peste %s"
 
 #: ../pam/fingerprint-strings.h:71
 msgid "Place your right middle finger on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul mijlociu de la mâna dreaptă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:72
 #, c-format
@@ -206,16 +206,16 @@ msgstr "Plasați degetul mijlociu de la mâna dreaptă pe %s"
 
 #: ../pam/fingerprint-strings.h:73
 msgid "Swipe your right middle finger across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul mijlociu de la mâna dreaptă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:74
 #, c-format
 msgid "Swipe your right middle finger across %s"
-msgstr ""
+msgstr "Treceți cu degetul mijlociu de la mâna dreaptă peste %s"
 
 #: ../pam/fingerprint-strings.h:76
 msgid "Place your right ring finger on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul inelar de la mâna dreaptă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:77
 #, c-format
@@ -224,16 +224,16 @@ msgstr "Plasați degetul inelar de la mâna dreaptă pe %s"
 
 #: ../pam/fingerprint-strings.h:78
 msgid "Swipe your right ring finger across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul inelar de la mâna dreaptă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:79
 #, c-format
 msgid "Swipe your right ring finger across %s"
-msgstr ""
+msgstr "Treceți cu degetul inelar de la mâna dreaptă peste %s"
 
 #: ../pam/fingerprint-strings.h:81
 msgid "Place your right little finger on the fingerprint reader"
-msgstr ""
+msgstr "Plasați degetul mic de la mâna dreaptă pe cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:82
 #, c-format
@@ -242,12 +242,12 @@ msgstr "Plasați degetul mic de la mâna dreaptă pe %s"
 
 #: ../pam/fingerprint-strings.h:83
 msgid "Swipe your right little finger across the fingerprint reader"
-msgstr ""
+msgstr "Treceți cu degetul mic de la mâna dreaptă peste cititorul de amprente"
 
 #: ../pam/fingerprint-strings.h:84
 #, c-format
 msgid "Swipe your right little finger across %s"
-msgstr ""
+msgstr "Treceți cu degetul mic de la mâna dreaptă peste %s"
 
 #: ../pam/fingerprint-strings.h:131 ../pam/fingerprint-strings.h:157
 msgid "Place your finger on the reader again"

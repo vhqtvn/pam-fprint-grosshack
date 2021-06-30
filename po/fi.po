@@ -4,14 +4,15 @@
 # 
 # Translators:
 # Jiri Grönroos <jiri.gronroos@iki.fi>, 2013,2018
+# Kimmo Kujansuu <mrkujansuu@gmail.com>, 2019
 # Ville Skyttä <ville.skytta@iki.fi>, 2011,2016
 msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-02-06 14:07+0100\n"
-"PO-Revision-Date: 2018-01-25 07:36+0000\n"
-"Last-Translator: Jiri Grönroos <jiri.gronroos@iki.fi>\n"
+"POT-Creation-Date: 2018-05-31 14:30+0200\n"
+"PO-Revision-Date: 2019-04-19 20:32+0000\n"
+"Last-Translator: Kimmo Kujansuu <mrkujansuu@gmail.com>\n"
 "Language-Team: Finnish (http://www.transifex.com/freedesktop/fprintd/language/fi/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -25,28 +26,28 @@ msgstr "Vahvista sormenjälki"
 
 #: ../data/net.reactivated.fprint.device.policy.in.h:2
 msgid "Privileges are required to verify fingerprints."
-msgstr ""
+msgstr "Sormenjälkien tarkistamiseen tarvitaan oikeudet."
 
 #: ../data/net.reactivated.fprint.device.policy.in.h:3
 msgid "Enroll new fingerprints"
-msgstr ""
+msgstr "Rekisteröi uusia sormenjälkiä"
 
 #: ../data/net.reactivated.fprint.device.policy.in.h:4
 msgid "Privileges are required to enroll new fingerprints."
-msgstr ""
+msgstr "Uusien sormenjälkien rekisteröintiin tarvitaan oikeudet."
 
 #: ../data/net.reactivated.fprint.device.policy.in.h:5
 msgid "Select a user to enroll"
-msgstr ""
+msgstr "Valitse käyttäjä, johon haluat kirjata"
 
 #: ../data/net.reactivated.fprint.device.policy.in.h:6
 msgid "Privileges are required to enroll new fingerprints for other users."
-msgstr ""
+msgstr "Uusien sormenjälkien rekisteröiminen muille käyttäjille edellyttää oikeuksia."
 
 #: ../src/device.c:385
 #, c-format
 msgid "Device was not claimed before use"
-msgstr ""
+msgstr "Laitetta ei noudettu ennen käyttöä"
 
 #: ../src/device.c:395
 #, c-format
@@ -64,12 +65,12 @@ msgstr "Aseta sormesi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:33
 msgid "Swipe your finger across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise sormella lukijan yli"
 
 #: ../pam/fingerprint-strings.h:34
 #, c-format
 msgid "Swipe your finger across %s"
-msgstr ""
+msgstr "Pyyhkäise sormellasi %s"
 
 #: ../pam/fingerprint-strings.h:36
 msgid "Place your left thumb on the fingerprint reader"
@@ -82,12 +83,12 @@ msgstr "Aseta vasen peukalosi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:38
 msgid "Swipe your left thumb across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise vasenta peukaloa lukijan yli"
 
 #: ../pam/fingerprint-strings.h:39
 #, c-format
 msgid "Swipe your left thumb across %s"
-msgstr ""
+msgstr "Pyyhkäise vasemmalla peukalollasi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:41
 msgid "Place your left index finger on the fingerprint reader"
@@ -100,12 +101,12 @@ msgstr "Aseta vasen etusormesi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:43
 msgid "Swipe your left index finger across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise vasen etusormi lukijan yli"
 
 #: ../pam/fingerprint-strings.h:44
 #, c-format
 msgid "Swipe your left index finger across %s"
-msgstr ""
+msgstr "Pyyhkäise vasemmalla etusormellasi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:46
 msgid "Place your left middle finger on the fingerprint reader"
@@ -118,12 +119,12 @@ msgstr "Aseta vasen keskisormesi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:48
 msgid "Swipe your left middle finger across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise vasen keskisormi lukijan yli"
 
 #: ../pam/fingerprint-strings.h:49
 #, c-format
 msgid "Swipe your left middle finger across %s"
-msgstr ""
+msgstr "Pyyhkäise vasemmalla keskisormellasi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:51
 msgid "Place your left ring finger on the fingerprint reader"
@@ -136,12 +137,12 @@ msgstr "Aseta vasen nimettömäsi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:53
 msgid "Swipe your left ring finger across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise vasenta nimetöntä lukijan yli"
 
 #: ../pam/fingerprint-strings.h:54
 #, c-format
 msgid "Swipe your left ring finger across %s"
-msgstr ""
+msgstr "Pyyhkäise vasemmalla nimettömälläsi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:56
 msgid "Place your left little finger on the fingerprint reader"
@@ -154,12 +155,12 @@ msgstr "Aseta vasen pikkusormesi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:58
 msgid "Swipe your left little finger across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise vasenta pikkusormea lukijan yli"
 
 #: ../pam/fingerprint-strings.h:59
 #, c-format
 msgid "Swipe your left little finger across %s"
-msgstr ""
+msgstr "Pyyhkäise vasemmalla pikkusormellasi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:61
 msgid "Place your right thumb on the fingerprint reader"
@@ -172,12 +173,12 @@ msgstr "Aseta oikea peukalosi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:63
 msgid "Swipe your right thumb across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise oikea peukalo lukijan yli"
 
 #: ../pam/fingerprint-strings.h:64
 #, c-format
 msgid "Swipe your right thumb across %s"
-msgstr ""
+msgstr "Pyyhkäise oikealla peukalollasi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:66
 msgid "Place your right index finger on the fingerprint reader"
@@ -190,12 +191,12 @@ msgstr "Aseta oikea etusormesi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:68
 msgid "Swipe your right index finger across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise oikea etusormi lukijan yli"
 
 #: ../pam/fingerprint-strings.h:69
 #, c-format
 msgid "Swipe your right index finger across %s"
-msgstr ""
+msgstr "Pyyhkäise oikealla etusormellasi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:71
 msgid "Place your right middle finger on the fingerprint reader"
@@ -208,12 +209,12 @@ msgstr "Aseta oikea keskisormesi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:73
 msgid "Swipe your right middle finger across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise oikea keskisormesi lukijan yli"
 
 #: ../pam/fingerprint-strings.h:74
 #, c-format
 msgid "Swipe your right middle finger across %s"
-msgstr ""
+msgstr "Pyyhkäise oikealla keskisormellasi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:76
 msgid "Place your right ring finger on the fingerprint reader"
@@ -226,12 +227,12 @@ msgstr "Aseta oikea nimettömäsi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:78
 msgid "Swipe your right ring finger across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise oikeaa nimetöntä lukijan yli"
 
 #: ../pam/fingerprint-strings.h:79
 #, c-format
 msgid "Swipe your right ring finger across %s"
-msgstr ""
+msgstr "Pyyhkäise oikealla nimettömälläsi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:81
 msgid "Place your right little finger on the fingerprint reader"
@@ -244,12 +245,12 @@ msgstr "Aseta oikea pikkusormesi lukijaan %s"
 
 #: ../pam/fingerprint-strings.h:83
 msgid "Swipe your right little finger across the fingerprint reader"
-msgstr ""
+msgstr "Pyyhkäise oikeaa pikkusormea lukijan yli"
 
 #: ../pam/fingerprint-strings.h:84
 #, c-format
 msgid "Swipe your right little finger across %s"
-msgstr ""
+msgstr "Pyyhkäise oikealla pikkusormellasi lukijaa %s"
 
 #: ../pam/fingerprint-strings.h:131 ../pam/fingerprint-strings.h:157
 msgid "Place your finger on the reader again"
@@ -269,4 +270,4 @@ msgstr "Sormesi ei ollut lukijan keskellä, yritä pyyhkäistä sormellasi uudel
 
 #: ../pam/fingerprint-strings.h:140 ../pam/fingerprint-strings.h:166
 msgid "Remove your finger, and try swiping your finger again"
-msgstr ""
+msgstr "Poista sormi ja yritä pyyhkäistä uudelleen"
