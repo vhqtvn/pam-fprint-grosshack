@@ -12,6 +12,13 @@ Licensed under the GPL version 2 or any later version (see COPYING).
 
 A PAM login module is included in the 'pam' directory.
 
+Translating
+===========
+
+fprintd and pam_fprintd are translated using weblate. Please visit
+https://translate.fedoraproject.org/projects/fprintd/ to contribute
+translations.
+
 API use cases
 =============
 

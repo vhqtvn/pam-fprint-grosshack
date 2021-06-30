@@ -1,8 +1,0 @@
-[main]
-host = https://www.transifex.com
-
-[fprintd.fprintd-po-fprintd-pot]
-file_filter = po/<lang>.po
-source_file = po/fprintd.pot
-source_lang = en
-
