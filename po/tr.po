@@ -5,20 +5,22 @@
 # Translators:
 # Caner Başaran <basaran.caner@gmail.com>, 2014
 # Emin Tufan Çetin <etcetin@gmail.com>, 2020
+# Oğuz Ersen <oguzersen@protonmail.com>, 2021.
 msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-06-30 14:00+0200\n"
-"PO-Revision-Date: 2020-02-29 10:08+0000\n"
-"Last-Translator: Emin Tufan Çetin <etcetin@gmail.com>\n"
-"Language-Team: Turkish (http://www.transifex.com/freedesktop/fprintd/"
-"language/tr/)\n"
+"PO-Revision-Date: 2021-07-16 20:04+0000\n"
+"Last-Translator: Oğuz Ersen <oguzersen@protonmail.com>\n"
+"Language-Team: Turkish <https://translate.fedoraproject.org/projects/fprintd/"
+"fprintd/tr/>\n"
 "Language: tr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"Plural-Forms: nplurals=2; plural=(n>1);\n"
+"X-Generator: Weblate 4.7.1\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -147,21 +149,21 @@ msgstr "Sol yüzük parmağınızı %s üzerinde kaydırın"
 
 #: pam/fingerprint-strings.h:75
 msgid "Place your left little finger on the fingerprint reader"
-msgstr "Sol küçük parmağınızı parmak izi okuyucuya yerleştirin"
+msgstr "Sol serçe parmağınızı parmak izi okuyucuya yerleştirin"
 
 #: pam/fingerprint-strings.h:76
 #, c-format
 msgid "Place your left little finger on %s"
-msgstr "Sol küçük parmağınızı %s üzerine yerleştirin"
+msgstr "Sol serçe parmağınızı %s üzerine yerleştirin"
 
 #: pam/fingerprint-strings.h:77
 msgid "Swipe your left little finger across the fingerprint reader"
-msgstr "Sol küçük parmağınızı parmak izi okuyucu üzerinde kaydırın"
+msgstr "Sol serçe parmağınızı parmak izi okuyucu üzerinde kaydırın"
 
 #: pam/fingerprint-strings.h:78
 #, c-format
 msgid "Swipe your left little finger across %s"
-msgstr "Sol küçük parmağınızı %s üzerinde kaydırın"
+msgstr "Sol serçe parmağınızı %s üzerinde kaydırın"
 
 #: pam/fingerprint-strings.h:80
 msgid "Place your right thumb on the fingerprint reader"
@@ -237,21 +239,21 @@ msgstr "Sağ yüzük parmağınızı %s üzerinde kaydırın"
 
 #: pam/fingerprint-strings.h:100
 msgid "Place your right little finger on the fingerprint reader"
-msgstr "Sağ küçük parmağınızı parmak izi okuyucuya yerleştirin"
+msgstr "Sağ serçe parmağınızı parmak izi okuyucuya yerleştirin"
 
 #: pam/fingerprint-strings.h:101
 #, c-format
 msgid "Place your right little finger on %s"
-msgstr "Sağ küçük parmağınızı %s üzerine yerleştirin"
+msgstr "Sağ serçe parmağınızı %s üzerine yerleştirin"
 
 #: pam/fingerprint-strings.h:102
 msgid "Swipe your right little finger across the fingerprint reader"
-msgstr "Sağ küçük parmağınızı parmak izi okuyucu üzerinde kaydırın"
+msgstr "Sağ serçe parmağınızı parmak izi okuyucu üzerinde kaydırın"
 
 #: pam/fingerprint-strings.h:103
 #, c-format
 msgid "Swipe your right little finger across %s"
-msgstr "Sağ küçük parmağınızı %s üzerinde kaydırın"
+msgstr "Sağ serçe parmağınızı %s üzerinde kaydırın"
 
 #: pam/fingerprint-strings.h:171 pam/fingerprint-strings.h:199
 msgid "Place your finger on the reader again"
@@ -275,13 +277,12 @@ msgstr "Parmağınızı kaldırın ve yeniden kaydırmayı deneyin"
 
 #: pam/pam_fprintd.c:537
 msgid "Verification timed out"
-msgstr ""
+msgstr "Doğrulama zaman aşımına uğradı"
 
 #: pam/pam_fprintd.c:560
-#, fuzzy
 msgid "Failed to match fingerprint"
-msgstr "Parmak izini doğrula"
+msgstr "Parmak izi eşleştirilemedi"
 
 #: pam/pam_fprintd.c:576
 msgid "An unknown error occurred"
-msgstr ""
+msgstr "Bilinmeyen bir hata oluştu"
