@@ -43,16 +43,18 @@ class OutputChecker(object):
                     fcntl.fcntl(self._pipe_fd_w, fcntl.F_GETFL) | os.O_CLOEXEC)
 
         # Start copier thread
-        self._thread = threading.Thread(target=self._copy)
+        self._thread = threading.Thread(target=self._copy, daemon=True)
         self._thread.start()
 
     def _copy(self):
+        p = select.poll()
+        p.register(self._pipe_fd_r)
         while True:
             try:
                 # Be lazy and wake up occasionally in case _pipe_fd_r became invalid
                 # The reason to do this is because os.read() will *not* return if the
                 # FD is forcefully closed.
-                select.select([self._pipe_fd_r], [], [], 0.1)
+                p.poll(0.1)
 
                 r = os.read(self._pipe_fd_r, 1024)
                 if not r:
@@ -130,7 +132,7 @@ class OutputChecker(object):
                 if failmsg:
                     raise AssertionError(failmsg)
                 else:
-                    raise AssertionError('Found needle %s but shouldn\'t have been there (timeout: %0.2f)' % (str(needle_re), timeout))
+                    raise AssertionError('Found needle %s but shouldn\'t have been there (timeout: %0.2f)' % (str(needle_re), wait))
 
         return ret
 
