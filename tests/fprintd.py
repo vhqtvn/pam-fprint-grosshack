@@ -38,6 +38,7 @@ gi.require_version('FPrint', '2.0')
 from gi.repository import GLib, Gio, FPrint
 from output_checker import OutputChecker
 import cairo
+import signal
 
 try:
     from subprocess import DEVNULL
@@ -164,6 +165,11 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Try to generate backtrace if meson kills as with SIGTERM
+        def r(*args):
+            raise KeyboardInterrupt()
+        signal.signal(signal.SIGTERM, r)
+
         super().setUpClass()
         fprintd = None
         cls._polkitd = None
