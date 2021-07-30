@@ -1348,8 +1348,6 @@ match_cb (FpDevice *device,
   cancelled = g_cancellable_is_cancelled (priv->current_cancellable);
   matched = match != NULL && cancelled == FALSE;
 
-  /* No-match is reported only after the operation completes.
-   * This avoids problems when the operation is immediately restarted. */
   report_verify_status (rdev, matched, error);
 }
 
