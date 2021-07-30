@@ -220,6 +220,14 @@ file_storage_print_data_load (FpDevice   *dev,
   if (r)
     return r;
 
+  /* Make sure the username/finger matches our expectations. */
+  if (fp_print_get_finger (new) != finger)
+    return -EINVAL;
+
+  if (g_strcmp0 (fp_print_get_username (new), username) != 0)
+    return -EINVAL;
+
+  /* And that the print is compatible with the device. */
   if (!fp_print_compatible (new, dev))
     return -EINVAL;
 
