@@ -1124,6 +1124,7 @@ load_all_prints (FprintDevice *rdev)
 {
   g_autoptr(GPtrArray) res = g_ptr_array_new_with_free_func (g_object_unref);
   GSList *user, *users = NULL;
+  guint i;
 
   users = store.discover_users ();
 
@@ -1132,7 +1133,9 @@ load_all_prints (FprintDevice *rdev)
       const char *username = user->data;
       g_autoptr(GPtrArray) prints = load_user_prints (rdev, username);
 
-      g_ptr_array_extend_and_steal (res, g_steal_pointer (&prints));
+      /* TODO: Use g_ptr_array_extend_and_steal with GLib >= 2.62 */
+      for (i = 0; i < prints->len; i++)
+        g_ptr_array_add (res, g_object_ref (g_ptr_array_index (prints, i)));
     }
 
   g_slist_free_full (users, g_free);
