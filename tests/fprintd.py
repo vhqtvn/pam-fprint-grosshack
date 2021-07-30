@@ -1086,6 +1086,51 @@ class FPrintdVirtualStorageDeviceTests(FPrintdVirtualStorageDeviceBaseTest):
         prints = self.get_stored_prints()
         self.assertEqual(set(prints), set(garbage_prints))
 
+    def test_local_storage_cleanup_data_error(self):
+        # Enroll a print and delete it
+        self.enroll_print('deleted-print', finger='left-thumb')
+        self.send_command('REMOVE', 'deleted-print')
+
+        # Note: would be thrown anyway by the storage device if we scan something
+        self.send_error(FPrint.DeviceError.DATA_NOT_FOUND)
+        self.device.VerifyStart('(s)', 'any')
+
+        self.wait_for_result('verify-no-match')
+        self.device.VerifyStop()
+
+        # At this point, there is no print left
+        with self.assertFprintError('NoEnrolledPrints'):
+            self.device.ListEnrolledFingers('(s)', 'testuser')
+
+    def test_local_storage_cleanup_no_match(self):
+        # Enroll a print and delete it
+        self.enroll_print('existing-print', finger='right-index-finger')
+        self.enroll_print('deleted-print', finger='left-thumb')
+        self.send_command('REMOVE', 'deleted-print')
+
+        # We need to send a print that is known to the device
+        self.send_image('other-print')
+        self.device.VerifyStart('(s)', 'right-index-finger')
+
+        self.wait_for_result('verify-no-match')
+        self.device.VerifyStop()
+
+        # At this point, the deleted print has disappeared
+        self.assertEqual(set(self.device.ListEnrolledFingers('(s)', 'testuser')), {'right-index-finger'})
+
+        # Now, do the same thing, and the print will not be deleted
+        self.enroll_print('deleted-print', finger='left-thumb')
+        self.send_command('REMOVE', 'deleted-print')
+
+        self.send_image('other-print')
+        self.device.VerifyStart('(s)', 'right-index-finger')
+
+        self.wait_for_result('verify-no-match')
+        self.device.VerifyStop()
+
+        # At this point, the deleted print is still there
+        self.assertEqual(set(self.device.ListEnrolledFingers('(s)', 'testuser')), {'right-index-finger', 'left-thumb'})
+
     def test_enroll_with_one_stage_only(self):
         self._maybe_reduce_enroll_stages(stages=1)
 

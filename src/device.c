@@ -101,6 +101,8 @@ typedef struct
   FpDevice        *dev;
   SessionData     *_session;
 
+  gboolean         local_storage_checked;
+
   guint            verify_stop_wait_timeout_id;
 
   PolkitAuthority *auth;
@@ -1273,6 +1275,93 @@ report_verify_status (FprintDevice *rdev,
     session->verify_status_reported = TRUE;
 }
 
+static void
+check_local_storage (FprintDevice *rdev,
+                     gboolean      found_match,
+                     GError       *error)
+{
+  g_autoptr(GError) err = NULL;
+  g_autoptr(GPtrArray) device_prints = NULL;
+  g_autoptr(GPtrArray) host_prints = NULL;
+  FprintDevicePrivate *priv = fprint_device_get_instance_private (rdev);
+  unsigned i;
+
+  g_return_if_fail (priv->current_action == ACTION_VERIFY ||
+                    priv->current_action == ACTION_IDENTIFY);
+
+  /* This only ever sense if the device can list prints. */
+  if (!fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_STORAGE_LIST))
+    return;
+
+  /* We do not have any proper driver that correctly reports DATA_NOT_FOUND
+   * errors. Only synaptics, but there the feature is being disabled on the
+   * firmware side.
+   * As such, just always run a test the first time we get a match failure.
+   */
+  if (g_error_matches (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_DATA_NOT_FOUND))
+    {
+      if (priv->local_storage_checked)
+        g_warning ("Device %s reported that a passed print did not exist during action %d, but we verified the local storage!",
+                   fp_device_get_name (priv->dev), priv->current_action);
+      else
+        g_debug ("Device %s reported that a passed print did not exist during action %d",
+                 fp_device_get_name (priv->dev), priv->current_action);
+    }
+  else if (error || priv->local_storage_checked)
+    {
+      return;
+    }
+  else if (!found_match)
+    {
+      g_debug ("Device %s failed to match during action %d, verifying local storage",
+               fp_device_get_name (priv->dev), priv->current_action);
+    }
+  else
+    {
+      return;
+    }
+
+  priv->local_storage_checked = TRUE;
+
+  device_prints = fp_device_list_prints_sync (priv->dev, NULL, &err);
+  if (!device_prints)
+    {
+      g_warning ("Failed to query prints: %s", err->message);
+      return;
+    }
+
+  host_prints = load_all_prints (rdev);
+
+  for (i = 0; i < host_prints->len; i++)
+    {
+      FpPrint *print = g_ptr_array_index (host_prints, i);
+      int r;
+
+      if (g_ptr_array_find_with_equal_func (device_prints,
+                                            print,
+                                            (GEqualFunc) fp_print_equal,
+                                            NULL))
+        continue;
+
+      /* Print not known by device, remove locally */
+      if ((r = store.print_data_delete (priv->dev,
+                                        fp_print_get_finger (print),
+                                        fp_print_get_username (print))) == 0)
+        {
+          g_message ("Deleted stored finger %d for user %s as it is unknown to device.",
+                     fp_print_get_finger (print),
+                     fp_print_get_username (print));
+        }
+      else
+        {
+          g_warning ("Error deleting finger %d for user %s that is unknown to device: %d!",
+                     fp_print_get_finger (print),
+                     fp_print_get_username (print),
+                     r);
+        }
+    }
+}
+
 static gboolean
 can_start_action (FprintDevice *rdev, GError **error)
 {
@@ -1489,6 +1578,8 @@ verify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
                        error->message);
         }
 
+      check_local_storage (rdev, match, error);
+
       stoppable_action_completed (rdev);
     }
 }
@@ -1531,6 +1622,8 @@ identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
             g_warning ("Device reported an error during identify: %s",
                        error->message);
         }
+
+      check_local_storage (rdev, match != NULL, error);
 
       stoppable_action_completed (rdev);
     }
