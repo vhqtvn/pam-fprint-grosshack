@@ -2679,15 +2679,6 @@ class FPrintdVirtualDeviceVerificationTests(FPrintdVirtualDeviceBaseTest):
             self.assertIsNone(self._last_result)
             self.assertFalse(self.finger_present)
 
-    def test_verify_stop_restarts_immediately(self):
-        self.send_image('tented_arch')
-        self.assertVerifyNoMatch()
-
-        self.call_device_method_async('VerifyStop', '()', [])
-        self.call_device_method_async('VerifyStart', '(s)', [self.verify_finger])
-
-        self.wait_for_device_reply(expected_replies=2)
-
     def test_verify_stop_waits_for_completion(self):
         self.stop_on_teardown = False
 
