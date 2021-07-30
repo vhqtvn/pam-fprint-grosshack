@@ -66,6 +66,14 @@ host_system = host_machine.system()
 glib_min_version = '2.56'
 libfprint_min_version = '1.92.0'
 
+glib_version_def = 'GLIB_VERSION_@0@_@1@'.format(
+    glib_min_version.split('.')[0], glib_min_version.split('.')[1])
+common_cflags = cc.get_supported_arguments([
+    '-DGLIB_VERSION_MIN_REQUIRED=' + glib_version_def,
+    '-DGLIB_VERSION_MAX_ALLOWED=' + glib_version_def,
+])
+add_project_arguments(common_cflags, language: 'c')
+
 fprintd_installdir = get_option('prefix') / get_option('libexecdir')
 fprintd_plugindir = get_option('prefix') / get_option('libdir') / meson.project_name() / 'modules'
 storage_path = get_option('prefix') / get_option('localstatedir') / 'lib/fprint'
