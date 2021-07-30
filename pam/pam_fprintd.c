@@ -536,6 +536,14 @@ do_verify (sd_bus      *bus,
           data->timed_out = true;
           send_info_msg (data->pamh, _("Verification timed out"));
         }
+      else
+        {
+          if (str_equal (data->result, "verify-no-match"))
+            send_err_msg (data->pamh, _("Failed to match fingerprint"));
+          else if (str_equal (data->result, "verify-match"))
+            /* Simply disconnect from bus if we return PAM_SUCCESS */
+            return PAM_SUCCESS;
+        }
 
       /* Ignore errors from VerifyStop */
       data->verify_started = false;
@@ -557,11 +565,7 @@ do_verify (sd_bus      *bus,
         {
           if (str_equal (data->result, "verify-no-match"))
             {
-              send_err_msg (data->pamh, _("Failed to match fingerprint"));
-            }
-          else if (str_equal (data->result, "verify-match"))
-            {
-              return PAM_SUCCESS;
+              /* Nothing to do at this point. */
             }
           else if (str_equal (data->result, "verify-unknown-error"))
             {
@@ -743,10 +747,16 @@ do_auth (pam_handle_t *pamh, const char *username)
   if (claim_device (pamh, bus, data->dev, username))
     {
       int ret = do_verify (bus, data);
-      release_device (pamh, bus, data->dev);
+
+      /* Simply disconnect from bus if we return PAM_SUCCESS */
+      if (ret != PAM_SUCCESS)
+        release_device (pamh, bus, data->dev);
+
+      sd_bus_close (bus);
       return ret;
     }
 
+  sd_bus_close (bus);
   return PAM_AUTHINFO_UNAVAIL;
 }
 
