@@ -1936,7 +1936,8 @@ enroll_identify_cb (FpDevice *dev, GAsyncResult *res, void *user_data)
                                         priv->current_cancellable,
                                         &error))
         {
-          g_warning ("Failed to garbage collect duplicate print, cannot continue with enroll.");
+          g_warning ("Failed to garbage collect duplicate print, cannot continue with enroll: %s",
+                     error->message);
           g_signal_emit (rdev, signals[SIGNAL_ENROLL_STATUS], 0, "enroll-duplicate", TRUE);
 
           stoppable_action_completed (rdev);
