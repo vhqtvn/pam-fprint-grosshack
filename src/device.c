@@ -1506,7 +1506,9 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
 
       if (gallery)
         {
-          print = g_ptr_array_steal_index_fast (gallery, 0);
+          /* TODO: Use g_ptr_array_remove_index_fast with GLib >= 2.58 */
+          print = g_object_ref (g_ptr_array_index (gallery, 0));
+          g_ptr_array_remove_index_fast (gallery, 0);
           finger = fp_print_get_finger (print);
         }
       else
