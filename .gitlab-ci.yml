@@ -95,10 +95,11 @@ test_dev:
     - ninja -C _build coverage
     - cat _build/meson-logs/coverage.txt
   artifacts:
-    name: log-and-coverage
-    when: always
+    expose_as: 'Coverage Report'
     paths:
       - _build/meson-logs
+      - _build/meson-logs/coveragereport/index.html
+    expire_in: 1 week
 
 test_dev_with_sanitizer:
   extends:
