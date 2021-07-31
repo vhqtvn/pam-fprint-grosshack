@@ -143,6 +143,12 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.assertRegex(res.info[0], r'Swipe your left little finger across the fingerprint reader')
         self.assertEqual(len(res.errors), 0)
 
+        # Check that we can stop verification and release the device. i.e.
+        # this has not been done by PAM already (the real fprintd would notice
+        # the disconnect, the mock service does not).
+        self.device_mock.VerifyStop()
+        self.device_mock.Release()
+
     def test_pam_fprintd_no_fingers(self):
         self.setup_device()
         self.device_mock.SetEnrolledFingers('toto', dbus.Array(set([]), signature='s'))
@@ -198,6 +204,13 @@ class TestPamFprintd(dbusmock.DBusTestCase):
         self.assertRegex(res.errors[0], r'Failed to match fingerprint')
         self.assertRegex(res.errors[0], r'Failed to match fingerprint')
         self.assertRegex(res.errors[0], r'Failed to match fingerprint')
+
+        # Check that we can cannot stop verification or release the device. i.e.
+        # PAM should have correctly done this after verification was done.
+        with self.assertRaisesRegex(dbus.exceptions.DBusException, r'net\.reactivated\.Fprint\.Error\.NoActionInProgress'):
+            self.device_mock.VerifyStop()
+        with self.assertRaisesRegex(dbus.exceptions.DBusException, r'net\.reactivated\.Fprint\.Error\.ClaimDevice'):
+            self.device_mock.Release()
 
     def test_pam_fprintd_blocks_unexpected_auth2(self):
         self.setup_device()
