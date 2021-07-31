@@ -121,6 +121,8 @@ class Connection:
         self.con.close()
         del self.con
 
+# Speed up tests by only loading a 128x128px area from the center
+MAX_IMG_SIZE = 128
 def load_image(img):
     png = cairo.ImageSurface.create_from_png(img)
 
@@ -129,7 +131,13 @@ def load_image(img):
     h = png.get_height()
     w = (w + 3) // 4 * 4
     h = (h + 3) // 4 * 4
-    img = cairo.ImageSurface(cairo.Format.A8, w, h)
+
+    w_out = min(MAX_IMG_SIZE, w)
+    h_out = min(MAX_IMG_SIZE, h)
+    x = (w - w_out) // 2
+    y = (h - h_out) // 2
+
+    img = cairo.ImageSurface(cairo.Format.A8, w_out, h_out)
     cr = cairo.Context(img)
 
     cr.set_source_rgba(1, 1, 1, 1)
@@ -138,7 +146,7 @@ def load_image(img):
     cr.set_source_rgba(0, 0, 0, 0)
     cr.set_operator(cairo.OPERATOR_SOURCE)
 
-    cr.set_source_surface(png)
+    cr.set_source_surface(png, -x, -y)
     cr.paint()
 
     return img
