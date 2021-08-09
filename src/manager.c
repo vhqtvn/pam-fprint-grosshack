@@ -152,14 +152,14 @@ fprint_manager_timeout_cb (FprintManager *manager)
 }
 
 static void
-fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintManager *manager)
+fprint_manager_busy_notified (FprintDevice *rdev, GParamSpec *spec, FprintManager *manager)
 {
   FprintManagerPrivate *priv = fprint_manager_get_instance_private (manager);
-  guint num_devices_used = 0;
+  guint num_devices_busy = 0;
 
   g_autolist (GDBusObject) devices = NULL;
   GList *l;
-  gboolean in_use;
+  gboolean busy;
 
   if (priv->timeout_id > 0)
     {
@@ -177,12 +177,12 @@ fprint_manager_in_use_notified (FprintDevice *rdev, GParamSpec *spec, FprintMana
       FprintDBusObjectSkeleton *object = l->data;
 
       dev = fprint_dbus_object_skeleton_get_device (object);
-      g_object_get (G_OBJECT (dev), "in-use", &in_use, NULL);
-      if (in_use != FALSE)
-        num_devices_used++;
+      g_object_get (G_OBJECT (dev), "busy", &busy, NULL);
+      if (busy != FALSE)
+        num_devices_busy++;
     }
 
-  if (num_devices_used == 0)
+  if (num_devices_busy == 0)
     priv->timeout_id = g_timeout_add_seconds (TIMEOUT, (GSourceFunc) fprint_manager_timeout_cb, manager);
 }
 
@@ -238,8 +238,8 @@ device_added_cb (FprintManager *manager, FpDevice *device, FpContext *context)
 
   rdev = fprint_device_new (device);
 
-  g_signal_connect (G_OBJECT (rdev), "notify::in-use",
-                    G_CALLBACK (fprint_manager_in_use_notified), manager);
+  g_signal_connect (G_OBJECT (rdev), "notify::busy",
+                    G_CALLBACK (fprint_manager_busy_notified), manager);
 
   path = get_device_path (rdev);
 
@@ -282,9 +282,9 @@ device_removed_cb (FprintManager *manager, FpDevice *device, FpContext *context)
       break;
     }
 
-  /* The device that disappeared might have been in-use.
+  /* The device that disappeared might have been busy.
    * Do we need to do anything else in this case to clean up more gracefully? */
-  fprint_manager_in_use_notified (NULL, NULL, manager);
+  fprint_manager_busy_notified (NULL, NULL, manager);
 }
 
 static void

@@ -127,7 +127,7 @@ G_DEFINE_TYPE_WITH_CODE (FprintDevice, fprint_device,
 
 enum fprint_device_properties {
   FPRINT_DEVICE_CONSTRUCT_DEV = 1,
-  FPRINT_DEVICE_IN_USE,
+  FPRINT_DEVICE_BUSY,
 };
 
 enum fprint_device_signals {
@@ -293,8 +293,10 @@ fprint_device_get_property (GObject *object, guint property_id,
       g_value_set_object (value, priv->dev);
       break;
 
-    case FPRINT_DEVICE_IN_USE:
-      g_value_set_boolean (value, g_hash_table_size (priv->clients) != 0);
+    case FPRINT_DEVICE_BUSY:
+      g_value_set_boolean (value,
+                           g_hash_table_size (priv->clients) != 0 ||
+                           fp_device_get_temperature (priv->dev) > FP_TEMPERATURE_COLD);
       break;
 
     default:
@@ -360,6 +362,14 @@ on_finger_status_changed (FprintDevice *rdev,
 }
 
 static void
+on_temperature_changed (FprintDevice *rdev,
+                        GParamSpec   *spec,
+                        FpDevice     *device)
+{
+  g_object_notify (G_OBJECT (rdev), "busy");
+}
+
+static void
 fprint_device_constructed (GObject *object)
 {
   FprintDevice *rdev = FPRINT_DEVICE (object);
@@ -383,6 +393,11 @@ fprint_device_constructed (GObject *object)
                            rdev, G_CONNECT_SWAPPED);
   on_finger_status_changed (rdev, NULL, priv->dev);
 
+  g_signal_connect_object (priv->dev, "notify::temperature",
+                           G_CALLBACK (on_temperature_changed),
+                           rdev, G_CONNECT_SWAPPED);
+  on_temperature_changed (rdev, NULL, priv->dev);
+
   G_OBJECT_CLASS (fprint_device_parent_class)->constructed (object);
 }
 
@@ -405,11 +420,11 @@ fprint_device_class_init (FprintDeviceClass *klass)
   g_object_class_install_property (gobject_class,
                                    FPRINT_DEVICE_CONSTRUCT_DEV, pspec);
 
-  pspec = g_param_spec_boolean ("in-use", "In use",
-                                "Whether the device is currently in use", FALSE,
+  pspec = g_param_spec_boolean ("busy", "Busy",
+                                "Whether the device is in use or too warm", FALSE,
                                 G_PARAM_READABLE);
   g_object_class_install_property (gobject_class,
-                                   FPRINT_DEVICE_IN_USE, pspec);
+                                   FPRINT_DEVICE_BUSY, pspec);
 
   signals[SIGNAL_VERIFY_STATUS] =
     g_signal_lookup ("verify-status", FPRINT_TYPE_DEVICE);
@@ -891,7 +906,7 @@ _fprint_device_client_vanished (GDBusConnection *connection,
   g_hash_table_remove (priv->clients, name);
 
   if (g_hash_table_size (priv->clients) == 0)
-    g_object_notify (G_OBJECT (rdev), "in-use");
+    g_object_notify (G_OBJECT (rdev), "busy");
 }
 
 static void
@@ -911,7 +926,7 @@ _fprint_device_add_client (FprintDevice *rdev, const char *sender)
                              rdev,
                              NULL);
       g_hash_table_insert (priv->clients, g_strdup (sender), GUINT_TO_POINTER (id));
-      g_object_notify (G_OBJECT (rdev), "in-use");
+      g_object_notify (G_OBJECT (rdev), "busy");
     }
 }
 
