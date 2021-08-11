@@ -1171,6 +1171,14 @@ fprint_device_release (FprintDBusDevice      *dbus_dev,
     }
 
   session = session_data_get (priv);
+
+  /* We iterated the mainloop, the session may have disappeared already. */
+  if (!session)
+    {
+      fprint_dbus_device_complete_release (FPRINT_DBUS_DEVICE (rdev), invocation);
+      return TRUE;
+    }
+
   session->invocation = g_object_ref (invocation);
 
   priv->current_action = ACTION_CLOSE;
