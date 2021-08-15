@@ -10,7 +10,7 @@ msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-06-30 14:00+0200\n"
-"PO-Revision-Date: 2017-09-19 09:46+0000\n"
+"PO-Revision-Date: 2021-08-15 14:02+0200\n"
 "Last-Translator: Robert Antoni Buj i Gelonch <rbuj@fedoraproject.org>\n"
 "Language-Team: Catalan (http://www.transifex.com/freedesktop/fprintd/"
 "language/ca/)\n"
@@ -19,6 +19,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 2.3\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -263,7 +264,7 @@ msgstr "Passeu el dit un altre cop"
 
 #: pam/fingerprint-strings.h:176 pam/fingerprint-strings.h:204
 msgid "Swipe was too short, try again"
-msgstr "Lectura incorrecta, torneu-ho a intentar"
+msgstr "Lectura incorrecta. Torneu-ho a intentar"
 
 #: pam/fingerprint-strings.h:178 pam/fingerprint-strings.h:206
 msgid "Your finger was not centered, try swiping your finger again"
@@ -275,13 +276,12 @@ msgstr "Retireu el dit i intenteu passar el dit de nou"
 
 #: pam/pam_fprintd.c:537
 msgid "Verification timed out"
-msgstr ""
+msgstr "S'ha esgotat el temps d'espera de la verificació"
 
 #: pam/pam_fprintd.c:560
-#, fuzzy
 msgid "Failed to match fingerprint"
-msgstr "Comprova una empremta"
+msgstr "L'empremta no coincideix"
 
 #: pam/pam_fprintd.c:576
 msgid "An unknown error occurred"
-msgstr ""
+msgstr "Hi ha hagut un error desconegut"
