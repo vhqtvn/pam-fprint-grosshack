@@ -1,5 +1,5 @@
 project('fprintd', 'c',
-    version: '1.92.0',
+    version: '1.94.0',
     license: 'GPLv2+',
     default_options: [
         'buildtype=debugoptimized',
@@ -64,7 +64,7 @@ add_project_arguments(common_cflags, language: 'c')
 host_system = host_machine.system()
 # NOTE: Bump gdbus-codegen min version once we can depend on 2.64!
 glib_min_version = '2.56'
-libfprint_min_version = '1.92.0'
+libfprint_min_version = '1.94.0'
 
 glib_version_def = 'GLIB_VERSION_@0@_@1@'.format(
     glib_min_version.split('.')[0], glib_min_version.split('.')[1])
