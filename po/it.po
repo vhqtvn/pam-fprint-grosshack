@@ -4,13 +4,14 @@
 #
 # Translators:
 # Milo Casagrande <milo@ubuntu.com>, 2013
+# Albano Battistella <albano_battistella@hotmail.com>, 2021
 msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-06-30 14:00+0200\n"
-"PO-Revision-Date: 2017-09-19 09:08+0000\n"
-"Last-Translator: Milo Casagrande <milo@ubuntu.com>\n"
+"PO-Revision-Date: 2021-08-21 12:08+0200\n"
+"Last-Translator:  Albano Battistella <albano_battistella@hotmail.com>\n"
 "Language-Team: Italian (http://www.transifex.com/freedesktop/fprintd/"
 "language/it/)\n"
 "Language: it\n"
@@ -274,13 +275,12 @@ msgstr "Rimuovere il dito e ripetere un altro passaggio"
 
 #: pam/pam_fprintd.c:537
 msgid "Verification timed out"
-msgstr ""
+msgstr "Verifica terminata"
 
 #: pam/pam_fprintd.c:560
-#, fuzzy
 msgid "Failed to match fingerprint"
-msgstr "Verifica una impronta"
+msgstr "Impossibile abbinare l'impronta digitale"
 
 #: pam/pam_fprintd.c:576
 msgid "An unknown error occurred"
-msgstr ""
+msgstr "Si è verificato un errore sconosciuto"
