@@ -601,7 +601,9 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
 
         fifo_path = os.path.join(self.tmpdir, 'logind_inhibit_fifo')
         os.mkfifo(fifo_path)
+        self.addCleanup(os.unlink, fifo_path)
         self.logind_inhibit_fifo = os.open(fifo_path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+        self.addCleanup(os.close, self.logind_inhibit_fifo)
         # EOF without a writer, BlockingIOError with a writer
         self.assertFalse(self.holds_inhibitor())
 
@@ -661,8 +663,6 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         self.polkitd_stop()
         self.device = None
         self.manager = None
-
-        os.close(self.logind_inhibit_fifo)
 
         super().tearDown()
 
