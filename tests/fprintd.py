@@ -201,6 +201,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
 
         cls.tmpdir = tempfile.mkdtemp(prefix='libfprint-')
+        cls.addClassCleanup(shutil.rmtree, cls.tmpdir)
 
         cls.sockaddr = os.path.join(cls.tmpdir, 'virtual-image.socket')
         os.environ[cls.socket_env] = cls.sockaddr
@@ -213,6 +214,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
         cls.test_bus = Gio.TestDBus.new(Gio.TestDBusFlags.NONE)
         cls.test_bus.up()
+        cls.addClassCleanup(cls.test_bus.down)
         cls.test_bus.unset()
         addr = cls.test_bus.get_bus_address()
         os.environ['DBUS_SYSTEM_BUS_ADDRESS'] = addr
@@ -220,16 +222,14 @@ class FPrintdTest(dbusmock.DBusTestCase):
             Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION |
             Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT, None, None)
         assert cls.dbus.is_closed() == False
+        cls.addClassCleanup(cls.dbus.close)
 
     @classmethod
     def tearDownClass(cls):
-        cls.dbus.close()
-        cls.test_bus.down()
-        del cls.dbus
-        del cls.test_bus
-        shutil.rmtree(cls.tmpdir)
         dbusmock.DBusTestCase.tearDownClass()
 
+        del cls.dbus
+        del cls.test_bus
 
     def daemon_start(self, driver='Virtual image device for debugging'):
         timeout = get_timeout('daemon_start')  # seconds
