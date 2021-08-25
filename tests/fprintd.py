@@ -615,7 +615,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
                                   'GLib.idle_add(lambda fd: os.close(fd), ret)')
         self.daemon_start(self.driver_name)
 
-        self.wait_got_delay_inhibitor()
+        self.wait_got_delay_inhibitor(timeout=5)
 
         if self.device is None:
             self.skipTest("Need {} device to run the test".format(self.device_driver))
