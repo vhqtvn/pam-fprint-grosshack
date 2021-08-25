@@ -598,6 +598,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         self.manager = None
         self.device = None
         self.polkitd_start()
+        self.addCleanup(self.polkitd_stop)
 
         fifo_path = os.path.join(self.tmpdir, 'logind_inhibit_fifo')
         os.mkfifo(fifo_path)
@@ -660,7 +661,6 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         self._changed_properties = []
 
     def tearDown(self):
-        self.polkitd_stop()
         self.device = None
         self.manager = None
 
