@@ -211,14 +211,8 @@ class FPrintdTest(dbusmock.DBusTestCase):
             n = os.path.basename(f)[:-4]
             cls.prints[n] = load_image(f)
 
-
-        cls.test_bus = Gio.TestDBus.new(Gio.TestDBusFlags.NONE)
-        cls.test_bus.up()
-        cls.addClassCleanup(cls.test_bus.down)
-        cls.test_bus.unset()
-        addr = cls.test_bus.get_bus_address()
-        os.environ['DBUS_SYSTEM_BUS_ADDRESS'] = addr
-        cls.dbus = Gio.DBusConnection.new_for_address_sync(addr,
+        cls.start_system_bus()
+        cls.dbus = Gio.DBusConnection.new_for_address_sync(os.environ['DBUS_SYSTEM_BUS_ADDRESS'],
             Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION |
             Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT, None, None)
         assert cls.dbus.is_closed() == False
@@ -229,7 +223,6 @@ class FPrintdTest(dbusmock.DBusTestCase):
         dbusmock.DBusTestCase.tearDownClass()
 
         del cls.dbus
-        del cls.test_bus
 
     def daemon_start(self, driver='Virtual image device for debugging'):
         timeout = get_timeout('daemon_start')  # seconds
@@ -372,6 +365,10 @@ class FPrintdTest(dbusmock.DBusTestCase):
         self.device_id = 0
         self._async_call_res = {}
         os.environ['FP_DRIVERS_WHITELIST'] = self.device_driver
+
+        # Always start fake polkitd because of
+        # https://gitlab.freedesktop.org/polkit/polkit/-/merge_requests/95
+        self.polkitd_start()
 
     def assertFprintError(self, fprint_error):
         if isinstance(fprint_error, list) or isinstance(fprint_error, tuple):
@@ -609,7 +606,6 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
 
         self.manager = None
         self.device = None
-        self.polkitd_start()
 
         fifo_path = os.path.join(self.tmpdir, 'logind_inhibit_fifo')
         os.mkfifo(fifo_path)
