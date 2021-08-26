@@ -250,6 +250,7 @@ class FPrintdTest(dbusmock.DBusTestCase):
             self.valgrind = True
         self.kill_daemon = False
         self.daemon_log = OutputChecker()
+        self.addCleanup(self.daemon_log.force_close)
         self.daemon = subprocess.Popen(argv,
                                        env=env,
                                        stdout=self.daemon_log.fd,
@@ -337,14 +338,23 @@ class FPrintdTest(dbusmock.DBusTestCase):
 
         self._polkitd, self._polkitd_obj = self.spawn_server_template(
             polkitd_template, {}, stdout=subprocess.PIPE)
+        self.addCleanup(self.stop_server, '_polkitd', '_polkitd_obj')
 
         return self._polkitd
 
-    def polkitd_stop(self):
-        if self._polkitd is None:
+    def stop_server(self, proc_attr, obj_attr):
+        proc = getattr(self, proc_attr, None)
+        if proc is None:
             return
-        self._polkitd.terminate()
-        self._polkitd.wait()
+
+        proc.terminate()
+        try:
+            proc.wait(timeout=1)
+        except subprocess.TimeoutExpired as e:
+            proc.kill()
+
+        delattr(self, proc_attr)
+        delattr(self, obj_attr)
 
     def polkitd_allow_all(self):
         self._polkitd_obj.SetAllowed([FprintDevicePermission.set_username,
@@ -600,7 +610,6 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
         self.manager = None
         self.device = None
         self.polkitd_start()
-        self.addCleanup(self.polkitd_stop)
 
         fifo_path = os.path.join(self.tmpdir, 'logind_inhibit_fifo')
         os.mkfifo(fifo_path)
@@ -615,6 +624,7 @@ class FPrintdVirtualDeviceBaseTest(FPrintdVirtualImageDeviceBaseTests):
                                   'ret = os.open("%s", os.O_WRONLY)\n' % fifo_path +
                                   'from gi.repository import GLib\n' +
                                   'GLib.idle_add(lambda fd: os.close(fd), ret)')
+        self.addCleanup(self.stop_server, 'logind', 'logind_obj')
         self.daemon_start(self.driver_name)
 
         self.wait_got_delay_inhibitor(timeout=5)
