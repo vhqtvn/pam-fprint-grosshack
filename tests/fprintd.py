@@ -237,6 +237,8 @@ class FPrintdTest(dbusmock.DBusTestCase):
         env['G_DEBUG'] = 'fatal-criticals'
         env['STATE_DIRECTORY'] = (self.state_dir + ':' + '/hopefully/a/state_dir_path/that/shouldnt/be/writable')
         env['RUNTIME_DIRECTORY'] = self.run_dir
+        # The tests parses the debug output for suspend inhibitor debugging
+        env['G_MESSAGES_DEBUG'] = 'all'
 
         argv = [self.paths['daemon'], '-t']
         valgrind = os.getenv('VALGRIND')
