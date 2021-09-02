@@ -2004,14 +2004,14 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
         self.wait_for_result()
         self.assertTrue(self._verify_stopped)
         self.assertEqual(self._last_result, 'verify-match')
-        self.assertEqual(self._selected_finger, 'any')
+        self.assertEqual(self._selected_finger, 'left-thumb')
         self.device.VerifyStop()
 
     def test_verify_wrong_finger_no_match(self):
         self.enroll_image('whorl', finger='right-thumb')
         self.device.VerifyStart('(s)', 'right-toe')
         self.send_image('tented_arch')
-        self.assertVerifyNoMatch(selected_finger='any')
+        self.assertVerifyNoMatch(selected_finger='right-thumb')
         self.device.VerifyStop()
 
     def test_verify_any_finger_match(self):
@@ -2047,9 +2047,9 @@ class FPrintdVirtualDeviceClaimedTest(FPrintdVirtualDeviceBaseTest):
                     self.device.VerifyStart('(s)', 'any')
                     self.send_image(print)
                     if should_match:
-                        self.assertVerifyMatch(selected_finger='any')
+                        self.assertVerifyMatch()
                     else:
-                        self.assertVerifyNoMatch(selected_finger='any')
+                        self.assertVerifyNoMatch()
                     self.device.VerifyStop()
 
             self.device.Release()
@@ -3086,7 +3086,7 @@ class FPrindConcurrentPolkitRequestsTest(FPrintdVirtualStorageDeviceBaseTest):
         self.device.Claim('(s)', '')
         self.device.VerifyStart('(s)', 'any')
         self.send_image('whorl')
-        self.assertVerifyMatch(selected_finger='any')
+        self.assertVerifyMatch(selected_finger='left-thumb')
         self.device.VerifyStop()
         self.device.Release()
 

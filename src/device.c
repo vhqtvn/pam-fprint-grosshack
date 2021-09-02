@@ -1667,7 +1667,15 @@ fprint_device_verify_start (FprintDBusDevice      *dbus_dev,
           g_dbus_method_invocation_return_gerror (invocation, error);
           return TRUE;
         }
-      if (fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_IDENTIFY))
+      else if (gallery->len == 1)
+        {
+          FpPrint *fprint = g_ptr_array_index (gallery, 0);
+
+          /* If we only have a single finger, then do verify on that.
+           * This also means we report it back correctly to the user. */
+          finger = fp_print_get_finger (fprint);
+        }
+      else if (fp_device_has_feature (priv->dev, FP_DEVICE_FEATURE_IDENTIFY))
         {
           guint i;
 
