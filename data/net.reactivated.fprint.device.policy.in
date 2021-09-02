@@ -20,8 +20,8 @@
   </action>
 
   <action id="net.reactivated.fprint.device.enroll">
-    <description>Enroll new fingerprints</description>
-    <message>Privileges are required to enroll new fingerprints.</message>
+    <description>Enroll or Delete fingerprints</description>
+    <message>Privileges are required to enroll or delete fingerprints.</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>
@@ -30,8 +30,8 @@
   </action>
 
   <action id="net.reactivated.fprint.device.setusername">
-    <description>Select a user to enroll</description>
-    <message>Privileges are required to enroll new fingerprints for other users.</message>
+    <description>Select a user to manage fingerprints for</description>
+    <message>Privileges are required to manage fingerprints for other users.</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>
