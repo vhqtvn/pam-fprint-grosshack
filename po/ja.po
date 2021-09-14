@@ -4,21 +4,22 @@
 #
 # Translators:
 # e93ed3aa97dec2eb31063731872555fc_1460a05 <71305a0095156d8e18373a5b7cfeb79e_8587>, 2011, 2012
+# Takuro Onoue <kusanaginoturugi@gmail.com>, 2021.
 msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-06-30 14:00+0200\n"
-"PO-Revision-Date: 2017-09-19 10:41+0000\n"
-"Last-Translator: e93ed3aa97dec2eb31063731872555fc_1460a05 "
-"<71305a0095156d8e18373a5b7cfeb79e_8587>\n"
-"Language-Team: Japanese (http://www.transifex.com/freedesktop/fprintd/"
-"language/ja/)\n"
+"PO-Revision-Date: 2021-09-09 03:04+0000\n"
+"Last-Translator: Takuro Onoue <kusanaginoturugi@gmail.com>\n"
+"Language-Team: Japanese <https://translate.fedoraproject.org/projects/"
+"fprintd/fprintd/ja/>\n"
 "Language: ja\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Weblate 4.8\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -274,13 +275,12 @@ msgstr "指をどかして、もう一度指をなぞってみてください"
 
 #: pam/pam_fprintd.c:537
 msgid "Verification timed out"
-msgstr ""
+msgstr "検証がタイムアウトしました"
 
 #: pam/pam_fprintd.c:560
-#, fuzzy
 msgid "Failed to match fingerprint"
-msgstr "指紋の検証"
+msgstr "指紋の検証に失敗しました"
 
 #: pam/pam_fprintd.c:576
 msgid "An unknown error occurred"
-msgstr ""
+msgstr "不明なエラーが発生しました"
