@@ -3,21 +3,22 @@
 # This file is distributed under the same license as the PACKAGE package.
 #
 # Translators:
-# Ettore Atalan <atalanttore@googlemail.com>, 2014
+# Ettore Atalan <atalanttore@googlemail.com>, 2014, 2021.
 msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-06-30 14:00+0200\n"
-"PO-Revision-Date: 2017-09-19 09:08+0000\n"
+"PO-Revision-Date: 2021-08-22 13:04+0000\n"
 "Last-Translator: Ettore Atalan <atalanttore@googlemail.com>\n"
-"Language-Team: German (http://www.transifex.com/freedesktop/fprintd/language/"
-"de/)\n"
+"Language-Team: German <https://translate.fedoraproject.org/projects/fprintd/"
+"fprintd/de/>\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 4.8\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -281,13 +282,12 @@ msgstr ""
 
 #: pam/pam_fprintd.c:537
 msgid "Verification timed out"
-msgstr ""
+msgstr "Zeitüberschreitung bei der Verifizierung"
 
 #: pam/pam_fprintd.c:560
-#, fuzzy
 msgid "Failed to match fingerprint"
-msgstr "Einen Fingerabdruck überprüfen"
+msgstr "Fehler beim Abgleich des Fingerabdrucks"
 
 #: pam/pam_fprintd.c:576
 msgid "An unknown error occurred"
-msgstr ""
+msgstr "Ein unbekannter Fehler ist aufgetreten"
