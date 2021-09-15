@@ -21,6 +21,7 @@ variables:
                 libasan
                 libfprint-devel
                 meson
+                patch
                 pam-devel
                 polkit-devel
                 python3-dbusmock
