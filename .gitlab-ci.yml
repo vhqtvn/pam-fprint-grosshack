@@ -11,6 +11,7 @@ variables:
   FDO_DISTRIBUTION_TAG: latest
   FDO_DISTRIBUTION_VERSION: rawhide
   FDO_UPSTREAM_REPO: "libfprint/$CI_PROJECT_NAME"
+  FEDORA_IMAGE: "$CI_REGISTRY/libfprint/$CI_PROJECT_NAME/fedora/$FDO_DISTRIBUTION_VERSION:$FDO_DISTRIBUTION_TAG"
   DEPENDENCIES: dbus-glib-devel
                 gcc
                 gcovr
@@ -28,13 +29,14 @@ variables:
                 python3-libpamtest
                 systemd-devel
 
+image: "$FEDORA_IMAGE"
+
 stages:
   - check-source
   - build
   - test
 
 .fprintd_build_preconditions:
-  extends: .fdo.distribution-image@fedora
   except:
     variables:
       - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
