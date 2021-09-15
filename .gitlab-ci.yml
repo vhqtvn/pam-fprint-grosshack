@@ -2,7 +2,7 @@ include:
   - project: 'libfprint/libfprint'
     ref: master
     file: '/.gitlab-ci/libfprint-templates.yaml'
-  - project: 'wayland/ci-templates'
+  - project: 'freedesktop/ci-templates'
     ref: master
     file: '/templates/fedora.yml'
 
@@ -10,7 +10,7 @@ variables:
   extends: .libfprint_common_variables
   FDO_DISTRIBUTION_TAG: latest
   FDO_DISTRIBUTION_VERSION: rawhide
-  FEDORA_IMAGE: "$CI_REGISTRY/libfprint/$CI_PROJECT_NAME/fedora/$FDO_DISTRIBUTION_VERSION:$FDO_DISTRIBUTION_TAG"
+  FDO_UPSTREAM_REPO: "libfprint/$CI_PROJECT_NAME"
   DEPENDENCIES: dbus-glib-devel
                 gcc
                 gcovr
@@ -27,14 +27,13 @@ variables:
                 python3-libpamtest
                 systemd-devel
 
-image: "$FEDORA_IMAGE"
-
 stages:
   - check-source
   - build
   - test
 
 .fprintd_build_preconditions:
+  extends: .fdo.distribution-image@fedora
   except:
     variables:
       - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
@@ -123,6 +122,7 @@ container_fedora_build:
       - $FPRINT_CRON_TASK == "BUILD_CI_IMAGES"
   variables:
     GIT_STRATEGY: none # no need to pull the whole tree for rebuilding the image
+    FDO_FORCE_REBUILD: 1
     # a list of packages to install
     FDO_DISTRIBUTION_PACKAGES:
       $DEPENDENCIES
