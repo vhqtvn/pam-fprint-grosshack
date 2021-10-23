@@ -158,7 +158,7 @@ version 0.6.0:
   one reader available
 
 version 0.5.1:
-- Add max_tries and timeout arguments to PAM module
+- Add max-tries and timeout arguments to PAM module
 - Add ability to require the fingerprint for enrolled users
 - Add "-f <finger>" option to enroll utilities
 
