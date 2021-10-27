@@ -24,7 +24,7 @@ if get_option('systemd')
 endif
 
 polkit_policy = 'net.reactivated.fprint.device.policy'
-polkit_policy_target = i18n.merge_file(polkit_policy,
+polkit_policy_target = i18n.merge_file(
     input: '@0@.in'.format(polkit_policy),
     output: polkit_policy,
     po_dir: meson.source_root() / 'po',
