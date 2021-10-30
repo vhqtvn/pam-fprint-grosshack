@@ -79,11 +79,11 @@ Will verify the user's fingerprints against the database.
 
 =back
 
-=head2 fprintd-enroll
+=head2 fprintd-delete
 
 =over 8
 
-Will enroll the user's right index finger into the database.
+Will delete the user's right index finger into the database.
 
 =back
 
@@ -102,4 +102,3 @@ By default, fprintd stores the fingerprints in B</var/lib/fprint/>
 =item B<gnome-control-center>
 
 =back
-
