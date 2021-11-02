@@ -21,7 +21,6 @@ PrivateTmp=true
 SystemCallFilter=@system-service
 
 # Network
-PrivateNetwork=true
 RestrictAddressFamilies=AF_UNIX AF_LOCAL AF_NETLINK
 
 # Execute Mappings
