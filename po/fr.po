@@ -5,13 +5,14 @@
 # Translators:
 # Claude Paroz <claude@2xlibre.net>, 2012, 2021.
 # Claude Paroz <claude@2xlibre.net>, 2011, 2021.
+# Thibault HEINRICH <thibault@lexikal-seo.net>, 2021.
 msgid ""
 msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-06-30 14:00+0200\n"
-"PO-Revision-Date: 2021-07-25 12:04+0000\n"
-"Last-Translator: Claude Paroz <claude@2xlibre.net>\n"
+"PO-Revision-Date: 2021-11-30 10:10+0000\n"
+"Last-Translator: Thibault HEINRICH <thibault@lexikal-seo.net>\n"
 "Language-Team: French <https://translate.fedoraproject.org/projects/fprintd/"
 "fprintd/fr/>\n"
 "Language: fr\n"
@@ -19,7 +20,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n > 1;\n"
-"X-Generator: Weblate 4.7.2\n"
+"X-Generator: Weblate 4.9.1\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -289,4 +290,4 @@ msgstr "Échec de reconnaissance de l’empreinte digitale"
 
 #: pam/pam_fprintd.c:576
 msgid "An unknown error occurred"
-msgstr "Une erreur inconnue est survenue"
+msgstr "Une erreur inconnue s'est produite"
