@@ -15,7 +15,7 @@ msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-12-02 10:58+0100\n"
-"PO-Revision-Date: 2021-07-16 20:04+0000\n"
+"PO-Revision-Date: 2021-12-04 09:16+0000\n"
 "Last-Translator: simmon <simmon@nplob.com>\n"
 "Language-Team: Korean <https://translate.fedoraproject.org/projects/fprintd/"
 "fprintd/ko/>\n"
@@ -24,7 +24,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 4.7.1\n"
+"X-Generator: Weblate 4.9.1\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -35,24 +35,20 @@ msgid "Privileges are required to verify fingerprints."
 msgstr "지문을 검증하려면 권한이 필요합니다."
 
 #: data/net.reactivated.fprint.device.policy.in:23
-#, fuzzy
 msgid "Enroll or Delete fingerprints"
-msgstr "새 지문 등록"
+msgstr "지문 등록 또는 삭제"
 
 #: data/net.reactivated.fprint.device.policy.in:24
-#, fuzzy
 msgid "Privileges are required to enroll or delete fingerprints."
-msgstr "새 지문을 등록하려면 권한이 필요합니다."
+msgstr "지문을 등록하거나 삭제하려면 하려면 권한이 필요합니다."
 
 #: data/net.reactivated.fprint.device.policy.in:33
-#, fuzzy
 msgid "Select a user to manage fingerprints for"
-msgstr "등록할 사용자를 선택하십시오"
+msgstr "지문을 관리 할 사용자를 선택하세요"
 
 #: data/net.reactivated.fprint.device.policy.in:34
-#, fuzzy
 msgid "Privileges are required to manage fingerprints for other users."
-msgstr "다른 사용자의 새 지문을 등록하려면 권한이 필요합니다."
+msgstr "다른 사용자를 위한 지문을 관리하려면 권한이 필요합니다."
 
 #: src/device.c:783
 #, c-format
