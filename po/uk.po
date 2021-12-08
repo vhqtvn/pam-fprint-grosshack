@@ -10,7 +10,7 @@ msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-12-02 10:58+0100\n"
-"PO-Revision-Date: 2021-07-16 20:04+0000\n"
+"PO-Revision-Date: 2021-12-04 09:16+0000\n"
 "Last-Translator: Yuri Chornoivan <yurchor@ukr.net>\n"
 "Language-Team: Ukrainian <https://translate.fedoraproject.org/projects/"
 "fprintd/fprintd/uk/>\n"
@@ -18,11 +18,11 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=4; plural=(n % 1 == 0 && n % 10 == 1 && n % 100 != "
-"11 ? 0 : n % 1 == 0 && n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % "
-"100 > 14) ? 1 : n % 1 == 0 && (n % 10 ==0 || (n % 10 >=5 && n % 10 <=9) || "
-"(n % 100 >=11 && n % 100 <=14 )) ? 2: 3);\n"
-"X-Generator: Weblate 4.7.1\n"
+"Plural-Forms: nplurals=4; plural=(n % 1 == 0 && n % 10 == 1 && n % 100 != 11 "
+"? 0 : n % 1 == 0 && n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > "
+"14) ? 1 : n % 1 == 0 && (n % 10 ==0 || (n % 10 >=5 && n % 10 <=9) || (n % "
+"100 >=11 && n % 100 <=14 )) ? 2: 3);\n"
+"X-Generator: Weblate 4.9.1\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -33,26 +33,23 @@ msgid "Privileges are required to verify fingerprints."
 msgstr "Для перевірки відбитків пальців потрібні відповідні права доступу."
 
 #: data/net.reactivated.fprint.device.policy.in:23
-#, fuzzy
 msgid "Enroll or Delete fingerprints"
-msgstr "Реєстрація нових відбитків пальців"
+msgstr "Реєстрація або вилучення відбитків"
 
 #: data/net.reactivated.fprint.device.policy.in:24
-#, fuzzy
 msgid "Privileges are required to enroll or delete fingerprints."
-msgstr "Для реєстрації нових відбитків потрібні відповідні права доступу."
+msgstr ""
+"Для реєстрації або вилучення відбитків потрібні відповідні права доступу."
 
 #: data/net.reactivated.fprint.device.policy.in:33
-#, fuzzy
 msgid "Select a user to manage fingerprints for"
-msgstr "Виберіть користувача для реєстрації"
+msgstr "Виберіть користувача для керування відбитками"
 
 #: data/net.reactivated.fprint.device.policy.in:34
-#, fuzzy
 msgid "Privileges are required to manage fingerprints for other users."
 msgstr ""
-"Для реєстрації нових відбитків для інших користувачів потрібні відповідні "
-"права доступу."
+"Для керування відбитками для інших користувачів потрібні відповідні права "
+"доступу."
 
 #: src/device.c:783
 #, c-format
