@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-12-02 10:58+0100\n"
-"PO-Revision-Date: 2021-08-17 02:04+0000\n"
+"PO-Revision-Date: 2021-12-04 09:16+0000\n"
 "Last-Translator: Andika Triwidada <andika@gmail.com>\n"
 "Language-Team: Indonesian <https://translate.fedoraproject.org/projects/"
 "fprintd/fprintd/id/>\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 4.7.2\n"
+"X-Generator: Weblate 4.9.1\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -29,25 +29,20 @@ msgid "Privileges are required to verify fingerprints."
 msgstr "Diperlukan hak khusus untuk memeriksa kebenaran sidik jari."
 
 #: data/net.reactivated.fprint.device.policy.in:23
-#, fuzzy
 msgid "Enroll or Delete fingerprints"
-msgstr "Mendaftar sidik jari baru"
+msgstr "Mendaftar atau menghapus sidik jari"
 
 #: data/net.reactivated.fprint.device.policy.in:24
-#, fuzzy
 msgid "Privileges are required to enroll or delete fingerprints."
-msgstr "Diperlukan hak khusus untuk mendaftarkan sidik jari baru."
+msgstr "Diperlukan hak khusus untuk mendaftarkan atau menghapus sidik jari."
 
 #: data/net.reactivated.fprint.device.policy.in:33
-#, fuzzy
 msgid "Select a user to manage fingerprints for"
-msgstr "Pilih pengguna untuk didaftar"
+msgstr "Pilih pengguna yang akan dikelola sidik jarinya"
 
 #: data/net.reactivated.fprint.device.policy.in:34
-#, fuzzy
 msgid "Privileges are required to manage fingerprints for other users."
-msgstr ""
-"Diperlukan hak khusus untuk mendaftarkan sidik jari baru bagi pengguna lain."
+msgstr "Diperlukan hak khusus untuk mengelola sidik jari bagi pengguna lain."
 
 #: src/device.c:783
 #, c-format
