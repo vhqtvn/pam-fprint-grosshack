@@ -12,7 +12,7 @@ msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-12-02 10:58+0100\n"
-"PO-Revision-Date: 2021-07-23 12:04+0000\n"
+"PO-Revision-Date: 2021-12-04 09:16+0000\n"
 "Last-Translator: Jan Kuparinen <copper_fin@hotmail.com>\n"
 "Language-Team: Finnish <https://translate.fedoraproject.org/projects/fprintd/"
 "fprintd/fi/>\n"
@@ -21,7 +21,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 4.7.2\n"
+"X-Generator: Weblate 4.9.1\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -32,25 +32,20 @@ msgid "Privileges are required to verify fingerprints."
 msgstr "Sormenjälkien tarkistamiseen tarvitaan oikeudet."
 
 #: data/net.reactivated.fprint.device.policy.in:23
-#, fuzzy
 msgid "Enroll or Delete fingerprints"
-msgstr "Rekisteröi uusia sormenjälkiä"
+msgstr "Rekisteröi tai poista sormenjälkiä"
 
 #: data/net.reactivated.fprint.device.policy.in:24
-#, fuzzy
 msgid "Privileges are required to enroll or delete fingerprints."
-msgstr "Uusien sormenjälkien rekisteröintiin tarvitaan oikeudet."
+msgstr "Sormenjälkien rekisteröintiin tai poistoon tarvitaan oikeudet."
 
 #: data/net.reactivated.fprint.device.policy.in:33
-#, fuzzy
 msgid "Select a user to manage fingerprints for"
-msgstr "Valitse käyttäjä, johon haluat kirjata"
+msgstr "Valitse käyttäjä, jonka sormenjälkiä hallinnoidaan"
 
 #: data/net.reactivated.fprint.device.policy.in:34
-#, fuzzy
 msgid "Privileges are required to manage fingerprints for other users."
-msgstr ""
-"Uusien sormenjälkien rekisteröiminen muille käyttäjille edellyttää oikeuksia."
+msgstr "Muiden käyttäjien sormenjälkien hallinta edellyttää käyttöoikeuksia."
 
 #: src/device.c:783
 #, c-format
