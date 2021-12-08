@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-12-02 10:58+0100\n"
-"PO-Revision-Date: 2021-07-24 11:08+0000\n"
+"PO-Revision-Date: 2021-12-04 14:50+0000\n"
 "Last-Translator: Piotr Drąg <piotrdrag@gmail.com>\n"
 "Language-Team: Polish <https://translate.fedoraproject.org/projects/fprintd/"
 "fprintd/pl/>\n"
@@ -20,7 +20,7 @@ msgstr ""
 "Plural-Forms: nplurals=4; plural=(n==1 ? 0 : (n%10>=2 && n%10<=4) && (n"
 "%100<12 || n%100>14) ? 1 : n!=1 && (n%10>=0 && n%10<=1) || (n%10>=5 && n"
 "%10<=9) || (n%100>=12 && n%100<=14) ? 2 : 3);\n"
-"X-Generator: Weblate 4.7.2\n"
+"X-Generator: Weblate 4.9.1\n"
 
 #: data/net.reactivated.fprint.device.policy.in:13
 msgid "Verify a fingerprint"
@@ -31,25 +31,21 @@ msgid "Privileges are required to verify fingerprints."
 msgstr "Wymagane są uprawnienia, aby zweryfikować odciski palców."
 
 #: data/net.reactivated.fprint.device.policy.in:23
-#, fuzzy
 msgid "Enroll or Delete fingerprints"
-msgstr "Pobieranie odcisków palców"
+msgstr "Pobieranie lub usuwanie odcisków palców"
 
 #: data/net.reactivated.fprint.device.policy.in:24
-#, fuzzy
 msgid "Privileges are required to enroll or delete fingerprints."
-msgstr "Wymagane są uprawnienia, aby pobrać nowe odciski palców."
+msgstr "Wymagane są uprawnienia, aby pobrać lub usunąć odciski palców."
 
 #: data/net.reactivated.fprint.device.policy.in:33
-#, fuzzy
 msgid "Select a user to manage fingerprints for"
-msgstr "Wybór użytkownika do pobrania"
+msgstr "Wybór użytkownika, dla którego zarządzać odciskami palców"
 
 #: data/net.reactivated.fprint.device.policy.in:34
-#, fuzzy
 msgid "Privileges are required to manage fingerprints for other users."
 msgstr ""
-"Wymagane są uprawnienia, aby pobrać nowe odciski palców dla innych "
+"Wymagane są uprawnienia, aby zarządzać odciskami palców dla innych "
 "użytkowników."
 
 #: src/device.c:783
