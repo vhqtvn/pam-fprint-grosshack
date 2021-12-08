@@ -11,7 +11,7 @@ msgstr ""
 "Project-Id-Version: fprintd\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-12-02 10:58+0100\n"
-"PO-Revision-Date: 2021-11-30 10:10+0000\n"
+"PO-Revision-Date: 2021-12-04 09:16+0000\n"
 "Last-Translator: Thibault HEINRICH <thibault@lexikal-seo.net>\n"
 "Language-Team: French <https://translate.fedoraproject.org/projects/fprintd/"
 "fprintd/fr/>\n"
@@ -32,28 +32,24 @@ msgstr ""
 "Des permissions sont nécessaires pour contrôler des empreintes digitales."
 
 #: data/net.reactivated.fprint.device.policy.in:23
-#, fuzzy
 msgid "Enroll or Delete fingerprints"
-msgstr "Introduire de nouvelles empreintes"
+msgstr "Introduire ou supprimer des empreintes"
 
 #: data/net.reactivated.fprint.device.policy.in:24
-#, fuzzy
 msgid "Privileges are required to enroll or delete fingerprints."
 msgstr ""
-"Des permissions sont nécessaires pour introduire de nouvelles empreintes "
+"Des permissions sont nécessaires pour introduire ou supprimer des empreintes "
 "digitales."
 
 #: data/net.reactivated.fprint.device.policy.in:33
-#, fuzzy
 msgid "Select a user to manage fingerprints for"
-msgstr "Choisir un utilisateur pour l’introduction"
+msgstr "Choisir un utilisateur pour l’administration des empreintes"
 
 #: data/net.reactivated.fprint.device.policy.in:34
-#, fuzzy
 msgid "Privileges are required to manage fingerprints for other users."
 msgstr ""
-"Des permissions sont nécessaires pour introduire de nouvelles empreintes "
-"digitales pour d’autres utilisateurs."
+"Des permissions sont nécessaires pour administrer des empreintes digitales "
+"pour le compte d’autres utilisateurs."
 
 #: src/device.c:783
 #, c-format
