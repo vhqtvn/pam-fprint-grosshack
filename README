@@ -1,3 +1,14 @@
+This is a fork of the pam module which implements the simultaneous
+password and fingerprint behaviour present in pam_thinkfinger. It
+was called a 'dirty hack' by the fprintd developers in the README
+for the PAM module, but it works, and I am not beneath using it.
+
+-- Misha
+
+-----------------------------------------------------------
+Original README
+-----------------------------------------------------------
+
 fprintd
 =======
 

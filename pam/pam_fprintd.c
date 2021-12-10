@@ -18,8 +18,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include <config.h>
-
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +27,8 @@
 #include <string.h>
 #include <syslog.h>
 #include <errno.h>
+
+#include <pthread.h>
 
 #include <libintl.h>
 #include <systemd/sd-bus.h>
@@ -194,6 +194,9 @@ typedef struct
   pam_handle_t *pamh;
 
   char         *driver;
+
+  sd_bus       *bus;
+  bool          stop_got_pw;
 } verify_data;
 
 static void
@@ -296,8 +299,7 @@ verify_finger_selected (sd_bus_message *m,
     }
   if (debug)
     pam_syslog (data->pamh, LOG_DEBUG, "verify_finger_selected %s", msg);
-  send_info_msg (data->pamh, msg);
-
+  //send_info_msg (data->pamh, msg);
   return 0;
 }
 
@@ -383,15 +385,18 @@ typedef int fd_int;
 PF_DEFINE_AUTO_CLEAN_FUNC (fd_int, fd_cleanup);
 
 static int
-do_verify (sd_bus      *bus,
-           verify_data *data)
+do_verify (void *d)
 {
+  verify_data *data = d;
+  sd_bus *bus = data->bus;
   pf_autoptr (sd_bus_slot) verify_status_slot = NULL;
   pf_autoptr (sd_bus_slot) verify_finger_selected_slot = NULL;
   pf_autofree char *scan_type = NULL;
   sigset_t signals;
   fd_int signal_fd = -1;
   int r;
+
+  data->stop_got_pw = false;
 
   /* Get some properties for the device */
   r = get_property_string (bus,
@@ -483,7 +488,7 @@ do_verify (sd_bus      *bus,
           int64_t wait_time;
 
           wait_time = verification_end - now ();
-          if (wait_time <= 0)
+          if (data->stop_got_pw || wait_time <= 0)
             break;
 
           if (read (signal_fd, &siginfo, sizeof (siginfo)) > 0)
@@ -557,7 +562,7 @@ do_verify (sd_bus      *bus,
                                  NULL,
                                  NULL);
 
-      if (data->timed_out)
+      if (data->timed_out || data->stop_got_pw)
         {
           return PAM_AUTHINFO_UNAVAIL;
         }
@@ -710,6 +715,17 @@ name_owner_changed (sd_bus_message *m,
   return 0;
 }
 
+static void
+prompt_pw (void *d)
+{
+  verify_data *data = d;
+  char *pw;
+  pam_prompt (data->pamh, PAM_PROMPT_ECHO_OFF, &pw, "Enter Password or Place finger on fingerprint reader: ");
+  pam_set_item (data->pamh, PAM_AUTHTOK, pw);
+  data->stop_got_pw = true;
+  return;
+}
+
 static int
 do_auth (pam_handle_t *pamh, const char *username)
 {
@@ -746,10 +762,22 @@ do_auth (pam_handle_t *pamh, const char *username)
 
   if (claim_device (pamh, bus, data->dev, username))
     {
-      int ret = do_verify (bus, data);
+      data->bus = bus;
+
+      pthread_t fprint_thread;
+      if (pthread_create (&fprint_thread, NULL, (void*) &do_verify, data) != 0)
+        send_err_msg (pamh, _("Failed to create thread"));
+      pthread_t pw_prompt_thread;
+      if (pthread_create (&pw_prompt_thread, NULL, (void*) &prompt_pw, data) != 0)
+        send_err_msg (pamh, _("Failed to create thread"));
+
+      int *ret;
+      if (pthread_join (fprint_thread,(void**) &ret) != 0)
+        send_err_msg (pamh, _("Error joining with thread"));
+      pthread_cancel (pw_prompt_thread);
 
       /* Simply disconnect from bus if we return PAM_SUCCESS */
-      if (ret != PAM_SUCCESS)
+      if (*ret != PAM_SUCCESS)
         release_device (pamh, bus, data->dev);
 
       sd_bus_close (bus);
