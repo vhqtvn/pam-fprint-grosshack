@@ -4,7 +4,7 @@ if pam_modules_dir == ''
     pam_modules_dir = '/' / get_option('libdir') / 'security'
 endif
 
-pam_fprintd = shared_module('pam_fprintd',
+pam_fprintd = shared_module('pam_fprintd_grosshack',
     name_prefix: '',
     include_directories: [
         include_directories('..'),
