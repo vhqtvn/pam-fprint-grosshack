@@ -18,6 +18,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include <config.h>
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -781,7 +783,7 @@ do_auth (pam_handle_t *pamh, const char *username)
         release_device (pamh, bus, data->dev);
 
       sd_bus_close (bus);
-      return ret;
+      return *ret;
     }
 
   sd_bus_close (bus);

@@ -97,6 +97,7 @@ pam_dep = cc.find_library('pam',
     required: get_option('pam'),
     has_headers: 'security/pam_modules.h',
 )
+pthread_dep = dependency('threads')
 
 pod2man = find_program('pod2man', required: get_option('man'))
 xsltproc = find_program('xsltproc', required: get_option('gtk_doc'))
@@ -170,16 +171,16 @@ config_h = configure_file(
   configuration: cdata
 )
 
-subdir('src')
-subdir('data')
-subdir('utils')
+#subdir('src')
+#subdir('data')
+#subdir('utils')
 if get_option('pam')
     subdir('pam')
 endif
-if get_option('gtk_doc')
-    subdir('doc')
-endif
-subdir('tests')
+#if get_option('gtk_doc')
+#    subdir('doc')
+#endif
+#subdir('tests')
 subdir('po')
 
 output = []
@@ -202,6 +203,6 @@ output += '  Manuals: ' + get_option('man').to_string()
 output += '  GTK Doc: ' + get_option('gtk_doc').to_string()
 output += '  XML Linter ' + xmllint.found().to_string()
 output += '\nTest setup:\n'
-output += '  With address sanitizer: ' + address_sanitizer.to_string()
+#output += '  With address sanitizer: ' + address_sanitizer.to_string()
 
 message('\n'+'\n'.join(output)+'\n')
