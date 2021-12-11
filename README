@@ -1,7 +1,25 @@
 This is a fork of the pam module which implements the simultaneous
 password and fingerprint behaviour present in pam_thinkfinger. It
-was called a 'dirty hack' by the fprintd developers in the README
+was called a 'gross hack' by the fprintd developers in their README
 for the PAM module, but it works, and I am not beneath using it.
+
+Compilation uses meson/ninja. Configure with "meson-build . build"
+and run "meson compile -C build" to compile. To install, move the
+generated pam_fprintd_grosshack.so to the correct directory on the
+system. Alternatively, Arch users can install pam-fprint-grosshack
+from the AUR.
+
+To use this module, add the following lines to the appropriate files
+in /etc/pam.d/ (i.e. /etc/pam.d/system-auth for any use):
+
+auth    sufficient    pam_fprintd_grosshack.so
+auth    sufficient    pam_unix.so try_first_pass nullok
+
+Warning! The original developers called this implementation a gross
+hack for a reason. This code may have major security flaws or other
+unforeseen bugs, so use with caution. And, of course, the standard
+legalese applies: No warranty, provided as-is, whatever you do or
+whatever happens to you is not my fault, etc.
 
 -- Misha
 
