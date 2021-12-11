@@ -181,7 +181,7 @@ endif
 #    subdir('doc')
 #endif
 #subdir('tests')
-subdir('po')
+#subdir('po')
 
 output = []
 output += 'System paths:'

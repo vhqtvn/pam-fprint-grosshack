@@ -197,8 +197,8 @@ typedef struct
 
   char         *driver;
 
-  sd_bus       *bus;
   bool          stop_got_pw;
+  pid_t         ppid;
 } verify_data;
 
 static void
@@ -386,19 +386,22 @@ fd_cleanup (int *fd)
 typedef int fd_int;
 PF_DEFINE_AUTO_CLEAN_FUNC (fd_int, fd_cleanup);
 
-static int
-do_verify (void *d)
+static bool has_recieved_sigusr1 = false;
+static void
+handle_sigusr1 (int sig)
 {
-  verify_data *data = d;
-  sd_bus *bus = data->bus;
+    has_recieved_sigusr1 = true;
+}
+
+static int
+do_verify (sd_bus *bus, verify_data *data)
+{
   pf_autoptr (sd_bus_slot) verify_status_slot = NULL;
   pf_autoptr (sd_bus_slot) verify_finger_selected_slot = NULL;
   pf_autofree char *scan_type = NULL;
   sigset_t signals;
   fd_int signal_fd = -1;
   int r;
-
-  data->stop_got_pw = false;
 
   /* Get some properties for the device */
   r = get_property_string (bus,
@@ -450,6 +453,8 @@ do_verify (void *d)
 
   sigemptyset (&signals);
   sigaddset (&signals, SIGINT);
+  signal (SIGUSR1, handle_sigusr1);
+  sigaddset (&signals, SIGUSR1);
   signal_fd = signalfd (signal_fd, &signals, SFD_NONBLOCK);
 
   while (data->max_tries > 0)
@@ -490,7 +495,7 @@ do_verify (void *d)
           int64_t wait_time;
 
           wait_time = verification_end - now ();
-          if (data->stop_got_pw || wait_time <= 0)
+          if (wait_time <= 0 || data->stop_got_pw)
             break;
 
           if (read (signal_fd, &siginfo, sizeof (siginfo)) > 0)
@@ -530,6 +535,12 @@ do_verify (void *d)
               if (r < 0 && errno != EINTR)
                 {
                   pam_syslog (data->pamh, LOG_ERR, "Error waiting for events: %d", errno);
+                  return PAM_AUTHINFO_UNAVAIL;
+                }
+              if (has_recieved_sigusr1)
+                {
+                  if (debug)
+                      pam_syslog (data->pamh, LOG_DEBUG, "Got SIGUSR1: assuming pw recieved");
                   return PAM_AUTHINFO_UNAVAIL;
                 }
             }
@@ -725,6 +736,9 @@ prompt_pw (void *d)
   pam_prompt (data->pamh, PAM_PROMPT_ECHO_OFF, &pw, "Enter Password or Place finger on fingerprint reader: ");
   pam_set_item (data->pamh, PAM_AUTHTOK, pw);
   data->stop_got_pw = true;
+  if (debug)
+    pam_syslog (data->pamh, LOG_DEBUG, "PW received, Should be killing parent");
+  kill(data->ppid, SIGUSR1);
   return;
 }
 
@@ -764,26 +778,22 @@ do_auth (pam_handle_t *pamh, const char *username)
 
   if (claim_device (pamh, bus, data->dev, username))
     {
-      data->bus = bus;
+      data->stop_got_pw = false;
+      data->ppid = getpid();
 
-      pthread_t fprint_thread;
-      if (pthread_create (&fprint_thread, NULL, (void*) &do_verify, data) != 0)
-        send_err_msg (pamh, _("Failed to create thread"));
       pthread_t pw_prompt_thread;
       if (pthread_create (&pw_prompt_thread, NULL, (void*) &prompt_pw, data) != 0)
         send_err_msg (pamh, _("Failed to create thread"));
 
-      int *ret;
-      if (pthread_join (fprint_thread,(void**) &ret) != 0)
-        send_err_msg (pamh, _("Error joining with thread"));
+      int ret = do_verify(bus, data);
       pthread_cancel (pw_prompt_thread);
 
       /* Simply disconnect from bus if we return PAM_SUCCESS */
-      if (*ret != PAM_SUCCESS)
+      if (ret != PAM_SUCCESS)
         release_device (pamh, bus, data->dev);
 
       sd_bus_close (bus);
-      return *ret;
+      return ret;
     }
 
   sd_bus_close (bus);
