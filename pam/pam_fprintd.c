@@ -38,6 +38,7 @@
 #include <signal.h>
 #include <sys/signalfd.h>
 #include <poll.h>
+#include <termios.h>
 
 #define PAM_SM_AUTH
 #include <security/pam_modules.h>
@@ -787,6 +788,12 @@ do_auth (pam_handle_t *pamh, const char *username)
 
       int ret = do_verify(bus, data);
       pthread_cancel (pw_prompt_thread);
+
+      /* Authenticating with fingerprint doesn't re-enable echo, so we have to */
+      struct termios term;
+      tcgetattr(fileno(stdin), &term);
+      term.c_lflag |= ECHO;
+      tcsetattr(fileno(stdin), 0, &term);
 
       /* Simply disconnect from bus if we return PAM_SUCCESS */
       if (ret != PAM_SUCCESS)
