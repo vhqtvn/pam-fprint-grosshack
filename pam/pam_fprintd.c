@@ -19,6 +19,7 @@
  */
 
 #include <config.h>
+#include <security/_pam_types.h>
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -787,6 +788,7 @@ do_auth (pam_handle_t *pamh, const char *username)
 
       int ret = do_verify(bus, data);
       pthread_cancel (pw_prompt_thread);
+      pam_prompt(data->pamh, PAM_TEXT_INFO, NULL, "***");
 
       /* Simply disconnect from bus if we return PAM_SUCCESS */
       if (ret != PAM_SUCCESS)
