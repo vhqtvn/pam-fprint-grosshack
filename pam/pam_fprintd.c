@@ -738,7 +738,7 @@ prompt_pw (void *d)
 {
   verify_data *data = d;
   char *pw;
-  pam_prompt (data->pamh, PAM_PROMPT_ECHO_OFF, &pw, "Enter Password or Place finger on fingerprint reader: ");
+  pam_prompt (data->pamh, PAM_PROMPT_ECHO_OFF, &pw, "Enter Password or Place finger on fingerprint reader: \n");
   pam_set_item (data->pamh, PAM_AUTHTOK, pw);
   data->stop_got_pw = true;
   if (debug)
@@ -792,7 +792,6 @@ do_auth (pam_handle_t *pamh, const char *username)
 
       int ret = do_verify(bus, data);
       pthread_cancel (pw_prompt_thread);
-      pam_prompt(data->pamh, PAM_TEXT_INFO, NULL, "***");
 
       /* Simply disconnect from bus if we return PAM_SUCCESS */
       if (ret != PAM_SUCCESS)
