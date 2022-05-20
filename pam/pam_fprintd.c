@@ -455,7 +455,6 @@ do_verify (sd_bus *bus, verify_data *data)
 
   sigemptyset (&signals);
   sigaddset (&signals, SIGINT);
-  signal (SIGUSR1, handle_sigusr1);
   sigaddset (&signals, SIGUSR1);
   signal_fd = signalfd (signal_fd, &signals, SFD_NONBLOCK);
 
@@ -785,6 +784,8 @@ do_auth (pam_handle_t *pamh, const char *username)
     {
       data->stop_got_pw = false;
       data->ppid = getpid();
+
+      signal (SIGUSR1, handle_sigusr1);
 
       pthread_t pw_prompt_thread;
       if (pthread_create (&pw_prompt_thread, NULL, (void*) &prompt_pw, data) != 0)
