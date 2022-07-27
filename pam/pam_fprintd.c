@@ -22,6 +22,7 @@
 #include <security/_pam_types.h>
 
 #define _GNU_SOURCE
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -454,13 +455,15 @@ do_verify (sd_bus *bus, verify_data *data)
 
   sigemptyset (&signals);
   sigaddset (&signals, SIGINT);
-  signal (SIGUSR1, handle_sigusr1);
   sigaddset (&signals, SIGUSR1);
   signal_fd = signalfd (signal_fd, &signals, SFD_NONBLOCK);
 
   while (data->max_tries > 0)
     {
-      uint64_t verification_end = now () + (timeout * USEC_PER_SEC);
+      uint64_t verification_end = ULONG_MAX;
+
+      if (timeout != UINT_MAX)
+        verification_end = now () + (timeout * USEC_PER_SEC);
 
       data->timed_out = false;
       data->verify_started = false;
@@ -734,7 +737,7 @@ prompt_pw (void *d)
 {
   verify_data *data = d;
   char *pw;
-  pam_prompt (data->pamh, PAM_PROMPT_ECHO_OFF, &pw, "Enter Password or Place finger on fingerprint reader: ");
+  pam_prompt (data->pamh, PAM_PROMPT_ECHO_OFF, &pw, "Enter Password or Place finger on fingerprint reader: \n");
   pam_set_item (data->pamh, PAM_AUTHTOK, pw);
   data->stop_got_pw = true;
   if (debug)
@@ -782,13 +785,14 @@ do_auth (pam_handle_t *pamh, const char *username)
       data->stop_got_pw = false;
       data->ppid = getpid();
 
+      signal (SIGUSR1, handle_sigusr1);
+
       pthread_t pw_prompt_thread;
       if (pthread_create (&pw_prompt_thread, NULL, (void*) &prompt_pw, data) != 0)
         send_err_msg (pamh, _("Failed to create thread"));
 
       int ret = do_verify(bus, data);
       pthread_cancel (pw_prompt_thread);
-      pam_prompt(data->pamh, PAM_TEXT_INFO, NULL, "***");
 
       /* Simply disconnect from bus if we return PAM_SUCCESS */
       if (ret != PAM_SUCCESS)
@@ -874,7 +878,8 @@ pam_sm_authenticate (pam_handle_t *pamh, int flags, int argc,
             }
           else if (str_has_prefix (argv[i], MAX_TRIES_MATCH) && strlen (argv[i]) > strlen (MAX_TRIES_MATCH))
             {
-              max_tries = atoi (argv[i] + strlen (MAX_TRIES_MATCH));
+              int opt_max_tries = atoi (argv[i] + strlen (MAX_TRIES_MATCH));
+              max_tries = (opt_max_tries < 0 ? UINT_MAX : (unsigned) opt_max_tries);
               if (max_tries < 1)
                 {
                   if (debug)
@@ -887,7 +892,8 @@ pam_sm_authenticate (pam_handle_t *pamh, int flags, int argc,
             }
           else if (str_has_prefix (argv[i], TIMEOUT_MATCH) && strlen (argv[i]) <= strlen (TIMEOUT_MATCH) + 2)
             {
-              timeout = atoi (argv[i] + strlen (TIMEOUT_MATCH));
+              int opt_timeout = atoi (argv[i] + strlen (TIMEOUT_MATCH));
+              timeout = (opt_timeout < 0 ? UINT_MAX : (unsigned) opt_timeout);
               if (timeout < MIN_TIMEOUT)
                 {
                   if (debug)

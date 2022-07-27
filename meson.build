@@ -1,5 +1,5 @@
 project('fprintd', 'c',
-    version: '1.94.1',
+    version: '1.94.2',
     license: 'GPLv2+',
     default_options: [
         'buildtype=debugoptimized',
@@ -154,7 +154,7 @@ python3_available_modules = []
 
 foreach module, required : python3_test_modules
     if required and run_command(python3, '-c', 'import @0@'.format(module)).returncode() != 0
-        error('Python3 module \'' + module + '\' required by test suite not found')
+        warning('Python3 module \'' + module + '\' required by test suite not found')
     endif
 endforeach
 
