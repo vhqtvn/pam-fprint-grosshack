@@ -813,14 +813,14 @@ prompt_pw (void *d)
   // Process the password if received
   if (pw && *pw) {
     pam_set_item(data->pamh, PAM_AUTHTOK, pw);
-    
-    data->stop_got_pw = true;
-    if (debug)
-      pam_syslog(data->pamh, LOG_DEBUG, "PW received, setting stop_got_pw=true");
-    
-    // Signal to parent thread
-    kill(data->ppid, SIGUSR1);
   }
+
+  data->stop_got_pw = true;
+  if (debug)
+    pam_syslog(data->pamh, LOG_DEBUG, "PW prompt done, setting stop_got_pw=true");
+  
+  // Signal to parent thread
+  kill(data->ppid, SIGUSR1);
 
   // Clean up memory
   if (pw) {
@@ -937,8 +937,7 @@ do_auth (pam_handle_t *pamh, const char *username)
     }
   }
 
-  /* Release the device if we claimed it and didn't succeed with fingerprint */
-  if (device_claimed && ret != PAM_SUCCESS)
+  if (device_claimed)
     release_device (pamh, bus, data->dev);
 
   sd_bus_close (bus);
