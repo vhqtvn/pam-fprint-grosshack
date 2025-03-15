@@ -201,6 +201,7 @@ typedef struct
   char         *driver;
 
   bool          stop_got_pw;
+  int           pam_prompt_result;
   pid_t         ppid;
   bool          fingerprint_enabled;  // Flag to indicate if fingerprint auth is available
 } verify_data;
@@ -393,6 +394,7 @@ PF_DEFINE_AUTO_CLEAN_FUNC (fd_int, fd_cleanup);
 static pthread_mutex_t input_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool has_recieved_sigusr1 = false;
 static bool fingerprint_success = false;
+static bool fingerprint_finished = false;
 
 static void
 handle_sigusr1 (int sig)
@@ -775,6 +777,7 @@ prompt_pw (void *d)
 
   // Use pam_prompt to get the password
   pam_result = pam_prompt(data->pamh, PAM_PROMPT_ECHO_OFF, &pw, "%s", prompt_text);
+  data->pam_prompt_result = pam_result;
 
   if (debug)
     pam_syslog(data->pamh, LOG_DEBUG, "Pam prompt returned: %d", pam_result);
@@ -783,6 +786,15 @@ prompt_pw (void *d)
   if (pam_result != PAM_SUCCESS || pw == NULL) {
     if (debug)
       pam_syslog(data->pamh, LOG_DEBUG, "No password received - likely fingerprint succeeded or error");
+    pthread_mutex_lock(&input_mutex);
+    if(fingerprint_finished) {
+      pthread_mutex_unlock(&input_mutex);
+      return NULL;
+    }
+    pthread_mutex_unlock(&input_mutex);
+    // error while using password, let parent thread know
+    data->stop_got_pw = true;
+    kill(data->ppid, SIGUSR1);
     return NULL;
   }
 
@@ -887,16 +899,24 @@ do_auth (pam_handle_t *pamh, const char *username)
   // Only try fingerprint verification if device was claimed successfully
   if (device_claimed) {
     ret = do_verify(bus, data);
+    pthread_mutex_lock(&input_mutex);
+    fingerprint_finished = true;
+    pthread_mutex_unlock(&input_mutex);
     if (debug)
       pam_syslog(pamh, LOG_DEBUG, "Verify returned %d", ret);
     
-    if (ret == PAM_SUCCESS) {
+    if(data->stop_got_pw) {
+      // result was set by the password prompt thread
+      ret = data->pam_prompt_result == PAM_SUCCESS ? PAM_SUCCESS : PAM_AUTH_ERR;
+    } else if (ret == PAM_SUCCESS) {
       send_info_msg(pamh, _("Fingerprint OK, press ENTER"));
 
       // Set a dummy password to indicate success
       const char *dummy_pw = "";
       pam_set_item(pamh, PAM_AUTHTOK, dummy_pw);
     } else {
+      if (debug)
+        pam_syslog(pamh, LOG_DEBUG, "Verify returned %d, tell user to input password", ret);
       send_info_msg(pamh, _("Enter password"));
     }
   }
@@ -910,7 +930,11 @@ do_auth (pam_handle_t *pamh, const char *username)
   if (data->stop_got_pw) {
     if (debug)
       pam_syslog(pamh, LOG_DEBUG, "Authentication continues with password");
-    ret = PAM_AUTHINFO_UNAVAIL; // Let other modules handle the password
+    if (data->pam_prompt_result == PAM_SUCCESS) {
+      ret = PAM_AUTHINFO_UNAVAIL; // Let other modules handle the password
+    } else {
+      ret = PAM_AUTH_ERR;
+    }
   }
 
   /* Release the device if we claimed it and didn't succeed with fingerprint */
