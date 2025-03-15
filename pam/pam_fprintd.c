@@ -202,6 +202,7 @@ typedef struct
 
   bool          stop_got_pw;
   pid_t         ppid;
+  bool          fingerprint_enabled;  // Flag to indicate if fingerprint auth is available
 } verify_data;
 
 static void
@@ -389,7 +390,10 @@ fd_cleanup (int *fd)
 typedef int fd_int;
 PF_DEFINE_AUTO_CLEAN_FUNC (fd_int, fd_cleanup);
 
+static pthread_mutex_t input_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool has_recieved_sigusr1 = false;
+static bool fingerprint_success = false;
+
 static void
 handle_sigusr1 (int sig)
 {
@@ -557,15 +561,18 @@ do_verify (sd_bus *bus, verify_data *data)
       if (now () >= verification_end)
         {
           data->timed_out = true;
-          send_info_msg (data->pamh, _("Verification timed out"));
+          send_info_msg (data->pamh, _("FP timeout"));
         }
       else
         {
           if (str_equal (data->result, "verify-no-match"))
-            send_err_msg (data->pamh, _("Failed to match fingerprint"));
-          else if (str_equal (data->result, "verify-match"))
-            /* Simply disconnect from bus if we return PAM_SUCCESS */
+            send_err_msg (data->pamh, _("FP no match, try again"));
+          else if (str_equal (data->result, "verify-match")) {
+            pthread_mutex_lock(&input_mutex);
+            fingerprint_success = true;
+            pthread_mutex_unlock(&input_mutex);
             return PAM_SUCCESS;
+          }
         }
 
       /* Ignore errors from VerifyStop */
@@ -600,7 +607,7 @@ do_verify (sd_bus *bus, verify_data *data)
             }
           else
             {
-              send_err_msg (data->pamh, _("An unknown error occurred"));
+              send_err_msg (data->pamh, _("FP unknown error"));
               return PAM_AUTH_ERR;
             }
         }
@@ -733,18 +740,82 @@ name_owner_changed (sd_bus_message *m,
   return 0;
 }
 
-static void
+static void*
 prompt_pw (void *d)
 {
   verify_data *data = d;
-  char *pw;
-  pam_prompt (data->pamh, PAM_PROMPT_ECHO_OFF, &pw, "Enter Password or Place finger on fingerprint reader: \n");
-  pam_set_item (data->pamh, PAM_AUTHTOK, pw);
-  data->stop_got_pw = true;
+  char *pw = NULL;
+  int pam_result;
+  const char *prompt_text;
+
   if (debug)
-    pam_syslog (data->pamh, LOG_DEBUG, "PW received, Should be killing parent");
-  kill(data->ppid, SIGUSR1);
-  return;
+    pam_syslog(data->pamh, LOG_DEBUG, "Prompting for password");
+
+  usleep(100000);
+
+  pthread_mutex_lock(&input_mutex);
+  if (fingerprint_success) {
+    pthread_mutex_unlock(&input_mutex);
+    if (debug)
+      pam_syslog(data->pamh, LOG_DEBUG, "Fingerprint already succeeded, skipping password prompt");
+    return NULL;
+  }
+  pthread_mutex_unlock(&input_mutex);
+
+  // Set prompt text based on whether fingerprint is available
+  if (data->fingerprint_enabled) {
+    prompt_text = "Enter password (or scan fingerprint): ";
+    if (debug)
+      pam_syslog(data->pamh, LOG_DEBUG, "Using fingerprint-enabled prompt");
+  } else {
+    prompt_text = "Enter password: ";
+    if (debug)
+      pam_syslog(data->pamh, LOG_DEBUG, "Using password-only prompt");
+  }
+
+  // Use pam_prompt to get the password
+  pam_result = pam_prompt(data->pamh, PAM_PROMPT_ECHO_OFF, &pw, "%s", prompt_text);
+
+  if (debug)
+    pam_syslog(data->pamh, LOG_DEBUG, "Pam prompt returned: %d", pam_result);
+
+  // Check if we were interrupted or got NULL
+  if (pam_result != PAM_SUCCESS || pw == NULL) {
+    if (debug)
+      pam_syslog(data->pamh, LOG_DEBUG, "No password received - likely fingerprint succeeded or error");
+    return NULL;
+  }
+
+  // Check again if fingerprint succeeded while we were waiting
+  pthread_mutex_lock(&input_mutex);
+  if (fingerprint_success) {
+    pthread_mutex_unlock(&input_mutex);
+    if (pw) {
+      memset(pw, 0, strlen(pw));
+      free(pw);
+    }
+    return NULL;
+  }
+  pthread_mutex_unlock(&input_mutex);
+
+  // Process the password if received
+  if (pw && *pw) {
+    pam_set_item(data->pamh, PAM_AUTHTOK, pw);
+    
+    data->stop_got_pw = true;
+    if (debug)
+      pam_syslog(data->pamh, LOG_DEBUG, "PW received, setting stop_got_pw=true");
+    
+    // Signal to parent thread
+    kill(data->ppid, SIGUSR1);
+  }
+
+  // Clean up memory
+  if (pw) {
+    memset(pw, 0, strlen(pw)); // Clear password from memory
+    free(pw);
+  }
+  return NULL;
 }
 
 static int
@@ -753,10 +824,13 @@ do_auth (pam_handle_t *pamh, const char *username)
   pf_autoptr (verify_data) data = NULL;
   pf_autoptr (sd_bus) bus = NULL;
   pf_autoptr (sd_bus_slot) name_owner_changed_slot = NULL;
+  bool device_claimed = false;
+  int ret = PAM_AUTHINFO_UNAVAIL;
 
   data = calloc (1, sizeof (verify_data));
   data->max_tries = max_tries;
   data->pamh = pamh;
+  data->fingerprint_enabled = false;  // Initialize to false by default
 
   if (sd_bus_open_system (&bus) < 0)
     {
@@ -766,7 +840,11 @@ do_auth (pam_handle_t *pamh, const char *username)
 
   data->dev = open_device (pamh, bus, username, &data->has_multiple_devices);
   if (data->dev == NULL)
-    return PAM_AUTHINFO_UNAVAIL;
+    {
+      if (debug)
+        pam_syslog(pamh, LOG_DEBUG, "No device found, falling back to password");
+      // Continue to password prompt even with no device
+    }
 
   /* Only connect to NameOwnerChanged when needed. In case of automatic startup
    * we rely on the fact that we never see those signals.
@@ -781,36 +859,69 @@ do_auth (pam_handle_t *pamh, const char *username)
                        name_owner_changed,
                        data);
 
-  if (claim_device (pamh, bus, data->dev, username))
-    {
-      data->stop_got_pw = false;
-      data->ppid = getpid();
+  data->stop_got_pw = false;
+  data->ppid = getpid();
 
-      signal (SIGUSR1, handle_sigusr1);
+  signal (SIGUSR1, handle_sigusr1);
 
-      pthread_t pw_prompt_thread;
-      if (pthread_create (&pw_prompt_thread, NULL, (void*) &prompt_pw, data) != 0)
-        send_err_msg (pamh, _("Failed to create thread"));
+  // Try to claim the device if available
+  if (data->dev != NULL) {
+    device_claimed = claim_device (pamh, bus, data->dev, username);
+    if (debug && !device_claimed)
+      pam_syslog(pamh, LOG_DEBUG, "Failed to claim device, falling back to password");
+    
+    // Set fingerprint_enabled flag if device is claimed successfully
+    data->fingerprint_enabled = device_claimed;
+  }
 
-      int ret = do_verify(bus, data);
-      pthread_cancel (pw_prompt_thread);
+  // Always create password prompt thread
+  pthread_t pw_prompt_thread;
+  if (pthread_create (&pw_prompt_thread, NULL, prompt_pw, data) != 0) {
+    pam_syslog(pamh, LOG_ERR, "Failed to create thread: %s", strerror(errno));
+    if (device_claimed)
+      release_device (pamh, bus, data->dev);
+    sd_bus_close (bus);
+    return PAM_SYSTEM_ERR;
+  }
 
-      /* Authenticating with fingerprint doesn't re-enable echo, so we have to */
-      struct termios term;
-      tcgetattr(fileno(stdin), &term);
-      term.c_lflag |= ECHO;
-      tcsetattr(fileno(stdin), 0, &term);
+  // Only try fingerprint verification if device was claimed successfully
+  if (device_claimed) {
+    ret = do_verify(bus, data);
+    if (debug)
+      pam_syslog(pamh, LOG_DEBUG, "Verify returned %d", ret);
+    
+    if (ret == PAM_SUCCESS) {
+      send_info_msg(pamh, _("Fingerprint OK, press ENTER"));
 
-      /* Simply disconnect from bus if we return PAM_SUCCESS */
-      if (ret != PAM_SUCCESS)
-        release_device (pamh, bus, data->dev);
-
-      sd_bus_close (bus);
-      return ret;
+      // Set a dummy password to indicate success
+      const char *dummy_pw = "";
+      pam_set_item(pamh, PAM_AUTHTOK, dummy_pw);
+    } else {
+      send_info_msg(pamh, _("Enter password"));
     }
+  }
+  
+  // Wait for the password prompt thread to complete
+  pthread_join(pw_prompt_thread, NULL);
+  if (debug)
+    pam_syslog(pamh, LOG_DEBUG, "PW prompt thread joined");
+
+  // Check if we got a password
+  if (data->stop_got_pw) {
+    if (debug)
+      pam_syslog(pamh, LOG_DEBUG, "Authentication continues with password");
+    ret = PAM_AUTHINFO_UNAVAIL; // Let other modules handle the password
+  }
+
+  /* Release the device if we claimed it and didn't succeed with fingerprint */
+  if (device_claimed && ret != PAM_SUCCESS)
+    release_device (pamh, bus, data->dev);
 
   sd_bus_close (bus);
-  return PAM_AUTHINFO_UNAVAIL;
+
+  if (debug)
+    pam_syslog(pamh, LOG_DEBUG, "Returning %d", ret);
+  return ret;
 }
 
 static bool
