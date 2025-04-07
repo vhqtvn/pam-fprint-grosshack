@@ -60,11 +60,12 @@
 #define DEBUG_MATCH "debug="
 #define MAX_TRIES_MATCH "max-tries="
 #define TIMEOUT_MATCH "timeout="
+#define NO_NEED_ENTER_MATCH "no-need-enter"
 
 static bool debug = false;
 static unsigned max_tries = DEFAULT_MAX_TRIES;
 static unsigned timeout = DEFAULT_TIMEOUT;
-
+static bool no_need_enter = false;
 #define USEC_PER_SEC ((uint64_t) 1000000ULL)
 #define NSEC_PER_USEC ((uint64_t) 1000ULL)
 #define USEC_PER_MSEC ((uint64_t) 1000ULL)
@@ -909,7 +910,8 @@ do_auth (pam_handle_t *pamh, const char *username)
       // result was set by the password prompt thread
       ret = data->pam_prompt_result == PAM_SUCCESS ? PAM_SUCCESS : PAM_AUTH_ERR;
     } else if (ret == PAM_SUCCESS) {
-      send_info_msg(pamh, _("Fingerprint OK, press ENTER"));
+      if(!no_need_enter)
+        send_info_msg(pamh, _("Fingerprint OK, press ENTER"));
 
       // Set a dummy password to indicate success
       const char *dummy_pw = "";
@@ -921,6 +923,9 @@ do_auth (pam_handle_t *pamh, const char *username)
     }
   }
   
+  if(no_need_enter) {
+    pthread_cancel(pw_prompt_thread);
+  }
   // Wait for the password prompt thread to complete
   pthread_join(pw_prompt_thread, NULL);
   if (debug)
@@ -1046,6 +1051,10 @@ pam_sm_authenticate (pam_handle_t *pamh, int flags, int argc,
                 {
                   pam_syslog (pamh, LOG_DEBUG, "timeout specified as: %d secs", timeout);
                 }
+            }
+          else if (str_has_prefix (argv[i], NO_NEED_ENTER_MATCH) && strlen (argv[i]) <= strlen (NO_NEED_ENTER_MATCH) + 2)
+            {
+              no_need_enter = true;
             }
         }
     }
