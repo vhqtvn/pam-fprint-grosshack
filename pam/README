@@ -14,6 +14,9 @@ Options:
 * You can add the "debug" option on the pam configuration file line above,
   this will log more information from PAM to the file specified in your
   syslog configuration (/var/log/secure by default on Fedora)
+* You can add the "suppress-messages" option to prevent intermediate messages
+  from being shown to the user. This is useful for polkit environments where
+  messages create blocking modal dialogs. Use this option in polkit-1 configs.
 
 Known issues:
 * pam_fprintd does not support identifying the user itself as

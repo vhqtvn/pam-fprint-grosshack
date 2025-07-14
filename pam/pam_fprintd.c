@@ -64,6 +64,7 @@
 #define NO_NEED_ENTER_MATCH "no-need-enter"
 #define NO_PTHREAD_MATCH "no-pthread"
 #define NO_PTHREAD_PW_FIRST_MATCH "no-pthread=pw-first"
+#define SUPPRESS_MESSAGES_MATCH "suppress-messages"
 
 static bool debug = false;
 static unsigned max_tries = DEFAULT_MAX_TRIES;
@@ -72,6 +73,7 @@ static bool no_need_enter = false;
 static bool no_pthread = false;
 static bool pw_first = false;
 static bool max_tries_switch_to_pw = false;
+static bool suppress_messages = false;
 #define USEC_PER_SEC ((uint64_t)1000000ULL)
 #define NSEC_PER_USEC ((uint64_t)1000ULL)
 #define USEC_PER_MSEC ((uint64_t)1000ULL)
@@ -272,13 +274,19 @@ verify_result(sd_bus_message *m,
     return 0;
   }
 
+  // For intermediate failures, just log to syslog instead of showing user messages
+  // to avoid blocking modal dialogs in polkit
   msg = verify_result_str_to_msg(result, data->is_swipe);
-  if (!msg)
+  if (msg)
+  {
+    if (debug)
+      pam_syslog(data->pamh, LOG_DEBUG, "Intermediate verify result: %s", msg);
+  }
+  else
   {
     data->result = strdup("Protocol error with fprintd!");
     return 0;
   }
-  send_err_msg(data->pamh, msg);
 
   return 0;
 }
@@ -599,12 +607,18 @@ do_verify(sd_bus *bus, verify_data *data)
     if (now() >= verification_end && !no_need_enter && !no_pthread)
     {
       data->timed_out = true;
-      send_err_msg(data->pamh, _("FP timeout"));
+      if (!suppress_messages)
+        send_err_msg(data->pamh, _("FP timeout"));
     }
     else
     {
       if (str_equal(data->result, "verify-no-match"))
-        send_err_msg(data->pamh, _("FP no match, try again"));
+      {
+        if (debug)
+          pam_syslog(data->pamh, LOG_DEBUG, "FP no match, will retry");
+        if (!suppress_messages)
+          send_info_msg(data->pamh, _("FP no match, try again"));
+      }
       else if (str_equal(data->result, "verify-match"))
       {
         if (!no_pthread)
@@ -649,7 +663,8 @@ do_verify(sd_bus *bus, verify_data *data)
       }
       else
       {
-        send_err_msg(data->pamh, _("FP unknown error"));
+        if (!suppress_messages)
+          send_err_msg(data->pamh, _("FP unknown error"));
         return PAM_AUTH_ERR;
       }
     }
@@ -1018,7 +1033,8 @@ static int do_auth_no_pthread(pam_handle_t *pamh, const char *username, sd_bus *
       if (term_fd >= 0)
         tcsetattr(term_fd, TCSANOW, &term_attr);
 
-      send_info_msg(pamh, _("Scan fingerprint or press any key to enter password"));
+      if (!suppress_messages)
+        send_info_msg(pamh, _("Scan fingerprint or press any key to enter password"));
 
       // wait all keys released before running verify
       if (term_fd >= 0)
@@ -1064,9 +1080,12 @@ static int do_auth_no_pthread(pam_handle_t *pamh, const char *username, sd_bus *
       {
         if (term_fd >= 0)
           tcsetattr(term_fd, TCSANOW, &term_attr_old);
-        if (!no_need_enter)
+        if (!no_need_enter && !suppress_messages)
         {
           send_info_msg(pamh, _("Fingerprint OK, press ENTER"));
+        }
+        if (!no_need_enter)
+        {
           const char *dummy_pw = "";
           pam_set_item(pamh, PAM_AUTHTOK, dummy_pw);
         }
@@ -1198,7 +1217,8 @@ do_auth(pam_handle_t *pamh, const char *username)
       {
         if (!no_need_enter)
         {
-          send_info_msg(pamh, _("Fingerprint OK, press ENTER"));
+          if (!suppress_messages)
+            send_info_msg(pamh, _("Fingerprint OK, press ENTER"));
           // Set a dummy password to indicate success
           const char *dummy_pw = "";
           pam_set_item(pamh, PAM_AUTHTOK, dummy_pw);
@@ -1208,7 +1228,8 @@ do_auth(pam_handle_t *pamh, const char *username)
       {
         if (debug)
           pam_syslog(pamh, LOG_DEBUG, "Verify returned %d, tell user to input password", ret);
-        send_err_msg(pamh, _("Enter password"));
+        if (!suppress_messages)
+          send_info_msg(pamh, _("Enter password"));
       }
     }
 
@@ -1363,6 +1384,10 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
       {
         no_pthread = true;
         pw_first = true;
+      }
+      else if (str_has_prefix(argv[i], SUPPRESS_MESSAGES_MATCH) && strlen(argv[i]) <= strlen(SUPPRESS_MESSAGES_MATCH) + 2)
+      {
+        suppress_messages = true;
       }
     }
   }
